@@ -143,67 +143,67 @@ public class OsxProcess implements NuProcess
 
     void readStdout(int available)
     {
-        try
+        if (available > 0)
         {
-            if (available > 0)
+            int read = 0;
+            while (read < available)
             {
-                int read = 0;
-                while (read < available)
+                outBuffer.position(0);
+                int rc = LIBC.read(stdout, outBuffer, Math.min(outBuffer.capacity(), available - read));
+                if (rc <= 0)
                 {
-                    outBuffer.position(0);
-                    int rc = LIBC.read(stdout, outBuffer, Math.min(outBuffer.capacity(), available - read));
-                    if (rc <= 0)
-                    {
-                        break;
-                    }
+                    break;
+                }
 
-                    read += rc;
-                    outBuffer.limit(rc);
+                read += rc;
+                outBuffer.limit(rc);
 
-                    processListener.onStdout(outBuffer);
+                try
+                {
+                	processListener.onStdout(outBuffer);
+                }
+                catch (Exception e)
+                {
+                	// Don't let an exception thrown from the user's handler interrupt us
                 }
             }
-            else if (available == -1)
-            {
-                processListener.onStdout(null);
-            }
         }
-        catch (Exception e)
+        else if (available == -1)
         {
-            // Don't let an exception thrown from the user's handler interrupt us
+            processListener.onStdout(null);
         }
     }
 
     void readStderr(int available)
     {
-        try
+        if (available > 0)
         {
-            if (available > 0)
+            int read = 0;
+            while (read < available)
             {
-                int read = 0;
-                while (read < available)
+                outBuffer.position(0);
+                int rc = LIBC.read(stderr, outBuffer, Math.min(outBuffer.capacity(), available - read));
+                if (rc <= 0)
                 {
-                    outBuffer.position(0);
-                    int rc = LIBC.read(stderr, outBuffer, Math.min(outBuffer.capacity(), available - read));
-                    if (rc <= 0)
-                    {
-                        break;
-                    }
+                    break;
+                }
 
-                    read += rc;
-                    outBuffer.limit(rc);
+                read += rc;
+                outBuffer.limit(rc);
 
-                    processListener.onStderr(outBuffer);
+                try
+                {
+                	processListener.onStderr(outBuffer);
+                }
+                catch (Exception e)
+                {
+                	// Don't let an exception thrown from the user's handler interrupt us
                 }
             }
-            else if (available == -1)
-            {
-                processListener.onStderr(null);
-            }
         }
-        catch (Exception e)
+        else if (available == -1)
         {
-            // Don't let an exception thrown from the user's handler interrupt us
+            processListener.onStderr(null);
         }
     }
 

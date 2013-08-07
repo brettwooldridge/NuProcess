@@ -11,8 +11,6 @@ import com.sun.jna.Pointer;
 class ProcessKqueue implements Runnable
 {
     private static final LibC LIBC;
-    private static final int STDOUT = 0;
-    private static final int STDERR = 1;
 
     static
     {
@@ -147,7 +145,10 @@ class ProcessKqueue implements Runnable
                 int available = kevent.data != null ? kevent.data.intValue() : -1;
                 osxProcess.readStdout(available);
 
-                maybeInformEOF(kevent, osxProcess, STDOUT);
+                if ((kevent.flags & Kevent.EV_EOF) != 0)
+                {
+                	osxProcess.readStdout(-1);
+                }
                 continue;
             }
 
@@ -157,7 +158,10 @@ class ProcessKqueue implements Runnable
                 int available = kevent.data != null ? kevent.data.intValue() : -1;
                 osxProcess.readStderr(available);
 
-                maybeInformEOF(kevent, osxProcess, STDERR);
+                if ((kevent.flags & Kevent.EV_EOF) != 0)
+                {
+                	osxProcess.readStderr(-1);
+                }
                 continue;
             }
 
@@ -167,22 +171,6 @@ class ProcessKqueue implements Runnable
                 continue;
             }
         }
-    }
-
-    private void maybeInformEOF(Kevent kevent, OsxProcess osxProcess, int destStdxxx)
-    {
-        // If we've reached the EOF call the listener with null
-        if ((kevent.flags & Kevent.EV_EOF) != 0)
-        {
-            if (destStdxxx == STDOUT)
-            {
-                osxProcess.readStdout(-1);
-            }
-            else
-            {
-                osxProcess.readStderr(-1);
-            }
-       }
     }
 
     private void unlistenKevent(int pid)
