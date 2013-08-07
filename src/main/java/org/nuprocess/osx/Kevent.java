@@ -72,11 +72,12 @@ public class Kevent extends Structure
     public static final int EV_EOF        = 0x8000;         /* EOF detected */
     public static final int EV_ERROR    = 0x4000;         /* error, data contains errno */
 
+    /* filters */
     public static final int EVFILT_READ     = (-1);
     public static final int EVFILT_WRITE    = (-2);
     public static final int EVFILT_AIO      = (-3);    /* attached to aio requests */
     public static final int EVFILT_VNODE    = (-4);    /* attached to vnodes */
-    public static final int EVFILT_PROC     = 65531; // (-5);    /* attached to struct proc */
+    public static final int EVFILT_PROC     = (-5);    /* attached to struct proc */
     public static final int EVFILT_SIGNAL   = (-6);    /* attached to struct proc */
     public static final int EVFILT_TIMER    = (-7);    /* timers */
     public static final int EVFILT_MACHPORT = (-8);    /* Mach portsets */
@@ -85,6 +86,7 @@ public class Kevent extends Structure
                                              /* (-11) unused */
     public static final int EVFILT_VM       = (-12);   /* Virtual memory events */
 
+    /* data/hint fflags for EVFILT_PROC */
     public static final int NOTE_EXIT        = 0x80000000;     /* process exited */
     public static final int NOTE_REAP        = 0x10000000;     /* process exited */    
     public static final int NOTE_EXITSTATUS  = 0x04000000;     /* exit status to be returned, valid for child process only */
