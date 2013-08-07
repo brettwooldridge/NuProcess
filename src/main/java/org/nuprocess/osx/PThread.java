@@ -7,6 +7,9 @@ import com.sun.jna.NativeLong;
 import com.sun.jna.Pointer;
 import com.sun.jna.Structure;
 
+/**
+ * @author Brett Wooldridge
+ */
 public class PThread extends Structure
 {
     public static class ByValue extends PThread implements Structure.ByValue { };

@@ -2,9 +2,29 @@ package org.nuprocess;
 
 import java.nio.ByteBuffer;
 
+/**
+ * @author Brett Wooldridge
+ */
 public interface NuProcessListener
 {
+	/**
+	 * This method is invoked when you call the {@link ProcessBuilder#start()}
+	 * method.  This is your opportunity to store away the {@code NuProcess}
+	 * instance, possibly in your listener, so that it can be used for
+	 * interaction within other callbacks in this interface.
+	 *
+	 * @param nuProcess the NuProcess that is starting
+	 */
+	void onStart(NuProcess nuProcess);
+
     /**
+     * This method is invoked when the process exits.
+     *
+     * @param statusCode
+     */
+    void onExit(int statusCode);
+
+	/**
      * This method is invoked when there is stdout data to process or an
      * the end-of-file (EOF) condition has been reached.  In the case
      * of EOF, the <code>buffer</code> parameter will be <code>null</code>;
@@ -57,18 +77,14 @@ public interface NuProcessListener
      */
     void onStderr(ByteBuffer buffer);
 
-    void onStdinReady();
+    /**
+     * @param available
+     */
+    void onStdinReady(int available);
 
     /**
      * This method is invoked when the process closes it's side of the stdin
      * pipe.
      */
     void onStdinClose();
-
-    /**
-     * This method is invoked when the process exits.
-     *
-     * @param statusCode
-     */
-    void onExit(int statusCode);
 }

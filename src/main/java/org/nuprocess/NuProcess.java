@@ -3,7 +3,9 @@ package org.nuprocess;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
-
+/**
+ * @author Brett Wooldridge
+ */
 public interface NuProcess
 {
     /**
@@ -16,11 +18,11 @@ public interface NuProcess
      * @return     how many bytes were written
      * @exception  IOException  if an I/O error occurs.
      */
-	int write(byte[] buf) throws IOException;
+    int write(byte[] buf) throws IOException;
 
-	int write(byte[] buf, int off, int len) throws IOException;
+    int write(byte[] buf, int off, int len) throws IOException;
 
-	int write(ByteBuffer buf) throws IOException;
+    int write(ByteBuffer buf) throws IOException;
 
     void stdinClose();
 }

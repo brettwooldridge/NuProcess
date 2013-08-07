@@ -8,16 +8,15 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import com.sun.jna.NativeLong;
 import com.sun.jna.Pointer;
 
+/**
+ * @author Brett Wooldridge
+ */
 class ProcessKqueue implements Runnable
 {
     private static final LibC LIBC;
+    private static final int EVENT_BATCH_SIZE;
 
-    static
-    {
-        LIBC = LibC.INSTANCE;
-    }
-
-    private volatile CyclicBarrier processorRunning;
+    private volatile CyclicBarrier startBarrier;
     private AtomicBoolean isRunning;
 
     private Map<Integer, OsxProcess> pidToProcessMap;
@@ -27,6 +26,13 @@ class ProcessKqueue implements Runnable
     private int wakeupPipe;
     private int kqueue;
 
+    static
+    {
+    	LIBC = LibC.INSTANCE;
+
+    	EVENT_BATCH_SIZE = Integer.getInteger("org.nuprocess.eventBatchSize", 8); 
+    }
+    
     ProcessKqueue(Map<Integer, OsxProcess> pidToProcessMap,
                   Map<Integer, OsxProcess> stdinToProcessMap,
                   Map<Integer, OsxProcess> stdoutToProcessMap,
@@ -37,7 +43,7 @@ class ProcessKqueue implements Runnable
         this.stdoutToProcessMap = stdoutToProcessMap;
         this.stderrToProcessMap = stderrToProcessMap;
         this.isRunning = new AtomicBoolean();
-        this.processorRunning = new CyclicBarrier(2);
+        this.startBarrier = new CyclicBarrier(2);
 
         kqueue = LIBC.kqueue();
         if (kqueue < 0)
@@ -53,31 +59,24 @@ class ProcessKqueue implements Runnable
     {
         try
         {
-            processorRunning.await();
+            startBarrier.await();
 
-            Kevent[] eventList = (Kevent[]) new Kevent().toArray(1);
+            Kevent[] eventList = (Kevent[]) new Kevent().toArray(EVENT_BATCH_SIZE);
             do
             {
-                try
+                process(eventList);
+                
+                // Clear the structures for the next loop - necessary?
+                for (int i = 0; i < EVENT_BATCH_SIZE; i++)
                 {
-                    process(eventList);
-                    
-                    // Clear the structures for the next loop
-                    for (int i = 0; i < eventList.length; i++)
-                    {
-                        eventList[i].clear();
-                    }
-                }
-                catch (InterruptedException ie)
-                {
-                    break;
+                    eventList[i].clear();
                 }
             } while (!isRunning.compareAndSet(pidToProcessMap.isEmpty(), false));
-        }
+	    }
         catch (Exception e)
         {
             // TODO: how to handle this error?
-            return;
+	    	isRunning.set(false);
         }
     }
 
@@ -96,7 +95,7 @@ class ProcessKqueue implements Runnable
      */
     void setBarrier(CyclicBarrier processorRunning)
     {
-        this.processorRunning = processorRunning;
+        this.startBarrier = processorRunning;
     }
 
     /**
@@ -168,7 +167,9 @@ class ProcessKqueue implements Runnable
             osxProcess = stdinToProcessMap.get(ident);
             if (osxProcess != null)
             {
-                continue;
+                int available = kevent.data != null ? kevent.data.intValue() : -1;
+            	osxProcess.writeStdin(available);
+            	continue;
             }
         }
     }

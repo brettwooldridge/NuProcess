@@ -8,6 +8,9 @@ import com.sun.jna.Pointer;
 import com.sun.jna.StringArray;
 import com.sun.jna.ptr.IntByReference;
 
+/**
+ * @author Brett Wooldridge
+ */
 public interface LibC extends Library
 {
     LibC INSTANCE = (LibC) Native.loadLibrary("c", LibC.class);

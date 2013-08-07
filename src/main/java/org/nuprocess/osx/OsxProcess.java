@@ -1,5 +1,6 @@
 package org.nuprocess.osx;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.HashSet;
 import java.util.List;
@@ -17,6 +18,9 @@ import com.sun.jna.Pointer;
 import com.sun.jna.StringArray;
 import com.sun.jna.ptr.IntByReference;
 
+/**
+ * @author Brett Wooldridge
+ */
 public class OsxProcess implements NuProcess
 {
     private static final LibC LIBC;
@@ -82,7 +86,7 @@ public class OsxProcess implements NuProcess
             checkReturnCode(rc, "Internal call to posix_spawnattr_init() failed");
 
             // Start the spawned process in suspended mode
-            short flags = LibC.POSIX_SPAWN_START_SUSPENDED;
+            short flags = LibC.POSIX_SPAWN_START_SUSPENDED | LibC.POSIX_SPAWN_CLOEXEC_DEFAULT;
             LIBC.posix_spawnattr_setflags(posix_spawnattr, flags);
 
             IntByReference restrict_pid = new IntByReference();
@@ -108,6 +112,8 @@ public class OsxProcess implements NuProcess
 
             kickstartProcessors();
 
+            callStart();
+            
             // Signal the spawned process to continue (unsuspend)
             LIBC.kill(pid, LibC.SIGCONT);
 
@@ -124,16 +130,35 @@ public class OsxProcess implements NuProcess
         }
     }
 
-    public void stdinWrite(String s)
-    {
-        ByteBuffer buffer = ByteBuffer.allocateDirect(512);
-        buffer.put(s.getBytes());
-        buffer.flip();
+	@Override
+	public int write(byte[] buf) throws IOException
+	{
+		return write(ByteBuffer.wrap(buf));
+	}
 
-        LIBC.write(stdin, buffer, s.length());
-        LIBC.close(stdin);
-    }
+	@Override
+	public int write(byte[] buf, int off, int len) throws IOException
+	{
+	    return write(ByteBuffer.wrap(buf, off, len));
+	}
 
+	@Override
+	public int write(ByteBuffer buf) throws IOException
+	{
+		ByteBuffer slice = buf.slice();
+        int rc = LIBC.write(stdin, slice, slice.capacity());
+        if (rc == -1)
+        {
+            throw new IOException("Failure writing to process pipe");
+        }
+        if (rc != buf.limit())
+        {
+            throw new IOException(String.format("Pipe overflow, tried to write %d but could only write %d bytes", buf.limit(), rc));
+        }
+        return rc;
+	}
+
+    @Override
     public void stdinClose()
     {
         LIBC.close(stdin);
@@ -142,6 +167,18 @@ public class OsxProcess implements NuProcess
     // ************************************************************************
     //                             Package methods
     // ************************************************************************
+
+    void callStart()
+    {
+        try
+        {
+        	processListener.onStart(this);
+        }
+        catch (Exception e)
+        {
+        	// Don't let an exception thrown from the user's handler interrupt us
+        }
+    }
 
     void readStdout(int available)
     {
@@ -209,12 +246,11 @@ public class OsxProcess implements NuProcess
         }
     }
 
-    void onExit(int statusCode)
+    void writeStdin(int available)
     {
         try
         {
-            cleanup();
-            processListener.onExit(statusCode);
+        	processListener.onStdinReady(available);
         }
         catch (Exception e)
         {
@@ -222,12 +258,20 @@ public class OsxProcess implements NuProcess
         }
     }
 
-    void cleanup()
+    void onExit(int statusCode)
     {
-        pidToProcessMap.remove(pid);
-        stdinToProcessMap.remove(stdin);
-        stdoutToProcessMap.remove(stdout);
-        stderrToProcessMap.remove(stderr);
+        try
+        {
+            processListener.onExit(statusCode);
+        }
+        catch (Exception e)
+        {
+            // Don't let an exception thrown from the user's handler interrupt us
+        }
+        finally
+        {
+        	cleanup();
+        }
     }
 
     // ************************************************************************
@@ -330,14 +374,24 @@ public class OsxProcess implements NuProcess
         }
     }
 
+    private void cleanup()
+    {
+    	outBuffer = null;
+    	processListener = null;
+        pidToProcessMap.remove(pid);
+        stdinToProcessMap.remove(stdin);
+        stdoutToProcessMap.remove(stdout);
+        stderrToProcessMap.remove(stderr);
+    }
+
     private void kickstartProcessors()
     {
         for (int i = 0; i < processors.length; i++)
         {
             if (processors[i].checkAndSetRunning())
             {
-                CyclicBarrier barrier = new CyclicBarrier(2);
-                processors[i].setBarrier(barrier);
+                CyclicBarrier spawnBarrier = new CyclicBarrier(2);
+                processors[i].setBarrier(spawnBarrier);
 
                 Thread t = new Thread(processors[i], "ProcessKqueue" + i);
                 t.setDaemon(true);
@@ -345,7 +399,7 @@ public class OsxProcess implements NuProcess
 
                 try
                 {
-                    barrier.await();
+                    spawnBarrier.await();
                 }
                 catch (Exception e)
                 {
@@ -357,7 +411,7 @@ public class OsxProcess implements NuProcess
 
     private void queueChangeList()
     {
-        Kevent[] events = (Kevent[]) new Kevent().toArray(3);
+        Kevent[] events = (Kevent[]) new Kevent().toArray(4);
 
         Kevent.EV_SET(events[0], new NativeLong(pid), 
                       Kevent.EVFILT_PROC,
@@ -374,6 +428,12 @@ public class OsxProcess implements NuProcess
         Kevent.EV_SET(events[2], new NativeLong(stderr), 
                       Kevent.EVFILT_READ,
                       Kevent.EV_ADD | Kevent.EV_ONESHOT,
+                      0,
+                      new NativeLong(0), Pointer.NULL);
+
+        Kevent.EV_SET(events[3], new NativeLong(stdin), 
+                      Kevent.EVFILT_WRITE,
+                      Kevent.EV_ADD,
                       0,
                       new NativeLong(0), Pointer.NULL);
 

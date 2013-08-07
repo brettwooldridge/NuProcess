@@ -1,25 +1,45 @@
 package org.nuprocess.osx;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.Assert;
 import org.junit.Test;
+import org.nuprocess.NuAbstractProcessListener;
 import org.nuprocess.NuProcess;
 import org.nuprocess.NuProcessBuilder;
 import org.nuprocess.NuProcessListener;
 
+/**
+ * @author Brett Wooldridge
+ */
 public class OsxTest
 {
     @Test
-    public void test1()
+    public void test1() throws IOException
     {
         final Semaphore semaphore = new Semaphore(0);
         final StringBuilder sb = new StringBuilder();
 
         NuProcessListener processListener = new NuProcessListener()
         {
+            private boolean done;
+            private NuProcess nuProcess;
+
+            @Override
+            public void onStart(NuProcess nuProcess)
+            {
+                this.nuProcess = nuProcess;
+            }
+
+            public void onExit(int statusCode)
+            {
+                semaphore.release();
+            }
+
             public void onStdout(ByteBuffer buffer)
             {
                 if (buffer == null)
@@ -31,23 +51,41 @@ public class OsxTest
                 buffer.get(bytes);
                 sb.append(new String(bytes));
             }
-            
+
             public void onStderr(ByteBuffer buffer)
             {
                 onStdout(buffer);
             }
-            
-            public void onExit(int statusCode)
+
+            @Override
+            public void onStdinReady(int available)
             {
-                semaphore.release();
+                if (done)
+                {
+                    nuProcess.stdinClose();
+                    return;
+                }
+
+                try
+                {
+                    nuProcess.write("This is a test message\n".getBytes());
+                    done = true;
+                }
+                catch (IOException e)
+                {
+                    e.printStackTrace();
+                }
+            }
+
+            @Override
+            public void onStdinClose()
+            {
             }
         };
 
         NuProcessBuilder pb = new NuProcessBuilder(Arrays.asList("/bin/cat"), processListener);
         NuProcess process = pb.start();
         Assert.assertNotNull(process);
-
-        process.stdinWrite("This is a test message\n");
 
         semaphore.acquireUninterruptibly();
         Assert.assertEquals("Output did not matched expected result", "This is a test message\n", sb.toString());
@@ -56,20 +94,28 @@ public class OsxTest
     @Test
     public void test2()
     {
-        NuProcessListener processListener = new NuProcessListener()
-        {
-            public void onStdout(ByteBuffer buffer)
-            {
-            }
-            
-            public void onStderr(ByteBuffer buffer)
-            {
-            }
-            
+        final Semaphore semaphore = new Semaphore(0);
+        final AtomicInteger exitCode = new AtomicInteger();
+
+        NuProcessListener processListener = new NuAbstractProcessListener() {
+            @Override
             public void onExit(int statusCode)
             {
+                exitCode.set(statusCode);
+                semaphore.release();
             }
         };
+
+        NuProcessBuilder pb = new NuProcessBuilder(Arrays.asList("/bin/cat", "/tmp/doesnotexist"), processListener);
+        pb.start();
+        semaphore.acquireUninterruptibly();
+        Assert.assertEquals("Exit code did not match expectation", 256, exitCode.get());
+    }
+
+    @Test
+    public void test3()
+    {
+        NuProcessListener processListener = new NuAbstractProcessListener() { };
 
         NuProcessBuilder pb = new NuProcessBuilder(Arrays.asList("/bin/zxczxc"), processListener);
         try

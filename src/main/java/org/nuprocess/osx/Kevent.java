@@ -8,6 +8,9 @@ import com.sun.jna.Pointer;
 import com.sun.jna.PointerType;
 import com.sun.jna.Structure;
 
+/**
+ * @author Brett Wooldridge
+ */
 public class Kevent extends Structure
 {
     public static class KeventPointer extends PointerType { };
