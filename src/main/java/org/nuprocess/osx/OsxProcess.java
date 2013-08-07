@@ -75,11 +75,13 @@ public class OsxProcess implements NuProcess
     {
         Pointer posix_spawn_file_actions = createPipes();
         Pointer posix_spawnattr = new Memory(Pointer.SIZE);
+
         try
         {
             int rc = LIBC.posix_spawnattr_init(posix_spawnattr);
             checkReturnCode(rc, "Internal call to posix_spawnattr_init() failed");
 
+            // Start the spawned process in suspended mode
             short flags = LibC.POSIX_SPAWN_START_SUSPENDED;
             LIBC.posix_spawnattr_setflags(posix_spawnattr, flags);
 
@@ -106,6 +108,7 @@ public class OsxProcess implements NuProcess
 
             kickstartProcessors();
 
+            // Signal the spawned process to continue (unsuspend)
             LIBC.kill(pid, LibC.SIGCONT);
 
             return this;
@@ -118,7 +121,6 @@ public class OsxProcess implements NuProcess
         {
             LIBC.posix_spawnattr_destroy(posix_spawnattr);
             LIBC.posix_spawn_file_actions_destroy(posix_spawn_file_actions);
-            posix_spawn_file_actions = null;
         }
     }
 
