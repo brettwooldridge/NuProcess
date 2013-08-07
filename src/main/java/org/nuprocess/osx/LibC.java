@@ -16,8 +16,6 @@ public interface LibC extends Library
 
     int fcntl(int fildes, int cmd, Pointer args);
 
-    int select(int n, int[] read, int[] write, int[] error, Timeval timeout);
-
     int close(int fildes);
 
     int write(int fildes, Buffer buf, int nbyte);
