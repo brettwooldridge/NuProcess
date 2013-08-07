@@ -57,6 +57,14 @@ public interface NuProcessListener
      */
     void onStderr(ByteBuffer buffer);
 
+    void onStdinReady();
+
+    /**
+     * This method is invoked when the process closes it's side of the stdin
+     * pipe.
+     */
+    void onStdinClose();
+
     /**
      * This method is invoked when the process exits.
      *
