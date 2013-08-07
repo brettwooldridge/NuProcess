@@ -32,14 +32,12 @@ class ProcessKqueue implements Runnable
     ProcessKqueue(Map<Integer, OsxProcess> pidToProcessMap,
                   Map<Integer, OsxProcess> stdinToProcessMap,
                   Map<Integer, OsxProcess> stdoutToProcessMap,
-                  Map<Integer, OsxProcess> stderrToProcessMap,
-                  int wakeupPipe)
+                  Map<Integer, OsxProcess> stderrToProcessMap)
     {
         this.pidToProcessMap = pidToProcessMap;
         this.stdinToProcessMap = stdinToProcessMap;
         this.stdoutToProcessMap = stdoutToProcessMap;
         this.stderrToProcessMap = stderrToProcessMap;
-        this.wakeupPipe = wakeupPipe;
         this.isRunning = new AtomicBoolean();
         this.processorRunning = new CyclicBarrier(2);
 
@@ -47,19 +45,6 @@ class ProcessKqueue implements Runnable
         if (kqueue < 0)
         {
             throw new RuntimeException("Unable to create kqueue");
-        }
-
-        // Register our wakeup pipe into the kqueue
-        Kevent[] kevent = (Kevent[]) new Kevent().toArray(1);
-        Kevent.EV_SET(kevent[0], new NativeLong(wakeupPipe), 
-                      Kevent.EVFILT_READ,
-                      Kevent.EV_ADD | Kevent.EV_ONESHOT,
-                      0,
-                      new NativeLong(0), Pointer.NULL);
-        int rc = LIBC.kevent(kqueue, kevent, 1, null, 0, null);
-        if (rc < 0)
-        {
-            throw new RuntimeException("Unable to register kevent for wakeup");
         }
     }
 

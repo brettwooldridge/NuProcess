@@ -26,7 +26,6 @@ public class OsxProcess implements NuProcess
     private static final Map<Integer, OsxProcess> stdoutToProcessMap;
     private static final Map<Integer, OsxProcess> stderrToProcessMap;
     private static final ProcessKqueue[] processors;
-    private static final int[] wakeupPipe;
 
     private static int processorRoundRobin;
 
@@ -50,10 +49,6 @@ public class OsxProcess implements NuProcess
     {
         LIBC = LibC.INSTANCE;
 
-        wakeupPipe = new int[2];
-        int rc = LIBC.pipe(wakeupPipe);
-        checkReturnCode(rc, "Create pipe() failed");
-        
         pidToProcessMap = new ConcurrentHashMap<Integer, OsxProcess>();
         stdinToProcessMap = new ConcurrentHashMap<Integer, OsxProcess>();
         stdoutToProcessMap = new ConcurrentHashMap<Integer, OsxProcess>();
@@ -64,7 +59,7 @@ public class OsxProcess implements NuProcess
         processors = new ProcessKqueue[numThreads];
         for (int i = 0; i < numThreads; i++)
         {
-            processors[i] = new ProcessKqueue(pidToProcessMap, stdinToProcessMap, stdoutToProcessMap, stderrToProcessMap, wakeupPipe[0]);
+            processors[i] = new ProcessKqueue(pidToProcessMap, stdinToProcessMap, stdoutToProcessMap, stderrToProcessMap);
         }
     }
 
@@ -391,17 +386,6 @@ public class OsxProcess implements NuProcess
                 throw new RuntimeException("Unable to register new events to kqueue");
             }            
         }
-
-        wakeupProcessors();
-    }
-
-    private void wakeupProcessors()
-    {
-        ByteBuffer buffer = ByteBuffer.allocateDirect(16);
-        buffer.put((byte) 0);
-        buffer.flip();
-
-        LIBC.write(wakeupPipe[1], buffer, 1);
     }
 
     private static void checkReturnCode(int rc, String failureMessage)
