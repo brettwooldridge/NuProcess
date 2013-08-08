@@ -1,7 +1,6 @@
 package org.nuprocess.linux;
 
 import java.io.File;
-import java.io.IOException;
 import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
 import java.util.List;
@@ -116,24 +115,6 @@ public class LinuxProcess implements NuProcess
         }
 
         return this;
-    }
-
-    @Override
-    public int write(byte[] buf) throws IOException
-    {
-        return 0;
-    }
-
-    @Override
-    public int write(byte[] buf, int off, int len) throws IOException
-    {
-        return 0;
-    }
-
-    @Override
-    public int write(ByteBuffer buf) throws IOException
-    {
-        return 0;
     }
 
     @Override

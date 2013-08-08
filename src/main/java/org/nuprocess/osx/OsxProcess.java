@@ -35,6 +35,7 @@ public class OsxProcess implements NuProcess
     private NuProcessListener processListener;
 
     private ByteBuffer outBuffer;
+    private ByteBuffer inBuffer;
 
     private int stdinWidow;
     private int stdoutWidow;
@@ -59,6 +60,7 @@ public class OsxProcess implements NuProcess
         this.environment = env;
         this.processListener = processListener;
         this.outBuffer = ByteBuffer.allocateDirect(BUFFER_CAPACITY);
+        this.inBuffer = ByteBuffer.allocateDirect(BUFFER_CAPACITY);
     }
 
     public NuProcess start()
