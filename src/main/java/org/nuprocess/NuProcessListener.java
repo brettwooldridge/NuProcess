@@ -85,8 +85,9 @@ public interface NuProcessListener
      * @param available the amount of available space in the pipe, do not attempt
      *                  to write more than this amount into stdin on your next
      *                  {@code NuProcess#write()} attempt
+     * @return true if you have more data to write, false otherwise
      */
-    void onStdinReady(int available);
+    boolean onStdinReady(int available);
 
     /**
      * This method is invoked when the process closes it's side of the stdin
