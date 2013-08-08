@@ -4,16 +4,13 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CyclicBarrier;
 
 import org.nuprocess.NuProcess;
 import org.nuprocess.NuProcessListener;
 
 import com.sun.jna.Memory;
-import com.sun.jna.NativeLong;
 import com.sun.jna.Pointer;
 import com.sun.jna.StringArray;
 import com.sun.jna.ptr.IntByReference;
@@ -25,13 +22,14 @@ public class OsxProcess implements NuProcess
 {
     private static final LibC LIBC;
     private static final int BUFFER_CAPACITY = 65536;
-    private static final Map<Integer, OsxProcess> pidToProcessMap;
-    private static final Map<Integer, OsxProcess> stdinToProcessMap;
-    private static final Map<Integer, OsxProcess> stdoutToProcessMap;
-    private static final Map<Integer, OsxProcess> stderrToProcessMap;
     private static final ProcessKqueue[] processors;
 
     private static int processorRoundRobin;
+    
+    int pid;
+    int stdin;
+    int stdout;
+    int stderr;
 
     private String[] args;
     private String[] environment;
@@ -39,31 +37,20 @@ public class OsxProcess implements NuProcess
 
     private ByteBuffer outBuffer;
 
-    private int stdin;
-    private int stdout;
-    private int stderr;
-
     private int stdinWidow;
     private int stdoutWidow;
     private int stderrWidow;
 
-    private int pid;
-
     static
     {
         LIBC = LibC.INSTANCE;
-
-        pidToProcessMap = new ConcurrentHashMap<Integer, OsxProcess>();
-        stdinToProcessMap = new ConcurrentHashMap<Integer, OsxProcess>();
-        stdoutToProcessMap = new ConcurrentHashMap<Integer, OsxProcess>();
-        stderrToProcessMap = new ConcurrentHashMap<Integer, OsxProcess>();
         
         int numThreads = Integer.getInteger("org.nuprocess.threads",
                                             Boolean.getBoolean("org.nuprocess.threadsEqualCores") ? Runtime.getRuntime().availableProcessors() : 1);
         processors = new ProcessKqueue[numThreads];
         for (int i = 0; i < numThreads; i++)
         {
-            processors[i] = new ProcessKqueue(pidToProcessMap, stdinToProcessMap, stdoutToProcessMap, stderrToProcessMap);
+            processors[i] = new ProcessKqueue();
         }
     }
 
@@ -103,11 +90,6 @@ public class OsxProcess implements NuProcess
             LIBC.close(stdoutWidow);
             LIBC.close(stderrWidow);
 
-            pidToProcessMap.put(restrict_pid.getValue(), this);
-            stdinToProcessMap.put(stdin, this);
-            stdoutToProcessMap.put(stdout, this);
-            stderrToProcessMap.put(stderr, this);
-
             queueChangeList();
 
             kickstartProcessors();
@@ -130,19 +112,16 @@ public class OsxProcess implements NuProcess
         }
     }
 
-	@Override
 	public int write(byte[] buf) throws IOException
 	{
 		return write(ByteBuffer.wrap(buf));
 	}
 
-	@Override
 	public int write(byte[] buf, int off, int len) throws IOException
 	{
 	    return write(ByteBuffer.wrap(buf, off, len));
 	}
 
-	@Override
 	public int write(ByteBuffer buf) throws IOException
 	{
 		ByteBuffer slice = buf.slice();
@@ -158,7 +137,6 @@ public class OsxProcess implements NuProcess
         return rc;
 	}
 
-    @Override
     public void stdinClose()
     {
         LIBC.close(stdin);
@@ -246,15 +224,16 @@ public class OsxProcess implements NuProcess
         }
     }
 
-    void writeStdin(int available)
+    boolean writeStdin(int available)
     {
         try
         {
-        	processListener.onStdinReady(available);
+        	return processListener.onStdinReady(available);
         }
         catch (Exception e)
         {
             // Don't let an exception thrown from the user's handler interrupt us
+        	return false;
         }
     }
 
@@ -270,7 +249,8 @@ public class OsxProcess implements NuProcess
         }
         finally
         {
-        	cleanup();
+        	outBuffer = null;
+        	processListener = null;
         }
     }
 
@@ -374,16 +354,6 @@ public class OsxProcess implements NuProcess
         }
     }
 
-    private void cleanup()
-    {
-    	outBuffer = null;
-    	processListener = null;
-        pidToProcessMap.remove(pid);
-        stdinToProcessMap.remove(stdin);
-        stdoutToProcessMap.remove(stdout);
-        stderrToProcessMap.remove(stderr);
-    }
-
     private void kickstartProcessors()
     {
         for (int i = 0; i < processors.length; i++)
@@ -411,42 +381,10 @@ public class OsxProcess implements NuProcess
 
     private void queueChangeList()
     {
-        Kevent[] events = (Kevent[]) new Kevent().toArray(4);
-
-        Kevent.EV_SET(events[0], new NativeLong(pid), 
-                      Kevent.EVFILT_PROC,
-                      Kevent.EV_ADD | Kevent.EV_ONESHOT,
-                      Kevent.NOTE_EXIT | Kevent.NOTE_EXITSTATUS | Kevent.NOTE_REAP,
-                      new NativeLong(0), Pointer.NULL);
-
-        Kevent.EV_SET(events[1], new NativeLong(stdout), 
-                      Kevent.EVFILT_READ,
-                      Kevent.EV_ADD | Kevent.EV_ONESHOT,
-                      0,
-                      new NativeLong(0), Pointer.NULL);
-
-        Kevent.EV_SET(events[2], new NativeLong(stderr), 
-                      Kevent.EVFILT_READ,
-                      Kevent.EV_ADD | Kevent.EV_ONESHOT,
-                      0,
-                      new NativeLong(0), Pointer.NULL);
-
-        Kevent.EV_SET(events[3], new NativeLong(stdin), 
-                      Kevent.EVFILT_WRITE,
-                      Kevent.EV_ADD,
-                      0,
-                      new NativeLong(0), Pointer.NULL);
-
         synchronized (OsxProcess.class)
         {
-            int kqueue = processors[processorRoundRobin].getKqueue();
+            processors[processorRoundRobin].queueChangeList(this);
             processorRoundRobin = (processorRoundRobin + 1) % processors.length;
-
-            int rc = LIBC.kevent(kqueue, events, events.length, null, 0, Pointer.NULL);
-            if (rc == -1)
-            {
-                throw new RuntimeException("Unable to register new events to kqueue");
-            }            
         }
     }
 
