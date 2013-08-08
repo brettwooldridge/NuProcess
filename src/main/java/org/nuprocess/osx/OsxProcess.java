@@ -21,7 +21,6 @@ import com.sun.jna.ptr.IntByReference;
 public class OsxProcess implements NuProcess
 {
     private static final LibC LIBC;
-    private static final int BUFFER_CAPACITY = 65536;
     private static final ProcessKqueue[] processors;
 
     private static int processorRoundRobin;

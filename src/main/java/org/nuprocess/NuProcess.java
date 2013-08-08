@@ -8,6 +8,8 @@ import java.nio.ByteBuffer;
  */
 public interface NuProcess
 {
+    int BUFFER_CAPACITY = 65536;
+
     /**
      * Writes <code>b.length</code> bytes from the specified byte array to the
      * stdin pipe of the process. The general contract for <code>write(b)</code>

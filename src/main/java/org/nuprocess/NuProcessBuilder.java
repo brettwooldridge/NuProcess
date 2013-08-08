@@ -1,7 +1,6 @@
 package org.nuprocess;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -25,35 +24,23 @@ public class NuProcessBuilder
 
     public NuProcessBuilder(List<String> command, NuProcessListener listener)
     {
-        this.command(command);
-        this.processListener = listener;
-    }
-
-    public NuProcessBuilder command(List<String> command)
-    {
         if (command == null || command.isEmpty())
         {
             throw new IllegalArgumentException("List of commands may not be null or empty");
         }
 
-        this.command = new ArrayList<String>(command);
-        return this;
-    }
+        if (processListener == null)
+        {
+            throw new IllegalArgumentException("A NuProcessListener must be specified");
+        }
 
-    public NuProcessBuilder command(String... command)
-    {
-        return command(Arrays.asList(command));
+        this.command = new ArrayList<String>(command);
+        this.processListener = listener;
     }
 
     public List<String> command()
     {
         return command;
-    }
-
-    public NuProcessBuilder processListener(NuProcessListener processListener)
-    {
-        this.processListener = processListener;
-        return this;
     }
 
     public Map<String, String> environment()
@@ -63,11 +50,6 @@ public class NuProcessBuilder
 
     public NuProcess start()
     {
-        if (processListener == null)
-        {
-            throw new IllegalArgumentException("A NuProcessListener must be specified");
-        }
-
         String[] env = new String[environment.size()];
         int i = 0;
         for (Entry<String, String> entrySet : environment.entrySet())
