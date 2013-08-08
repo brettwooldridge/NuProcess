@@ -83,7 +83,7 @@ class ProcessKqueue implements Runnable
         fildesToProcessMap.put(osxProcess.stdout, osxProcess);
         fildesToProcessMap.put(osxProcess.stderr, osxProcess);
 
-        Kevent[] events = (Kevent[]) new Kevent().toArray(4);
+        Kevent[] events = (Kevent[]) new Kevent().toArray(3);
 
         Kevent.EV_SET(events[0], new NativeLong(osxProcess.pid),
                       Kevent.EVFILT_PROC,
@@ -103,17 +103,16 @@ class ProcessKqueue implements Runnable
                       0,
                       new NativeLong(0), Pointer.NULL);
 
-        Kevent.EV_SET(events[3], new NativeLong(osxProcess.stdin),
-                      Kevent.EVFILT_WRITE,
-                      Kevent.EV_ADD | Kevent.EV_ONESHOT,
-                      0,
-                      new NativeLong(0), Pointer.NULL);
-
         int rc = LIBC.kevent(kqueue, events, events.length, null, 0, Pointer.NULL);
         if (rc == -1)
         {
             throw new RuntimeException("Unable to register new events to kqueue");
         }
+    }
+
+    void wantWrite(int stdin)
+    {
+        requeueRead(stdin);
     }
 
     /**

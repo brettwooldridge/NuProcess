@@ -59,5 +59,6 @@ public interface LibC extends Library
     short POSIX_SPAWN_CLOEXEC_DEFAULT = 0x4000;
 
     // From /usr/include/sys/signal.h
+    int SIGTERM = 15;
     int SIGCONT = 19;
 }

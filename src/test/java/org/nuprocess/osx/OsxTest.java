@@ -21,7 +21,7 @@ public class OsxTest
     @Test
     public void test1() throws IOException
     {
-        if (true) return;
+        // if (true) return;
 
         final Semaphore semaphore = new Semaphore(0);
         final StringBuilder sb = new StringBuilder();
@@ -31,16 +31,20 @@ public class OsxTest
             private boolean done;
             private NuProcess nuProcess;
 
+            @Override
             public void onStart(NuProcess nuProcess)
             {
                 this.nuProcess = nuProcess;
+                nuProcess.wantWrite();
             }
 
+            @Override
             public void onExit(int statusCode)
             {
                 semaphore.release();
             }
 
+            @Override
             public void onStdout(ByteBuffer buffer)
             {
                 if (buffer == null)
@@ -53,12 +57,19 @@ public class OsxTest
                 sb.append(new String(bytes));
             }
 
+            @Override
             public void onStderr(ByteBuffer buffer)
             {
                 onStdout(buffer);
             }
 
-            public boolean onStdinReady(int available)
+            @Override
+            public void onStdinClose()
+            {
+            }
+
+            @Override
+            public boolean onStdinReady(ByteBuffer buffer)
             {
                 if (done)
                 {
@@ -66,21 +77,10 @@ public class OsxTest
                     return false;
                 }
 
-                try
-                {
-                    nuProcess.write("This is a test message\n".getBytes());
-                    done = true;
-                    return true;
-                }
-                catch (IOException e)
-                {
-                    throw new RuntimeException(e);
-                }
-            }
-
-            @Override
-            public void onStdinClose()
-            {
+                buffer.put("This is a test message\n".getBytes());
+                buffer.flip();
+                done = true;
+                return true;
             }
         };
 
@@ -95,6 +95,8 @@ public class OsxTest
     @Test
     public void test2()
     {
+        // if (true) return;
+
         final Semaphore semaphore = new Semaphore(0);
         final AtomicInteger exitCode = new AtomicInteger();
 
@@ -116,7 +118,7 @@ public class OsxTest
     @Test
     public void test3()
     {
-        if (true) return;
+        // if (true) return;
 
         NuProcessListener processListener = new NuAbstractProcessListener() { };
 

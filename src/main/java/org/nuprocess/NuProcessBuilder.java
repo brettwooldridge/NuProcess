@@ -6,7 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
-import org.nuprocess.linux.LinuxProcess;
+import org.nuprocess.osx.OsxProcess;
 
 /**
  * @author Brett Wooldridge
@@ -57,8 +57,8 @@ public class NuProcessBuilder
             env[i++] = entrySet.getKey() + "=" + entrySet.getValue();
         }
 
-        // OsxProcess p = new OsxProcess(command, env, processListener);
-        LinuxProcess p = new LinuxProcess(command, env, processListener);
+        OsxProcess p = new OsxProcess(command, env, processListener);
+        // LinuxProcess p = new LinuxProcess(command, env, processListener);
         return p.start();
     }
 }

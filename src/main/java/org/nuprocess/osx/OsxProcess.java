@@ -1,11 +1,13 @@
 package org.nuprocess.osx;
 
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.nuprocess.NuProcess;
 import org.nuprocess.NuProcessListener;
@@ -30,9 +32,13 @@ public class OsxProcess implements NuProcess
     int stdout;
     int stderr;
 
-    private String[] args;
-    private String[] environment;
     private NuProcessListener processListener;
+    private AtomicBoolean userWantsWrite;
+    private ProcessKqueue myProcessor;
+    private AtomicInteger exitCode;
+    private CountDownLatch exitPending;
+    private String[] environment;
+    private String[] args;
 
     private ByteBuffer outBuffer;
     private ByteBuffer inBuffer;
@@ -59,8 +65,9 @@ public class OsxProcess implements NuProcess
         this.args = command.toArray(new String[0]);
         this.environment = env;
         this.processListener = processListener;
-        this.outBuffer = ByteBuffer.allocateDirect(BUFFER_CAPACITY);
-        this.inBuffer = ByteBuffer.allocateDirect(BUFFER_CAPACITY);
+        this.userWantsWrite = new AtomicBoolean();
+        this.exitCode = new AtomicInteger();
+        this.exitPending = new CountDownLatch(1);
     }
 
     public NuProcess start()
@@ -85,6 +92,10 @@ public class OsxProcess implements NuProcess
 
             args = null;
             environment = null;
+
+            outBuffer = ByteBuffer.allocateDirect(BUFFER_CAPACITY);
+            inBuffer = ByteBuffer.allocateDirect(BUFFER_CAPACITY);
+            inBuffer.flip();
 
             // After we've spawned, close the unused ends of our pipes (that were dup'd into the child process space)
             LIBC.close(stdinWidow);
@@ -113,128 +124,137 @@ public class OsxProcess implements NuProcess
         }
     }
 
-	public int write(byte[] buf) throws IOException
-	{
-		return write(ByteBuffer.wrap(buf));
-	}
+    @Override
+    public int waitFor() throws InterruptedException
+    {
+        exitPending.await();
+        return exitCode.get();
+    }
 
-	public int write(byte[] buf, int off, int len) throws IOException
-	{
-	    return write(ByteBuffer.wrap(buf, off, len));
-	}
-
-	public int write(ByteBuffer buf) throws IOException
-	{
-		ByteBuffer slice = buf.slice();
-        int rc = LIBC.write(stdin, slice, slice.capacity());
-        if (rc == -1)
+    @Override
+    public void destroy()
+    {
+        if (exitPending.getCount() != 0)
         {
-            throw new IOException("Failure writing to process pipe");
+            LIBC.kill(pid, LibC.SIGTERM);
         }
-        if (rc != buf.limit())
-        {
-            throw new IOException(String.format("Pipe overflow, tried to write %d but could only write %d bytes", buf.limit(), rc));
-        }
-        return rc;
-	}
+    }
 
+    @Override
+    public void wantWrite()
+    {
+        if (stdin != 0)
+        {
+            userWantsWrite.set(true);
+            myProcessor.wantWrite(stdin);
+        }
+    }
+
+    @Override
     public void stdinClose()
     {
-        LIBC.close(stdin);
+        if (stdin != 0)
+        {
+            LIBC.close(stdin);
+            stdin = 0;
+        }
     }
 
     // ************************************************************************
     //                             Package methods
     // ************************************************************************
 
-    void callStart()
+    void readStdout(int availability)
     {
         try
         {
-        	processListener.onStart(this);
-        }
-        catch (Exception e)
-        {
-        	// Don't let an exception thrown from the user's handler interrupt us
-        }
-    }
-
-    void readStdout(int available)
-    {
-        if (available > 0)
-        {
-            int read = 0;
-            while (read < available)
+            if (availability < 0)
             {
-                outBuffer.position(0);
-                int rc = LIBC.read(stdout, outBuffer, Math.min(outBuffer.capacity(), available - read));
-                if (rc <= 0)
-                {
-                    break;
-                }
-
-                read += rc;
-                outBuffer.limit(rc);
-
-                try
-                {
-                	processListener.onStdout(outBuffer);
-                }
-                catch (Exception e)
-                {
-                	// Don't let an exception thrown from the user's handler interrupt us
-                }
+                processListener.onStdout(null);
+                return;
             }
-        }
-        else if (available == -1)
-        {
-            processListener.onStdout(null);
-        }
-    }
-
-    void readStderr(int available)
-    {
-        if (available > 0)
-        {
-            int read = 0;
-            while (read < available)
+            else if (availability == 0)
             {
-                outBuffer.position(0);
-                int rc = LIBC.read(stderr, outBuffer, Math.min(outBuffer.capacity(), available - read));
-                if (rc <= 0)
-                {
-                    break;
-                }
-
-                read += rc;
-                outBuffer.limit(rc);
-
-                try
-                {
-                	processListener.onStderr(outBuffer);
-                }
-                catch (Exception e)
-                {
-                	// Don't let an exception thrown from the user's handler interrupt us
-                }
+                return;
             }
-        }
-        else if (available == -1)
-        {
-            processListener.onStderr(null);
-        }
-    }
 
-    boolean writeStdin(int available)
-    {
-        try
-        {
-        	return processListener.onStdinReady(available);
+            outBuffer.clear();
+            int read = LIBC.read(stdout, outBuffer, Math.min(availability, BUFFER_CAPACITY));
+            if (read == -1)
+            {
+                // EOF?
+            }
+            outBuffer.limit(read);
+            processListener.onStdout(outBuffer);
         }
         catch (Exception e)
         {
             // Don't let an exception thrown from the user's handler interrupt us
-        	return false;
+        }
+    }
+
+    void readStderr(int availability)
+    {
+        try
+        {
+            if (availability < 0)
+            {
+                processListener.onStderr(null);
+                return;
+            }
+            else if (availability == 0)
+            {
+                return;
+            }
+
+            outBuffer.clear();
+            int read = LIBC.read(stderr, outBuffer, Math.min(availability, BUFFER_CAPACITY));
+            if (read == -1)
+            {
+                // EOF?
+            }
+            outBuffer.limit(read);
+            processListener.onStderr(outBuffer);
+        }
+        catch (Exception e)
+        {
+            // Don't let an exception thrown from the user's handler interrupt us
+        }
+    }
+
+    boolean writeStdin(int availability)
+    {
+        if (availability == 0)
+        {
+            return false;
+        }
+
+        if (inBuffer.position() < inBuffer.limit())
+        {
+            ByteBuffer slice = inBuffer.slice();
+            int wrote = LIBC.write(stdin, slice, Math.min(availability, slice.capacity()));
+            if (wrote == -1)
+            {
+                // EOF?
+                return false;
+            }
+
+            inBuffer.position(inBuffer.position() + wrote);
+            if (userWantsWrite.compareAndSet(false, false))
+            {
+                return (wrote == slice.capacity() ? false : true);
+            }
+        }
+
+        inBuffer.clear();
+        try
+        {
+            return userWantsWrite.getAndSet(processListener.onStdinReady(inBuffer));
+        }
+        catch (Exception e)
+        {
+            // Don't let an exception thrown from the user's handler interrupt us
+            return false;
         }
     }
 
@@ -242,7 +262,9 @@ public class OsxProcess implements NuProcess
     {
         try
         {
+            exitCode.set(statusCode);
             processListener.onExit(statusCode);
+            exitPending.countDown();
         }
         catch (Exception e)
         {
@@ -250,7 +272,12 @@ public class OsxProcess implements NuProcess
         }
         finally
         {
+            LIBC.close(stdin);
+            LIBC.close(stdout);
+            LIBC.close(stderr);
+
         	outBuffer = null;
+        	inBuffer = null;
         	processListener = null;
         }
     }
@@ -258,6 +285,18 @@ public class OsxProcess implements NuProcess
     // ************************************************************************
     //                             Private methods
     // ************************************************************************
+
+    private void callStart()
+    {
+        try
+        {
+            processListener.onStart(this);
+        }
+        catch (Exception e)
+        {
+            // Don't let an exception thrown from the user's handler interrupt us
+        }
+    }
 
     private Pointer createPipes()
     {
@@ -382,9 +421,10 @@ public class OsxProcess implements NuProcess
 
     private void queueChangeList()
     {
-        synchronized (OsxProcess.class)
+        synchronized (this.getClass())
         {
-            processors[processorRoundRobin].queueChangeList(this);
+            myProcessor = processors[processorRoundRobin]; 
+            myProcessor.queueChangeList(this);
             processorRoundRobin = (processorRoundRobin + 1) % processors.length;
         }
     }
