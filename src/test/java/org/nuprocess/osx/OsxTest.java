@@ -29,7 +29,6 @@ public class OsxTest
             private boolean done;
             private NuProcess nuProcess;
 
-            @Override
             public void onStart(NuProcess nuProcess)
             {
                 this.nuProcess = nuProcess;
@@ -57,23 +56,23 @@ public class OsxTest
                 onStdout(buffer);
             }
 
-            @Override
-            public void onStdinReady(int available)
+            public boolean onStdinReady(int available)
             {
                 if (done)
                 {
                     nuProcess.stdinClose();
-                    return;
+                    return false;
                 }
 
                 try
                 {
                     nuProcess.write("This is a test message\n".getBytes());
                     done = true;
+                    return true;
                 }
                 catch (IOException e)
                 {
-                    e.printStackTrace();
+                    throw new RuntimeException(e);
                 }
             }
 

@@ -31,8 +31,9 @@ public abstract class NuAbstractProcessListener implements NuProcessListener
     }
 
     @Override
-    public void onStdinReady(int available)
+    public boolean onStdinReady(int available)
     {
+    	return false;
     }
 
     @Override
