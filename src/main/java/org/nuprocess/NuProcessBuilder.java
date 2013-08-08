@@ -6,7 +6,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
-import org.nuprocess.osx.OsxProcess;
+import org.nuprocess.linux.LinuxProcess;
 
 /**
  * @author Brett Wooldridge
@@ -29,7 +29,7 @@ public class NuProcessBuilder
             throw new IllegalArgumentException("List of commands may not be null or empty");
         }
 
-        if (processListener == null)
+        if (listener == null)
         {
             throw new IllegalArgumentException("A NuProcessListener must be specified");
         }
@@ -57,8 +57,8 @@ public class NuProcessBuilder
             env[i++] = entrySet.getKey() + "=" + entrySet.getValue();
         }
 
-        OsxProcess p = new OsxProcess(command, env, processListener);
-
+        // OsxProcess p = new OsxProcess(command, env, processListener);
+        LinuxProcess p = new LinuxProcess(command, env, processListener);
         return p.start();
     }
 }

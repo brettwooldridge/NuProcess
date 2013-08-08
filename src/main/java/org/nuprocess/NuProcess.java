@@ -27,4 +27,6 @@ public interface NuProcess
     int write(ByteBuffer buf) throws IOException;
 
     void stdinClose();
+   
+    void destroy();
 }

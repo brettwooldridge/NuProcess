@@ -87,7 +87,7 @@ public interface NuProcessListener
      *                  {@code NuProcess#write()} attempt
      * @return true if you have more data to write, false otherwise
      */
-    boolean onStdinReady(int available);
+    boolean onStdinReady(ByteBuffer buffer);
 
     /**
      * This method is invoked when the process closes it's side of the stdin
