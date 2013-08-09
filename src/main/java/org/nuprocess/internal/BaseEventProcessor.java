@@ -8,7 +8,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 /**
  * @author Brett Wooldridge
  */
-public abstract class BaseEventProcessor<T extends BaseProcess> implements IEventProcessor<T>
+public abstract class BaseEventProcessor<T extends BasePosixProcess> implements IEventProcessor<T>
 {
     public static final int EVENT_BATCH_SIZE;
 

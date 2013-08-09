@@ -6,7 +6,8 @@ import java.util.concurrent.CountDownLatch;
 
 import org.nuprocess.NuProcess;
 import org.nuprocess.NuProcessListener;
-import org.nuprocess.internal.BaseProcess;
+import org.nuprocess.internal.BasePosixProcess;
+import org.nuprocess.internal.ILibC;
 
 import com.sun.jna.Memory;
 import com.sun.jna.Pointer;
@@ -16,7 +17,7 @@ import com.sun.jna.ptr.IntByReference;
 /**
  * @author Brett Wooldridge
  */
-public class OsxProcess extends BaseProcess
+public class OsxProcess extends BasePosixProcess
 {
     private static final LibC LIBC;
 
@@ -243,73 +244,14 @@ public class OsxProcess extends BaseProcess
         LIBC.close(fildes);
     }
 
+    @Override
+    protected ILibC getLibC()
+    {
+        return LIBC;
+    }
+
     // ************************************************************************
     //                             Private methods
     // ************************************************************************
 
-    private Pointer createPipes()
-    {
-        int rc = 0;
-
-        int[] in = new int[2];
-        int[] out = new int[2];
-        int[] err = new int[2];
-
-        Pointer posix_spawn_file_actions = Pointer.NULL;
-        try
-        {
-            rc = LIBC.pipe(in);
-            checkReturnCode(rc, "Create pipe() failed");
-            
-            rc = LIBC.pipe(out);
-            checkReturnCode(rc, "Create pipe() failed");
-    
-            rc = LIBC.pipe(err);
-            checkReturnCode(rc, "Create pipe() failed");
-    
-            // Create spawn file actions
-            posix_spawn_file_actions = new Memory(Pointer.SIZE);
-            rc = LIBC.posix_spawn_file_actions_init(posix_spawn_file_actions);
-            checkReturnCode(rc, "Internal call to posix_spawn_file_actions_init() failed");
-    
-            // Dup the reading end of the pipe into the sub-process, and close our end
-            rc = LIBC.posix_spawn_file_actions_adddup2(posix_spawn_file_actions, in[0], 0);
-            checkReturnCode(rc, "Internal call to posix_spawn_file_actions_adddup2() failed");
-    
-            rc = LIBC.posix_spawn_file_actions_addclose(posix_spawn_file_actions, in[1]);
-            checkReturnCode(rc, "Internal call to posix_spawn_file_actions_addclose() failed");
-            
-            stdin = in[1];
-            stdinWidow = in[0];
-    
-            // Dup the writing end of the pipe into the sub-process, and close our end
-            rc = LIBC.posix_spawn_file_actions_adddup2(posix_spawn_file_actions, out[1], 1);
-            checkReturnCode(rc, "Internal call to posix_spawn_file_actions_adddup2() failed");
-    
-            rc = LIBC.posix_spawn_file_actions_addclose(posix_spawn_file_actions, out[0]);
-            checkReturnCode(rc, "Internal call to posix_spawn_file_actions_addclose() failed");
-    
-            stdout = out[0];
-            stdoutWidow = out[1];
-
-            // Dup the writing end of the pipe into the sub-process, and close our end
-            rc = LIBC.posix_spawn_file_actions_adddup2(posix_spawn_file_actions, err[1], 2);
-            checkReturnCode(rc, "Internal call to posix_spawn_file_actions_adddup2() failed");
-    
-            rc = LIBC.posix_spawn_file_actions_addclose(posix_spawn_file_actions, err[0]);
-            checkReturnCode(rc, "Internal call to posix_spawn_file_actions_addclose() failed");
-
-            stderr = err[0];
-            stderrWidow = err[1];
-
-            return posix_spawn_file_actions;
-        }
-        catch (RuntimeException e)
-        {
-            LIBC.posix_spawn_file_actions_destroy(posix_spawn_file_actions);
-
-            initFailureCleanup(in, out, err);
-            throw e;
-        }
-    }
 }

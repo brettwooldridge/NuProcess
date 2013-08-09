@@ -8,7 +8,8 @@ import java.util.concurrent.CountDownLatch;
 
 import org.nuprocess.NuProcess;
 import org.nuprocess.NuProcessListener;
-import org.nuprocess.internal.BaseProcess;
+import org.nuprocess.internal.BasePosixProcess;
+import org.nuprocess.internal.ILibC;
 import org.objenesis.Objenesis;
 import org.objenesis.ObjenesisStd;
 import org.objenesis.instantiator.ObjectInstantiator;
@@ -16,7 +17,7 @@ import org.objenesis.instantiator.ObjectInstantiator;
 /**
  * @author Brett Wooldridge
  */
-public class LinuxProcess extends BaseProcess
+public class LinuxProcess extends BasePosixProcess
 {
     private static final LibC LIBC;
 
@@ -64,7 +65,7 @@ public class LinuxProcess extends BaseProcess
         this.exitPending = new CountDownLatch(1);
     }
 
-    public NuProcess start()
+    public NuProcess Zstart()
     {
         int[] std_fds = {-1, -1, -1};
 
@@ -252,6 +253,12 @@ public class LinuxProcess extends BaseProcess
         {
             LIBC.close(fd);
         }
+    }
+
+    @Override
+    protected ILibC getLibC()
+    {
+        return LIBC;
     }
 
     // ************************************************************************

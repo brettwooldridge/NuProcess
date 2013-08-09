@@ -2,7 +2,7 @@ package org.nuprocess.internal;
 
 import java.util.concurrent.CyclicBarrier;
 
-public interface IEventProcessor<T extends BaseProcess> extends Runnable
+public interface IEventProcessor<T extends BasePosixProcess> extends Runnable
 {
     boolean checkAndSetRunning();
 
