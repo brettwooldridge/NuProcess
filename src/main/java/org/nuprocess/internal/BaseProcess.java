@@ -131,11 +131,7 @@ public abstract class BaseProcess implements NuProcess
 
         outBuffer = ByteBuffer.allocateDirect(BUFFER_CAPACITY);
         inBuffer = ByteBuffer.allocateDirect(BUFFER_CAPACITY);
-
-        // After we've spawned, close the unused ends of our pipes (that were dup'd into the child process space)
-        // close(stdinWidow);
-        // close(stdoutWidow);
-        // close(stderrWidow);        
+        inBuffer.flip();
     }
 
     protected void kickstartProcessors()

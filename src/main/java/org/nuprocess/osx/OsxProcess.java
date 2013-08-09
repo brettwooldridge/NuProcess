@@ -59,6 +59,11 @@ public class OsxProcess extends BaseProcess
     
             pid = restrict_pid.getValue();
 
+            // After we've spawned, close the unused ends of our pipes (that were dup'd into the child process space)
+            close(stdinWidow);
+            close(stdoutWidow);
+            close(stderrWidow);
+
             afterStart();
 
             registerProcess();
