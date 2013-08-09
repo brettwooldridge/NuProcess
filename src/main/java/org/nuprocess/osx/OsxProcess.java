@@ -1,16 +1,12 @@
 package org.nuprocess.osx;
 
 import java.nio.ByteBuffer;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.CyclicBarrier;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import org.nuprocess.NuProcess;
 import org.nuprocess.NuProcessListener;
+import org.nuprocess.internal.BaseProcess;
 
 import com.sun.jna.Memory;
 import com.sun.jna.Pointer;
@@ -20,56 +16,29 @@ import com.sun.jna.ptr.IntByReference;
 /**
  * @author Brett Wooldridge
  */
-public class OsxProcess implements NuProcess
+public class OsxProcess extends BaseProcess
 {
     private static final LibC LIBC;
-    private static final ProcessKqueue[] processors;
 
-    private static int processorRoundRobin;
-    
-    int pid;
-    int stdin;
-    int stdout;
-    int stderr;
-
-    private NuProcessListener processListener;
-    private AtomicBoolean userWantsWrite;
-    private ProcessKqueue myProcessor;
-    private AtomicInteger exitCode;
     private CountDownLatch exitPending;
-    private String[] environment;
-    private String[] args;
-
-    private ByteBuffer outBuffer;
-    private ByteBuffer inBuffer;
-
-    private int stdinWidow;
-    private int stdoutWidow;
-    private int stderrWidow;
 
     static
     {
         LIBC = LibC.INSTANCE;
-        
-        int numThreads = Integer.getInteger("org.nuprocess.threads",
-                                            Boolean.getBoolean("org.nuprocess.threadsEqualCores") ? Runtime.getRuntime().availableProcessors() : 1);
-        processors = new ProcessKqueue[numThreads];
-        for (int i = 0; i < numThreads; i++)
+
+        for (int i = 0; i < processors.length; i++)
         {
             processors[i] = new ProcessKqueue();
         }
     }
 
-    public OsxProcess(List<String> command, String[] env, NuProcessListener processListener)
+    public OsxProcess(List<String> commands, String[] env, NuProcessListener processListener)
     {
-        this.args = command.toArray(new String[0]);
-        this.environment = env;
-        this.processListener = processListener;
-        this.userWantsWrite = new AtomicBoolean();
-        this.exitCode = new AtomicInteger();
+        super(commands, env, processListener);
         this.exitPending = new CountDownLatch(1);
     }
 
+    @Override
     public NuProcess start()
     {
         Pointer posix_spawn_file_actions = createPipes();
@@ -85,24 +54,14 @@ public class OsxProcess implements NuProcess
             LIBC.posix_spawnattr_setflags(posix_spawnattr, flags);
 
             IntByReference restrict_pid = new IntByReference();
-            rc = LIBC.posix_spawn(restrict_pid, args[0], posix_spawn_file_actions, posix_spawnattr, new StringArray(args), new StringArray(environment));
+            rc = LIBC.posix_spawn(restrict_pid, commands[0], posix_spawn_file_actions, posix_spawnattr, new StringArray(commands), new StringArray(environment));
             checkReturnCode(rc, "Invocation of posix_spawn() failed");
     
             pid = restrict_pid.getValue();
 
-            args = null;
-            environment = null;
+            afterStart();
 
-            outBuffer = ByteBuffer.allocateDirect(BUFFER_CAPACITY);
-            inBuffer = ByteBuffer.allocateDirect(BUFFER_CAPACITY);
-            inBuffer.flip();
-
-            // After we've spawned, close the unused ends of our pipes (that were dup'd into the child process space)
-            LIBC.close(stdinWidow);
-            LIBC.close(stdoutWidow);
-            LIBC.close(stderrWidow);
-
-            queueChangeList();
+            registerProcess();
 
             kickstartProcessors();
 
@@ -137,16 +96,6 @@ public class OsxProcess implements NuProcess
         if (exitPending.getCount() != 0)
         {
             LIBC.kill(pid, LibC.SIGTERM);
-        }
-    }
-
-    @Override
-    public void wantWrite()
-    {
-        if (stdin != 0)
-        {
-            userWantsWrite.set(true);
-            myProcessor.wantWrite(stdin);
         }
     }
 
@@ -246,10 +195,12 @@ public class OsxProcess implements NuProcess
             }
         }
 
-        inBuffer.clear();
         try
         {
-            return userWantsWrite.getAndSet(processListener.onStdinReady(inBuffer));
+            inBuffer.clear();
+            boolean wantMore = processListener.onStdinReady(inBuffer);
+            userWantsWrite.set(wantMore);
+            return wantMore;
         }
         catch (Exception e)
         {
@@ -282,21 +233,14 @@ public class OsxProcess implements NuProcess
         }
     }
 
+    protected void close(int fildes)
+    {
+        LIBC.close(fildes);
+    }
+
     // ************************************************************************
     //                             Private methods
     // ************************************************************************
-
-    private void callStart()
-    {
-        try
-        {
-            processListener.onStart(this);
-        }
-        catch (Exception e)
-        {
-            // Don't let an exception thrown from the user's handler interrupt us
-        }
-    }
 
     private Pointer createPipes()
     {
@@ -350,8 +294,8 @@ public class OsxProcess implements NuProcess
             rc = LIBC.posix_spawn_file_actions_addclose(posix_spawn_file_actions, err[0]);
             checkReturnCode(rc, "Internal call to posix_spawn_file_actions_addclose() failed");
 
-            stderrWidow = err[1];
             stderr = err[0];
+            stderrWidow = err[1];
 
             return posix_spawn_file_actions;
         }
@@ -361,79 +305,6 @@ public class OsxProcess implements NuProcess
 
             initFailureCleanup(in, out, err);
             throw e;
-        }
-    }
-
-    private void initFailureCleanup(int[] in, int[] out, int[] err)
-    {
-        Set<Integer> unique = new HashSet<Integer>();
-        if (in != null)
-        {
-            unique.add(in[0]);
-            unique.add(in[1]);
-        }
-
-        if (out != null)
-        {
-            unique.add(out[0]);
-            unique.add(out[1]);
-        }
-
-        if (err != null)
-        {
-            unique.add(err[0]);
-            unique.add(err[1]);
-        }
-
-        for (int fildes : unique)
-        {
-            if (fildes != 0)
-            {
-                LIBC.close(fildes);
-            }
-        }
-    }
-
-    private void kickstartProcessors()
-    {
-        for (int i = 0; i < processors.length; i++)
-        {
-            if (processors[i].checkAndSetRunning())
-            {
-                CyclicBarrier spawnBarrier = new CyclicBarrier(2);
-                processors[i].setBarrier(spawnBarrier);
-
-                Thread t = new Thread(processors[i], "ProcessKqueue" + i);
-                t.setDaemon(true);
-                t.start();
-
-                try
-                {
-                    spawnBarrier.await();
-                }
-                catch (Exception e)
-                {
-                    throw new RuntimeException(e);
-                }
-            }
-        }
-    }
-
-    private void queueChangeList()
-    {
-        synchronized (this.getClass())
-        {
-            myProcessor = processors[processorRoundRobin]; 
-            myProcessor.queueChangeList(this);
-            processorRoundRobin = (processorRoundRobin + 1) % processors.length;
-        }
-    }
-
-    private static void checkReturnCode(int rc, String failureMessage)
-    {
-        if (rc != 0)
-        {
-            throw new RuntimeException(failureMessage + ", return code: "+ rc);
         }
     }
 }

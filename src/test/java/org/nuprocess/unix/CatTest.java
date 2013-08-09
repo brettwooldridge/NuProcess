@@ -1,4 +1,4 @@
-package org.nuprocess.osx;
+package org.nuprocess.unix;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -16,7 +16,7 @@ import org.nuprocess.NuProcessListener;
 /**
  * @author Brett Wooldridge
  */
-public class OsxTest
+public class CatTest
 {
     @Test
     public void test1() throws IOException

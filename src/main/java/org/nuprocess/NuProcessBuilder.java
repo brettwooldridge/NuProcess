@@ -6,20 +6,52 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 
-import org.nuprocess.osx.OsxProcess;
-
 /**
  * @author Brett Wooldridge
  */
 public class NuProcessBuilder
 {
+    private static final NuProcessFactory factory;
+
     private List<String> command;
     private HashMap<String, String> environment;
     private NuProcessListener processListener;
 
-    // Instance initializer
+    static
     {
-        environment = new HashMap<String, String>(System.getenv());
+        String factoryClassName = null;
+        String osname = System.getProperty("os.name").toLowerCase();
+        if (osname.contains("mac"))
+        {
+            factoryClassName = "org.nuprocess.osx.OsxProcessFactory";
+        }
+        else if (osname.contains("win"))
+        {
+            factoryClassName = "org.nuprocess.win.WinProcessFactory";
+        }
+        else if (osname.contains("linux"))
+        {
+            factoryClassName = "org.nuprocess.linux.LinProcessFactory";
+        }
+        else if (osname.contains("sunos"))
+        {
+            factoryClassName = "org.nuprocess.solaris.SolProcessFactory";
+        }
+
+        if (factoryClassName == null)
+        {
+            throw new RuntimeException("Unsupported operating system: " + osname);
+        }
+
+        try
+        {
+            Class<?> forName = Class.forName(factoryClassName);
+            factory = (NuProcessFactory) forName.newInstance();
+        }
+        catch (Exception e)
+        {
+            throw new RuntimeException(e);
+        }
     }
 
     public NuProcessBuilder(List<String> command, NuProcessListener listener)
@@ -34,6 +66,7 @@ public class NuProcessBuilder
             throw new IllegalArgumentException("A NuProcessListener must be specified");
         }
 
+        this.environment = new HashMap<String, String>(System.getenv());
         this.command = new ArrayList<String>(command);
         this.processListener = listener;
     }
@@ -48,6 +81,16 @@ public class NuProcessBuilder
         return environment;
     }
 
+    public void setProcessListener(NuProcessListener listener)
+    {
+        if (listener == null)
+        {
+            throw new IllegalArgumentException("A NuProcessListener must be specified");
+        }
+
+        this.processListener = listener;
+    }
+
     public NuProcess start()
     {
         String[] env = new String[environment.size()];
@@ -57,8 +100,7 @@ public class NuProcessBuilder
             env[i++] = entrySet.getKey() + "=" + entrySet.getValue();
         }
 
-        OsxProcess p = new OsxProcess(command, env, processListener);
-        // LinuxProcess p = new LinuxProcess(command, env, processListener);
+        NuProcess p = factory.createProcess(command, env, processListener);
         return p.start();
     }
 }

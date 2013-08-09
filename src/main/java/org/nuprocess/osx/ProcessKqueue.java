@@ -1,9 +1,6 @@
 package org.nuprocess.osx;
 
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CyclicBarrier;
-import java.util.concurrent.atomic.AtomicBoolean;
+import org.nuprocess.internal.BaseEventProcessor;
 
 import com.sun.jna.NativeLong;
 import com.sun.jna.Pointer;
@@ -11,93 +8,65 @@ import com.sun.jna.Pointer;
 /**
  * @author Brett Wooldridge
  */
-class ProcessKqueue implements Runnable
+class ProcessKqueue extends BaseEventProcessor<OsxProcess>
 {
-    private static final LibC LIBC;
-    private static final int EVENT_BATCH_SIZE;
+    private static final LibC LIBC = LibC.INSTANCE;
 
-    private volatile CyclicBarrier startBarrier;
-    private AtomicBoolean isRunning;
-
-    private Map<Integer, OsxProcess> pidToProcessMap;
-    private Map<Integer, OsxProcess> fildesToProcessMap;
     private int kqueue;
+    private Kevent[] eventList;
 
-    static
-    {
-    	LIBC = LibC.INSTANCE;
-
-    	EVENT_BATCH_SIZE = Integer.getInteger("org.nuprocess.eventBatchSize", 8); 
-    }
-    
     ProcessKqueue()
     {
-    	pidToProcessMap = new ConcurrentHashMap<Integer, OsxProcess>();
-        fildesToProcessMap = new ConcurrentHashMap<Integer, OsxProcess>();
-        isRunning = new AtomicBoolean();
-        startBarrier = new CyclicBarrier(2);
-
         kqueue = LIBC.kqueue();
         if (kqueue < 0)
         {
             throw new RuntimeException("Unable to create kqueue");
         }
-    }
 
-    /**
-     * The primary run loop of the kqueue event processor.
-     */
-    public void run()
-    {
-        try
-        {
-            startBarrier.await();
-
-            Kevent[] eventList = (Kevent[]) new Kevent().toArray(EVENT_BATCH_SIZE);
-            do
-            {
-                process(eventList);
-                
-                // Clear the structures for the next loop - necessary?
-                for (int i = 0; i < EVENT_BATCH_SIZE; i++)
-                {
-                    eventList[i].clear();
-                }
-            } while (!isRunning.compareAndSet(pidToProcessMap.isEmpty(), false));
-	    }
-        catch (Exception e)
-        {
-            // TODO: how to handle this error?
-	    	isRunning.set(false);
-        }
+        eventList = (Kevent[]) new Kevent().toArray(EVENT_BATCH_SIZE);
     }
 
     // ************************************************************************
-    //                             Package methods
+    //                         IEventProcessor methods
     // ************************************************************************
 
-    void queueChangeList(OsxProcess osxProcess)
+    @Override
+    public void requeueRead(int stdin)
     {
-        pidToProcessMap.put(osxProcess.pid, osxProcess);
-        fildesToProcessMap.put(osxProcess.stdin, osxProcess);
-        fildesToProcessMap.put(osxProcess.stdout, osxProcess);
-        fildesToProcessMap.put(osxProcess.stderr, osxProcess);
+        Kevent[] events = (Kevent[]) new Kevent().toArray(1);
+
+        Kevent.EV_SET(events[0], new NativeLong(stdin),
+                Kevent.EVFILT_WRITE,
+                Kevent.EV_ADD | Kevent.EV_ONESHOT,
+                0,
+                new NativeLong(0), Pointer.NULL);
+
+        LIBC.kevent(kqueue, events, 1, null, 0, Pointer.NULL);
+    }
+
+    @Override
+    public void registerProcess(OsxProcess process)
+    {
+        pidToProcessMap.put(process.getPid(), process);
+        fildesToProcessMap.put(process.getStdin(), process);
+        fildesToProcessMap.put(process.getStdout(), process);
+        fildesToProcessMap.put(process.getStderr(), process);
 
         Kevent[] events = (Kevent[]) new Kevent().toArray(3);
 
-        Kevent.EV_SET(events[0], new NativeLong(osxProcess.pid),
+        Kevent.EV_SET(events[0], new NativeLong(process.getPid()),
                       Kevent.EVFILT_PROC,
                       Kevent.EV_ADD,
                       Kevent.NOTE_EXIT | Kevent.NOTE_EXITSTATUS | Kevent.NOTE_REAP,
                       new NativeLong(0), Pointer.NULL);
 
-        Kevent.EV_SET(events[1], new NativeLong(osxProcess.stdout),
+        Kevent.EV_SET(events[1], new NativeLong(process.getStdout()),
                       Kevent.EVFILT_READ,
                       Kevent.EV_ADD,
                       0,
                       new NativeLong(0), Pointer.NULL);
 
-        Kevent.EV_SET(events[2], new NativeLong(osxProcess.stderr),
+        Kevent.EV_SET(events[2], new NativeLong(process.getStderr()),
                       Kevent.EVFILT_READ,
                       Kevent.EV_ADD,
                       0,
@@ -110,37 +79,11 @@ class ProcessKqueue implements Runnable
         }
     }
 
-    void wantWrite(int stdin)
-    {
-        requeueRead(stdin);
-    }
-
-    /**
-     * Set the CyclicBarrier that this thread should join, along with the OsxProcess
-     * thread that is starting this processor.  Used to cause the OsxProcess to wait
-     * until the processor is up and running before returning from start() to the
-     * user.
-     *
-     * @param processorRunning a CyclicBarrier to join
-     */
-    void setBarrier(CyclicBarrier processorRunning)
-    {
-        this.startBarrier = processorRunning;
-    }
-
-    /**
-     * @return
-     */
-    boolean checkAndSetRunning()
-    {
-        return isRunning.compareAndSet(false, true);
-    }
-
     // ************************************************************************
     //                             Private methods
     // ************************************************************************
 
-    private void process(Kevent[] eventList) throws InterruptedException
+    public void process()
     {
         int nev = LIBC.kevent(kqueue, null, 0, eventList, eventList.length, Pointer.NULL);
         if (nev == -1)
@@ -159,7 +102,7 @@ class ProcessKqueue implements Runnable
                 if (osxProcess != null)
                 {
                     int available = kevent.data != null ? kevent.data.intValue() : -1;
-                    if (ident == osxProcess.stdout)
+                    if (ident == osxProcess.getStdout())
                     {
                     	osxProcess.readStdout(available);
                         if ((kevent.flags & Kevent.EV_EOF) != 0)
@@ -185,7 +128,7 @@ class ProcessKqueue implements Runnable
                     int available = kevent.data != null ? kevent.data.intValue() : -1;
                 	if (osxProcess.writeStdin(available))
                 	{
-                		requeueRead(osxProcess.stdin);
+                		requeueRead(osxProcess.getStdin());
                 	}
                 }
             }
@@ -199,27 +142,16 @@ class ProcessKqueue implements Runnable
 
                 cleanupProcess(osxProcess);                
             }
+
+            kevent.clear();
         }
-    }
-
-    private void requeueRead(int stdin)
-    {
-        Kevent[] events = (Kevent[]) new Kevent().toArray(1);
-
-        Kevent.EV_SET(events[0], new NativeLong(stdin),
-                Kevent.EVFILT_WRITE,
-                Kevent.EV_ADD | Kevent.EV_ONESHOT,
-                0,
-                new NativeLong(0), Pointer.NULL);
-
-        LIBC.kevent(kqueue, events, 1, null, 0, Pointer.NULL);
     }
 
     private void cleanupProcess(OsxProcess osxProcess)
     {
         Kevent[] events = (Kevent[]) new Kevent().toArray(1);
 
-        Kevent.EV_SET(events[0], new NativeLong(osxProcess.pid), 
+        Kevent.EV_SET(events[0], new NativeLong(osxProcess.getPid()), 
                       Kevent.EVFILT_PROC,
                       Kevent.EV_DELETE | Kevent.EV_ENABLE | Kevent.EV_ONESHOT,
                       Kevent.NOTE_EXIT | Kevent.NOTE_EXITSTATUS | Kevent.NOTE_REAP,
@@ -227,9 +159,9 @@ class ProcessKqueue implements Runnable
 
         LIBC.kevent(kqueue, events, 1, null, 0, Pointer.NULL);
 
-        pidToProcessMap.remove(osxProcess.pid);
-        fildesToProcessMap.remove(osxProcess.stdin);
-        fildesToProcessMap.remove(osxProcess.stdout);
-        fildesToProcessMap.remove(osxProcess.stderr);
+        pidToProcessMap.remove(osxProcess.getPid());
+        fildesToProcessMap.remove(osxProcess.getStdin());
+        fildesToProcessMap.remove(osxProcess.getStdout());
+        fildesToProcessMap.remove(osxProcess.getStderr());
     }
 }

@@ -4,7 +4,6 @@ import java.nio.Buffer;
 
 import com.sun.jna.Library;
 import com.sun.jna.Native;
-import com.sun.jna.Pointer;
 import com.sun.jna.ptr.IntByReference;
 
 /**
@@ -16,7 +15,9 @@ public interface LibC extends Library
 
     int pipe(int[] fildes);
 
-    int fcntl(int fildes, int cmd, Pointer args);
+    int fcntl(int fildes, int cmd);
+
+    int fcntl(int fildes, int cmd, long argO);
 
     int close(int fildes);
 
@@ -33,4 +34,9 @@ public interface LibC extends Library
     int epoll_ctl(int epfd, int op, int fd, EpollEvent event);
 
     int epoll_wait(int epfd, EpollEvent[] events, int maxevents, int timeout);
+
+    int F_GETFL = 3;
+    int F_SETFL = 4;
+
+    int O_NONBLOCK = 2048;
 }

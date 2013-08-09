@@ -5,11 +5,10 @@ import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import org.nuprocess.NuProcess;
 import org.nuprocess.NuProcessListener;
+import org.nuprocess.internal.BaseProcess;
 import org.objenesis.Objenesis;
 import org.objenesis.ObjenesisStd;
 import org.objenesis.instantiator.ObjectInstantiator;
@@ -17,32 +16,17 @@ import org.objenesis.instantiator.ObjectInstantiator;
 /**
  * @author Brett Wooldridge
  */
-public class LinuxProcess implements NuProcess
+public class LinuxProcess extends BaseProcess
 {
     private static final LibC LIBC;
 
-    private static final ProcessEpoll[] processors;
-    private static int processorRoundRobin;
     private static final ObjectInstantiator processInstantiator;
     private static final Class<?> processClass;
     private static boolean JDK7;
     private static Method forkAndExec;
     private static Method destroyProcess;
 
-    int pid;
-    int stdin;
-    int stdout;
-    int stderr;
-
-    private AtomicBoolean userWantsWrite;
-    private NuProcessListener processListener;
-    private AtomicInteger exitCode;
     private CountDownLatch exitPending;
-    private String[] environment;
-    private String[] commands;
-
-    private ByteBuffer outBuffer;
-    private ByteBuffer inBuffer;
 
     private Object unixProcessInstance;
 
@@ -68,31 +52,21 @@ public class LinuxProcess implements NuProcess
 
         reflectUnixProcess();
 
-        int numThreads = Integer.getInteger("org.nuprocess.threads",
-                                            Boolean.getBoolean("org.nuprocess.threadsEqualCores") ? Runtime.getRuntime().availableProcessors() : 1);
-        processors = new ProcessEpoll[numThreads];
-        for (int i = 0; i < numThreads; i++)
+        for (int i = 0; i < processors.length; i++)
         {
             processors[i] = new ProcessEpoll();
         }
     }
 
-    public LinuxProcess(List<String> command, String[] env, NuProcessListener processListener)
+    public LinuxProcess(List<String> commands, String[] env, NuProcessListener processListener)
     {
-        this.commands = command.toArray(new String[0]);
-        this.environment = env;
-        this.processListener = processListener;
-        this.exitCode = new AtomicInteger();
+        super(commands, env, processListener);
         this.exitPending = new CountDownLatch(1);
-        this.userWantsWrite = new AtomicBoolean();
     }
 
     public NuProcess start()
     {
-        int[] std_fds = new int[3];
-        std_fds[0] = 0;
-        std_fds[1] = 1;
-        std_fds[2] = 2;
+        int[] std_fds = {-1, -1, -1};
 
         // Convert arguments to a contiguous block; it's easier to do
         // memory management in Java than in C.
@@ -108,36 +82,37 @@ public class LinuxProcess implements NuProcess
         for (byte[] arg : args)
         {
             System.arraycopy(arg, 0, argBlock, i, arg.length);
-            i += arg.length + 1;  // No need to write NUL byte explicitly, the +1 handles it
+            i += arg.length + 1; // No need to write NUL byte explicitly, the +1 handles it
         }
 
         byte[] envBlock = toEnvironmentBlock();
 
         File workDir = new File(".");
-        
+
         unixProcessInstance = processInstantiator.newInstance();
-        Object[] params = { toCString(commands[0]), argBlock, args.length, envBlock, environment.length,
-                            toCString(workDir.getAbsolutePath()), std_fds, false };
+        Object[] params = { toCString(commands[0]), argBlock, args.length, envBlock, environment.length, toCString(workDir.getAbsolutePath()), std_fds, false };
         try
         {
             pid = (int) forkAndExec.invoke(unixProcessInstance, params);
             if (pid >= 0)
             {
             }
+            stdin = std_fds[0];
+            stdout = std_fds[1];
+            stderr = std_fds[2];
         }
         catch (Exception e)
         {
             throw new RuntimeException(e);
         }
 
-        commands = null;
-        environment = null;
+        afterStart();
 
-        outBuffer = ByteBuffer.allocateDirect(BUFFER_CAPACITY);
-        inBuffer = ByteBuffer.allocateDirect(BUFFER_CAPACITY);
-        inBuffer.flip();
+        registerProcess();
 
-        processListener.onStart(this);
+        kickstartProcessors();
+
+        callStart();
 
         return this;
     }
@@ -153,19 +128,12 @@ public class LinuxProcess implements NuProcess
     }
 
     @Override
-    public void wantWrite()
-    {
-        userWantsWrite.set(true);
-        // TODO: call processor to express write interest
-    }
-
-    @Override
     public void stdinClose()
     {
         if (stdin != 0)
         {
             LIBC.close(stdin);
-            stdin = 0;
+            // stdin = 0;
         }
     }
 
@@ -174,7 +142,7 @@ public class LinuxProcess implements NuProcess
     {
         try
         {
-            destroyProcess.invoke(unixProcessInstance, new Object[] {pid});
+            destroyProcess.invoke(unixProcessInstance, new Object[] { pid });
         }
         catch (Exception e)
         {
@@ -191,28 +159,54 @@ public class LinuxProcess implements NuProcess
     //                             Package methods
     // ************************************************************************
 
-    void readStdout()
+    void readStdout(boolean closed)
     {
-        outBuffer.clear();
-        int read = LIBC.read(stdout, outBuffer, BUFFER_CAPACITY);
-        if (read == -1)
+        try
         {
-            // EOF?
+            if (closed)
+            {
+                processListener.onStdout(null);
+                return;
+            }
+
+            outBuffer.clear();
+            int read = LIBC.read(stdout, outBuffer, BUFFER_CAPACITY);
+            if (read == -1)
+            {
+                // EOF?
+            }
+            outBuffer.limit(read);
+            processListener.onStdout(outBuffer);
         }
-        outBuffer.limit(read);
-        processListener.onStdout(outBuffer);
+        catch (Exception e)
+        {
+            // Don't let an exception thrown from the user's handler interrupt us
+        }
     }
 
-    void readStderr()
+    void readStderr(boolean closed)
     {
-        outBuffer.clear();
-        int read = LIBC.read(stderr, outBuffer, BUFFER_CAPACITY);
-        if (read == -1)
+        try
         {
-            // EOF?
+            if (closed)
+            {
+                processListener.onStderr(null);
+                return;
+            }
+
+            outBuffer.clear();
+            int read = LIBC.read(stderr, outBuffer, BUFFER_CAPACITY);
+            if (read == -1)
+            {
+                // EOF?
+            }
+            outBuffer.limit(read);
+            processListener.onStderr(outBuffer);
         }
-        outBuffer.limit(read);
-        processListener.onStderr(outBuffer);
+        catch (Exception e)
+        {
+            // Don't let an exception thrown from the user's handler interrupt us
+        }
     }
 
     boolean writeStdin()
@@ -228,20 +222,35 @@ public class LinuxProcess implements NuProcess
                     // EOF?
                     return false;
                 }
-                else if (wrote == slice.capacity())
+
+                inBuffer.position(inBuffer.position() + wrote);
+                if (userWantsWrite.compareAndSet(false, false))
                 {
-                    inBuffer.clear();
-                    return false;
-                }
-                else
-                {
-                    inBuffer.position(inBuffer.position() + wrote);
-                    return true; // want more
+                    return (wrote == slice.capacity() ? false : true);
                 }
             }
 
-            inBuffer.clear();
-            processListener.onStdinReady(inBuffer);
+            try
+            {
+                inBuffer.clear();
+                boolean wantMore = processListener.onStdinReady(inBuffer);
+                userWantsWrite.set(wantMore);
+                return wantMore;
+            }
+            catch (Exception e)
+            {
+                // Don't let an exception thrown from the user's handler interrupt us
+                return false;
+            }
+        }
+    }
+
+    @Override
+    protected void close(int fd)
+    {
+        if (fd != 0)
+        {
+            LIBC.close(fd);
         }
     }
 
@@ -268,21 +277,20 @@ public class LinuxProcess implements NuProcess
         {
             byte[] val = env.getBytes();
             System.arraycopy(val, 0, block, i, val.length);
-            i += val.length + 1;  // No need to write NUL byte explicitly, the +1 handles it
+            i += val.length + 1; // No need to write NUL byte explicitly, the +1 handles it
         }
 
         return block;
     }
 
-    private byte[] toCString(String s) {
+    private byte[] toCString(String s)
+    {
         if (s == null)
             return null;
         byte[] bytes = s.getBytes();
         byte[] result = new byte[bytes.length + 1];
-        System.arraycopy(bytes, 0,
-                         result, 0,
-                         bytes.length);
-        result[result.length-1] = (byte)0;
+        System.arraycopy(bytes, 0, result, 0, bytes.length);
+        result[result.length - 1] = (byte) 0;
         return result;
     }
 
