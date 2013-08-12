@@ -1,10 +1,10 @@
 package org.nuprocess;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.TreeMap;
 
 /**
  * @author Brett Wooldridge
@@ -14,7 +14,7 @@ public class NuProcessBuilder
     private static final NuProcessFactory factory;
 
     private List<String> command;
-    private HashMap<String, String> environment;
+    private TreeMap<String, String> environment;
     private NuProcessListener processListener;
 
     static
@@ -66,7 +66,7 @@ public class NuProcessBuilder
             throw new IllegalArgumentException("A NuProcessListener must be specified");
         }
 
-        this.environment = new HashMap<String, String>(System.getenv());
+        this.environment = new TreeMap<String, String>(System.getenv());
         this.command = new ArrayList<String>(command);
         this.processListener = listener;
     }

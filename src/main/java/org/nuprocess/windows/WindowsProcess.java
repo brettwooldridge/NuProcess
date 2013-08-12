@@ -1,7 +1,12 @@
 package org.nuprocess.windows;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -9,7 +14,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.nuprocess.NuProcess;
 import org.nuprocess.NuProcessListener;
 
-import com.sun.jna.Pointer;
+import com.sun.jna.Memory;
 import com.sun.jna.platform.win32.Kernel32;
 import com.sun.jna.platform.win32.WinBase.PROCESS_INFORMATION;
 import com.sun.jna.platform.win32.WinBase.SECURITY_ATTRIBUTES;
@@ -68,7 +73,10 @@ public class WindowsProcess implements NuProcess
         try
         {
             createPipes();
-            createEnvironment();
+
+            char[] block = getEnvironment();
+            Memory env = new Memory(block.length * 3);
+            env.write(0, block, 0, block.length);
 
             STARTUPINFO startupInfo = new STARTUPINFO();
             startupInfo.cb = new DWORD(startupInfo.size());
@@ -80,16 +88,8 @@ public class WindowsProcess implements NuProcess
             PROCESS_INFORMATION processInfo = new PROCESS_INFORMATION();
 
             DWORD dwCreationFlags = new DWORD(Kernel32.CREATE_NO_WINDOW | Kernel32.CREATE_UNICODE_ENVIRONMENT);
-            if (!KERNEL32.CreateProcessW(null,
-                                         getCommandLine(),
-                                         null /*lpProcessAttributes*/,
-                                         null /*lpThreadAttributes*/,
-                                         false /*bInheritHandles*/,
-                                         dwCreationFlags,
-                                         null /*lpEnvironment*/,
-                                         null /*lpCurrentDirectory*/,
-                                         startupInfo,
-                                         processInfo))
+            if (!KERNEL32.CreateProcessW(null, getCommandLine(), null /*lpProcessAttributes*/, null /*lpThreadAttributes*/, false /*bInheritHandles*/,
+                                         dwCreationFlags, env, null /*lpCurrentDirectory*/, startupInfo, processInfo))
             {
                 throw new RuntimeException("CreateProcessW() failed");
             }
@@ -97,28 +97,10 @@ public class WindowsProcess implements NuProcess
         }
         catch (RuntimeException e)
         {
-            
+
         }
 
         return this;
-    }
-
-    private void createEnvironment()
-    {
-        Pointer blockW = NU_KERNEL32.GetEnvironmentStringsW();
-
-        int i = 0;
-        while (true)
-        {
-            if (blockW.getChar(i) == 0 && blockW.getChar(i+2) == 0)
-            {
-                break;
-            }
-            i += 2;
-        }
-
-        String s = new String(blockW.getCharArray(0, i / 2));
-        NU_KERNEL32.FreeEnvironmentStringsW(blockW);
     }
 
     @Override
@@ -206,12 +188,79 @@ public class WindowsProcess implements NuProcess
         {
             sb.append(s).append(' ');
         }
-
+        
         if (sb.length() > 0)
         {
             sb.setLength(sb.length() - 1);
         }
 
         return sb.toString().toCharArray();
+    }
+
+    private char[] getEnvironment()
+    {
+        Map<String, String> env = new HashMap<String, String>(System.getenv());
+        for (String entry : environment)
+        {
+            int ndx = entry.indexOf('=');
+            if (ndx != -1)
+            {
+                env.put(entry.substring(0, ndx), (ndx < entry.length() ? entry.substring(ndx + 1) : ""));
+            }
+        }
+
+        return getEnvironmentBlock(env).toCharArray();
+    }
+
+    private String getEnvironmentBlock(Map<String, String> env)
+    {
+        // Sort by name using UPPERCASE collation
+        List<Map.Entry<String, String>> list = new ArrayList<>(env.entrySet());
+        Collections.sort(list, new EntryComparator());
+
+        StringBuilder sb = new StringBuilder(32 * env.size());
+        for (Map.Entry<String, String> e : list)
+        {
+            sb.append(e.getKey()).append('=').append(e.getValue()).append('\u0000');
+        }
+
+        // Add final NUL termination
+        sb.append('\u0000');
+        return sb.toString();
+    }
+
+    private static final class NameComparator implements Comparator<String>
+    {
+        public int compare(String s1, String s2)
+        {
+            int len1 = s1.length();
+            int len2 = s2.length();
+            for (int i = 0; i < Math.min(len1, len2); i++)
+            {
+                char c1 = s1.charAt(i);
+                char c2 = s2.charAt(i);
+                if (c1 != c2)
+                {
+                    c1 = Character.toUpperCase(c1);
+                    c2 = Character.toUpperCase(c2);
+                    if (c1 != c2)
+                    {
+                        return c1 - c2;
+                    }
+                }
+            }
+
+            return len1 - len2;
+        }
+    }
+
+    private static final class EntryComparator implements Comparator<Map.Entry<String, String>>
+    {
+        static NameComparator nameComparator = new NameComparator();
+
+        public int compare(Map.Entry<String, String> e1, Map.Entry<String, String> e2)
+        {
+            return nameComparator.compare(e1.getKey(), e2.getKey());
+        }
     }
 }
