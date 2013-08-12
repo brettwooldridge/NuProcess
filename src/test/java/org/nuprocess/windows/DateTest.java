@@ -30,7 +30,7 @@ public class DateTest
             }
         };
 
-        NuProcessBuilder pb = new NuProcessBuilder(Arrays.asList("date", "/T"), processListener);
+        NuProcessBuilder pb = new NuProcessBuilder(Arrays.asList("ipconfig.exe", "/all"), processListener);
         pb.start();
         semaphore.acquireUninterruptibly();
         Assert.assertEquals("Exit code did not match expectation", 1, exitCode.get());

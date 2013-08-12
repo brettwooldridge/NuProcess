@@ -10,27 +10,30 @@ import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 
 import org.nuprocess.NuProcess;
 import org.nuprocess.NuProcessListener;
 
 import com.sun.jna.Memory;
-import com.sun.jna.Pointer;
 import com.sun.jna.platform.win32.Kernel32;
+import com.sun.jna.platform.win32.WinBase;
 import com.sun.jna.platform.win32.WinBase.PROCESS_INFORMATION;
 import com.sun.jna.platform.win32.WinBase.SECURITY_ATTRIBUTES;
 import com.sun.jna.platform.win32.WinBase.STARTUPINFO;
 import com.sun.jna.platform.win32.WinDef.DWORD;
 import com.sun.jna.platform.win32.WinNT.HANDLE;
-import com.sun.jna.platform.win32.WinNT.HANDLEByReference;
 
 /**
  * @author Brett Wooldridge
  */
 public class WindowsProcess implements NuProcess
 {
-    private static final Kernel32 KERNEL32 = Kernel32.INSTANCE;
-    private static final NuKernel32 NU_KERNEL32 = NuKernel32.INSTANCE;
+    private static final NuKernel32 KERNEL32 = NuKernel32.INSTANCE;
+
+    private static final int BUFFER_SIZE = 4096;
+
+    private static final AtomicLong namedPipeCounter;
 
     private NuProcessListener processListener;
 
@@ -50,6 +53,11 @@ public class WindowsProcess implements NuProcess
 
     private ByteBuffer outBuffer;
     private ByteBuffer inBuffer;
+
+    static
+    {
+        namedPipeCounter = new AtomicLong();
+    }
 
     public WindowsProcess(List<String> commands, String[] env, NuProcessListener processListener)
     {
@@ -91,7 +99,7 @@ public class WindowsProcess implements NuProcess
 
             DWORD dwCreationFlags = new DWORD(Kernel32.CREATE_NO_WINDOW); // | Kernel32.CREATE_UNICODE_ENVIRONMENT);
             if (!KERNEL32.CreateProcessW(null, getCommandLine(), null /*lpProcessAttributes*/, null /*lpThreadAttributes*/, true /*bInheritHandles*/,
-                                         dwCreationFlags, null /*env*/, null /*lpCurrentDirectory*/, startupInfo, processInfo))
+                                         dwCreationFlags, /*null*/env, null /*lpCurrentDirectory*/, startupInfo, processInfo))
             {
                 throw new RuntimeException("CreateProcessW() failed");
             }
@@ -135,47 +143,56 @@ public class WindowsProcess implements NuProcess
         sattr.bInheritHandle = true;
         sattr.lpSecurityDescriptor = null;
 
-        HANDLEByReference ref1 = new HANDLEByReference();
-        HANDLEByReference ref2 = new HANDLEByReference();
-        if (!KERNEL32.CreatePipe(ref1, ref2, sattr, 0))
+        int dwOpenMode = NuKernel32.PIPE_ACCESS_INBOUND | NuKernel32.FILE_FLAG_OVERLAPPED;
+
+        String pipeName = "\\\\.\\pipe\\NuProcess" + namedPipeCounter.getAndIncrement();
+        hStdoutWrite = KERNEL32.CreateNamedPipe(pipeName, dwOpenMode, 0 /*dwPipeMode*/, 1 /*nMaxInstances*/, BUFFER_SIZE, BUFFER_SIZE,
+                                                       0 /*nDefaultTimeOut*/, sattr);
+        if (WinBase.INVALID_HANDLE_VALUE.getPointer().equals(hStdoutWrite.getPointer()))
         {
             throw new RuntimeException("Unable to create pipe");
         }
 
-        hStdoutRead = ref1.getValue();
-        hStdoutWrite = ref2.getValue();
-        if (!KERNEL32.SetHandleInformation(hStdoutRead, Kernel32.HANDLE_FLAG_INHERIT, 0))
+        hStdoutRead = KERNEL32.CreateFile(pipeName, Kernel32.GENERIC_READ, Kernel32.FILE_SHARE_READ /*dwShareMode*/, null,
+                                          Kernel32.OPEN_EXISTING /*dwCreationDisposition*/, Kernel32.FILE_ATTRIBUTE_NORMAL /*dwFlagsAndAttributes*/, null /*hTemplateFile*/);
+        if (WinBase.INVALID_HANDLE_VALUE.getPointer().equals(hStdoutRead.getPointer()))
         {
             throw new RuntimeException("Unable to create pipe");
         }
 
-        ref1 = new HANDLEByReference();
-        ref2 = new HANDLEByReference();
-        if (!KERNEL32.CreatePipe(ref1, ref2, sattr, 0))
-        {
-            throw new RuntimeException("Unable to create pipe");
-        }
-
-        hStderrRead = ref1.getValue();
-        hStderrWrite = ref2.getValue();
-        if (!KERNEL32.SetHandleInformation(hStderrRead, Kernel32.HANDLE_FLAG_INHERIT, 0))
-        {
-            throw new RuntimeException("Unable to create pipe");
-        }
-
-        ref1 = new HANDLEByReference();
-        ref2 = new HANDLEByReference();
-        if (!KERNEL32.CreatePipe(ref1, ref2, sattr, 0))
-        {
-            throw new RuntimeException("Unable to create pipe");
-        }
-
-        hStdinRead = ref1.getValue();
-        hStdinWrite = ref2.getValue();
-        if (!KERNEL32.SetHandleInformation(hStdinWrite, Kernel32.HANDLE_FLAG_INHERIT, 0))
-        {
-            throw new RuntimeException("Unable to create pipe");
-        }
+        //        if (!KERNEL32.SetHandleInformation(hStdoutRead, Kernel32.HANDLE_FLAG_INHERIT, 0))
+        //        {
+        //            throw new RuntimeException("Unable to create pipe");
+        //        }
+        //        hStdoutWrite = ref2.getValue();
+        //
+        //        ref1 = new HANDLEByReference();
+        //        ref2 = new HANDLEByReference();
+        //        if (!KERNEL32.CreatePipe(ref1, ref2, sattr, 0))
+        //        {
+        //            throw new RuntimeException("Unable to create pipe");
+        //        }
+        //
+        //        hStderrRead = ref1.getValue();
+        //        hStderrWrite = ref2.getValue();
+        //        if (!KERNEL32.SetHandleInformation(hStderrRead, Kernel32.HANDLE_FLAG_INHERIT, 0))
+        //        {
+        //            throw new RuntimeException("Unable to create pipe");
+        //        }
+        //
+        //        ref1 = new HANDLEByReference();
+        //        ref2 = new HANDLEByReference();
+        //        if (!KERNEL32.CreatePipe(ref1, ref2, sattr, 0))
+        //        {
+        //            throw new RuntimeException("Unable to create pipe");
+        //        }
+        //
+        //        hStdinRead = ref1.getValue();
+        //        hStdinWrite = ref2.getValue();
+        //        if (!KERNEL32.SetHandleInformation(hStdinWrite, Kernel32.HANDLE_FLAG_INHERIT, 0))
+        //        {
+        //            throw new RuntimeException("Unable to create pipe");
+        //        }
     }
 
     private char[] getCommandLine()
@@ -190,7 +207,7 @@ public class WindowsProcess implements NuProcess
         {
             sb.append(s).append(' ');
         }
-        
+
         if (sb.length() > 0)
         {
             sb.setLength(sb.length() - 1);
