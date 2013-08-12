@@ -15,6 +15,7 @@ import org.nuprocess.NuProcess;
 import org.nuprocess.NuProcessListener;
 
 import com.sun.jna.Memory;
+import com.sun.jna.Pointer;
 import com.sun.jna.platform.win32.Kernel32;
 import com.sun.jna.platform.win32.WinBase.PROCESS_INFORMATION;
 import com.sun.jna.platform.win32.WinBase.SECURITY_ATTRIBUTES;
@@ -79,6 +80,7 @@ public class WindowsProcess implements NuProcess
             env.write(0, block, 0, block.length);
 
             STARTUPINFO startupInfo = new STARTUPINFO();
+            startupInfo.clear();
             startupInfo.cb = new DWORD(startupInfo.size());
             startupInfo.hStdInput = hStdinRead;
             startupInfo.hStdError = hStderrWrite;
@@ -87,9 +89,9 @@ public class WindowsProcess implements NuProcess
 
             PROCESS_INFORMATION processInfo = new PROCESS_INFORMATION();
 
-            DWORD dwCreationFlags = new DWORD(Kernel32.CREATE_NO_WINDOW | Kernel32.CREATE_UNICODE_ENVIRONMENT);
-            if (!KERNEL32.CreateProcessW(null, getCommandLine(), null /*lpProcessAttributes*/, null /*lpThreadAttributes*/, false /*bInheritHandles*/,
-                                         dwCreationFlags, env, null /*lpCurrentDirectory*/, startupInfo, processInfo))
+            DWORD dwCreationFlags = new DWORD(Kernel32.CREATE_NO_WINDOW); // | Kernel32.CREATE_UNICODE_ENVIRONMENT);
+            if (!KERNEL32.CreateProcessW(null, getCommandLine(), null /*lpProcessAttributes*/, null /*lpThreadAttributes*/, true /*bInheritHandles*/,
+                                         dwCreationFlags, null /*env*/, null /*lpCurrentDirectory*/, startupInfo, processInfo))
             {
                 throw new RuntimeException("CreateProcessW() failed");
             }
@@ -193,6 +195,8 @@ public class WindowsProcess implements NuProcess
         {
             sb.setLength(sb.length() - 1);
         }
+
+        sb.append((char) 0);
 
         return sb.toString().toCharArray();
     }

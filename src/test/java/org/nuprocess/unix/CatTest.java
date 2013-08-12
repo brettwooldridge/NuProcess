@@ -8,14 +8,17 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.Assert;
 import org.junit.Test;
+import org.junit.runner.RunWith;
 import org.nuprocess.NuAbstractProcessListener;
 import org.nuprocess.NuProcess;
 import org.nuprocess.NuProcessBuilder;
 import org.nuprocess.NuProcessListener;
+import org.nuprocess.RunOnlyOnUnix;
 
 /**
  * @author Brett Wooldridge
  */
+@RunWith(value=RunOnlyOnUnix.class)
 public class CatTest
 {
     @Test
