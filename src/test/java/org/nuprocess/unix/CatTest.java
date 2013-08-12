@@ -95,8 +95,6 @@ public class CatTest
     @Test
     public void test2()
     {
-        // if (true) return;
-
         final Semaphore semaphore = new Semaphore(0);
         final AtomicInteger exitCode = new AtomicInteger();
 
@@ -109,28 +107,30 @@ public class CatTest
             }
         };
 
-        NuProcessBuilder pb = new NuProcessBuilder(Arrays.asList("/bin/cat", "/tmp/foo"), processListener);
+        NuProcessBuilder pb = new NuProcessBuilder(Arrays.asList("/bin/cat", "/tmp/sdfadsf"), processListener);
         pb.start();
         semaphore.acquireUninterruptibly();
-        Assert.assertEquals("Exit code did not match expectation", 256, exitCode.get());
+        Assert.assertEquals("Exit code did not match expectation", 1, exitCode.get());
     }
 
     @Test
     public void test3()
     {
-        // if (true) return;
+        final Semaphore semaphore = new Semaphore(0);
+        final AtomicInteger exitCode = new AtomicInteger();
 
-        NuProcessListener processListener = new NuAbstractProcessListener() { };
+        NuProcessListener processListener = new NuAbstractProcessListener() {
+            @Override
+            public void onExit(int statusCode)
+            {
+                exitCode.set(statusCode);
+                semaphore.release();
+            }
+        };
 
         NuProcessBuilder pb = new NuProcessBuilder(Arrays.asList("/bin/zxczxc"), processListener);
-        try
-        {
-            pb.start();
-            Assert.fail("An exception should have been thrown");
-        }
-        catch (RuntimeException e)
-        {
-            Assert.assertTrue("Unexpected return code", e.getMessage().contains("return code: 2"));
-        }
+        pb.start();
+        semaphore.acquireUninterruptibly();
+        Assert.assertEquals("Output did not matched expected result", Integer.MIN_VALUE, exitCode.get());
     }
 }

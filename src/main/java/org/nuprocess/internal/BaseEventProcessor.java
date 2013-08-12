@@ -45,6 +45,7 @@ public abstract class BaseEventProcessor<T extends BasePosixProcess> implements 
                 process();
             }
             while (!isRunning.compareAndSet(pidToProcessMap.isEmpty(), false));
+            isRunning.set(false);
         }
         catch (Exception e)
         {

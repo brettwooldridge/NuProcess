@@ -22,7 +22,7 @@ public interface ILibC
 
     int kill(int pid, int sig);
 
-    int wait(IntByReference status);
+    int waitpid(int pid, IntByReference status, int options);
 
     int posix_spawnattr_init(Pointer posix_spawnattr_t);
 

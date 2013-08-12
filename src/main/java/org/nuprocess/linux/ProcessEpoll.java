@@ -3,6 +3,7 @@ package org.nuprocess.linux;
 import org.nuprocess.internal.BaseEventProcessor;
 
 import com.sun.jna.Native;
+import com.sun.jna.ptr.IntByReference;
 
 /**
  * @author Brett Wooldridge
@@ -82,10 +83,10 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
         {
             EpollEvent epEvent = eventList[i];
             int ident = epEvent.fd; //data.fd;
+            LinuxProcess linuxProcess = fildesToProcessMap.get(ident);
 
             if ((epEvent.events & EpollEvent.EPOLLIN) != 0)  // stdout/stderr data available to read
             {
-                LinuxProcess linuxProcess = fildesToProcessMap.get(ident);
                 if (linuxProcess != null)
                 {
                     if (ident == linuxProcess.getStdout())
@@ -100,7 +101,6 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
             }
             else if ((epEvent.events & EpollEvent.EPOLLOUT) != 0) // Room in stdin pipe available to write
             {
-                LinuxProcess linuxProcess = fildesToProcessMap.get(ident);
                 if (linuxProcess != null)
                 {
                 	if (linuxProcess.writeStdin())
@@ -113,7 +113,6 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
 
             if ((epEvent.events & EpollEvent.EPOLLHUP) != 0)
             {
-                LinuxProcess linuxProcess = fildesToProcessMap.get(ident);
                 if (linuxProcess != null)
                 {
                     if (ident == linuxProcess.getStdout())
@@ -128,6 +127,12 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
                 LIBC.epoll_ctl(epoll, EpollEvent.EPOLL_CTL_DEL, ident, null);
             }
 
+            if (linuxProcess != null && linuxProcess.isSoftExit())
+            {
+                int status = cleanupProcess(linuxProcess);
+                linuxProcess.onExit(status);
+            }
+
             epEvent.clear();
         }
     }
@@ -136,21 +141,37 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
     //                             Private methods
     // ************************************************************************
 
-    private void cleanupProcess(LinuxProcess linuxProcess)
+    private int cleanupProcess(LinuxProcess linuxProcess)
     {
-//        Kevent[] events = (Kevent[]) new Kevent().toArray(1);
-//
-//        Kevent.EV_SET(events[0], new NativeLong(linuxProcess.pid), 
-//                      Kevent.EVFILT_PROC,
-//                      Kevent.EV_DELETE | Kevent.EV_ENABLE | Kevent.EV_ONESHOT,
-//                      Kevent.NOTE_EXIT | Kevent.NOTE_EXITSTATUS | Kevent.NOTE_REAP,
-//                      new NativeLong(0), Pointer.NULL);
-//
-//        LIBC.kevent(epoll, events, 1, null, 0, Pointer.NULL);
+        try
+        {
+            int rc = 0;
+            rc = LIBC.epoll_ctl(epoll, EpollEvent.EPOLL_CTL_DEL, linuxProcess.getStdout(), null);
+            rc = LIBC.epoll_ctl(epoll, EpollEvent.EPOLL_CTL_DEL, linuxProcess.getStderr(), null);
+            rc = LIBC.epoll_ctl(epoll, EpollEvent.EPOLL_CTL_DEL, linuxProcess.getStdin(), null);
+            boolean stdinWasRegistered = (rc == 0);
 
-        pidToProcessMap.remove(linuxProcess.getPid());
-        fildesToProcessMap.remove(linuxProcess.getStdin());
-        fildesToProcessMap.remove(linuxProcess.getStdout());
-        fildesToProcessMap.remove(linuxProcess.getStderr());
+            IntByReference status = new IntByReference();
+            rc = LIBC.waitpid(linuxProcess.getPid(), status, 0);
+            if (rc == -1)
+            {
+                return Integer.MAX_VALUE;
+            }
+
+            rc = (status.getValue() & 0xff00) >> 8;
+            if (rc == 127 && !stdinWasRegistered)
+            {
+                return Integer.MIN_VALUE;
+            }
+
+            return rc; 
+        }
+        finally
+        {
+            pidToProcessMap.remove(linuxProcess.getPid());
+            fildesToProcessMap.remove(linuxProcess.getStdin());
+            fildesToProcessMap.remove(linuxProcess.getStdout());
+            fildesToProcessMap.remove(linuxProcess.getStderr());
+        }
     }
 }

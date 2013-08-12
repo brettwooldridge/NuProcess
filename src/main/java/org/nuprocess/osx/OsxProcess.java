@@ -2,7 +2,6 @@ package org.nuprocess.osx;
 
 import java.nio.ByteBuffer;
 import java.util.List;
-import java.util.concurrent.CountDownLatch;
 
 import org.nuprocess.NuProcess;
 import org.nuprocess.NuProcessListener;
@@ -21,8 +20,6 @@ public class OsxProcess extends BasePosixProcess
 {
     private static final LibC LIBC;
 
-    private CountDownLatch exitPending;
-
     static
     {
         LIBC = LibC.INSTANCE;
@@ -36,7 +33,6 @@ public class OsxProcess extends BasePosixProcess
     public OsxProcess(List<String> commands, String[] env, NuProcessListener processListener)
     {
         super(commands, env, processListener);
-        this.exitPending = new CountDownLatch(1);
     }
 
     @Override
@@ -212,30 +208,6 @@ public class OsxProcess extends BasePosixProcess
         {
             // Don't let an exception thrown from the user's handler interrupt us
             return false;
-        }
-    }
-
-    void onExit(int statusCode)
-    {
-        try
-        {
-            exitCode.set(statusCode);
-            processListener.onExit(statusCode);
-            exitPending.countDown();
-        }
-        catch (Exception e)
-        {
-            // Don't let an exception thrown from the user's handler interrupt us
-        }
-        finally
-        {
-            LIBC.close(stdin);
-            LIBC.close(stdout);
-            LIBC.close(stderr);
-
-        	outBuffer = null;
-        	inBuffer = null;
-        	processListener = null;
         }
     }
 
