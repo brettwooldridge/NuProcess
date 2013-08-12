@@ -27,7 +27,7 @@ public class NuProcessBuilder
         }
         else if (osname.contains("win"))
         {
-            factoryClassName = "org.nuprocess.win.WinProcessFactory";
+            factoryClassName = "org.nuprocess.windows.WinProcessFactory";
         }
         else if (osname.contains("linux"))
         {

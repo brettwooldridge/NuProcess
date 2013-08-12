@@ -3,15 +3,9 @@ package org.nuprocess.osx;
 import java.nio.ByteBuffer;
 import java.util.List;
 
-import org.nuprocess.NuProcess;
 import org.nuprocess.NuProcessListener;
 import org.nuprocess.internal.BasePosixProcess;
 import org.nuprocess.internal.ILibC;
-
-import com.sun.jna.Memory;
-import com.sun.jna.Pointer;
-import com.sun.jna.StringArray;
-import com.sun.jna.ptr.IntByReference;
 
 /**
  * @author Brett Wooldridge
