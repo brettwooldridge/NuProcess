@@ -36,56 +36,6 @@ public class OsxProcess extends BasePosixProcess
     }
 
     @Override
-    public NuProcess start()
-    {
-        Pointer posix_spawn_file_actions = createPipes();
-        Pointer posix_spawnattr = new Memory(Pointer.SIZE);
-
-        try
-        {
-            int rc = LIBC.posix_spawnattr_init(posix_spawnattr);
-            checkReturnCode(rc, "Internal call to posix_spawnattr_init() failed");
-
-            // Start the spawned process in suspended mode
-            short flags = LibC.POSIX_SPAWN_START_SUSPENDED | LibC.POSIX_SPAWN_CLOEXEC_DEFAULT;
-            LIBC.posix_spawnattr_setflags(posix_spawnattr, flags);
-
-            IntByReference restrict_pid = new IntByReference();
-            rc = LIBC.posix_spawn(restrict_pid, commands[0], posix_spawn_file_actions, posix_spawnattr, new StringArray(commands), new StringArray(environment));
-            checkReturnCode(rc, "Invocation of posix_spawn() failed");
-    
-            pid = restrict_pid.getValue();
-
-            // After we've spawned, close the unused ends of our pipes (that were dup'd into the child process space)
-            close(stdinWidow);
-            close(stdoutWidow);
-            close(stderrWidow);
-
-            afterStart();
-
-            registerProcess();
-
-            kickstartProcessors();
-
-            callStart();
-            
-            // Signal the spawned process to continue (unsuspend)
-            LIBC.kill(pid, LibC.SIGCONT);
-
-            return this;
-        }
-        catch (RuntimeException re)
-        {
-            throw re;
-        }
-        finally
-        {
-            LIBC.posix_spawnattr_destroy(posix_spawnattr);
-            LIBC.posix_spawn_file_actions_destroy(posix_spawn_file_actions);
-        }
-    }
-
-    @Override
     public int waitFor() throws InterruptedException
     {
         exitPending.await();

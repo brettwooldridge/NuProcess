@@ -137,7 +137,8 @@ class ProcessKqueue extends BaseEventProcessor<OsxProcess>
                 OsxProcess osxProcess = pidToProcessMap.get(ident);
                 if (osxProcess != null)
                 {
-                    osxProcess.onExit(kevent.data.intValue());
+                    int rc = (kevent.data.intValue() & 0xff00) >> 8;
+                    osxProcess.onExit(rc);
                 }
 
                 cleanupProcess(osxProcess);                
