@@ -8,12 +8,13 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
 
 import org.nuprocess.NuProcess;
 import org.nuprocess.NuProcessListener;
+import org.nuprocess.windows.NuKernel32.OVERLAPPED;
 
 import com.sun.jna.Memory;
 import com.sun.jna.platform.win32.Kernel32;
@@ -27,14 +28,19 @@ import com.sun.jna.platform.win32.WinNT.HANDLE;
 /**
  * @author Brett Wooldridge
  */
-public class WindowsProcess implements NuProcess
+public final class WindowsProcess implements NuProcess
 {
     private static final NuKernel32 KERNEL32 = NuKernel32.INSTANCE;
 
+    private static final int PROCESSOR_THREADS;
     private static final int BUFFER_SIZE = 4096;
 
-    private static final AtomicLong namedPipeCounter;
+    private static ProcessCompletions[] processors;
+    private static int processorRoundRobin;
 
+    private static final AtomicInteger namedPipeCounter;
+
+    private ProcessCompletions myProcessor;
     private NuProcessListener processListener;
 
     private String[] environment;
@@ -44,19 +50,33 @@ public class WindowsProcess implements NuProcess
 
     private AtomicBoolean userWantsWrite;
 
-    private HANDLE hStdinRead;
-    private HANDLE hStdinWrite;
-    private HANDLE hStdoutRead;
-    private HANDLE hStdoutWrite;
-    private HANDLE hStderrRead;
-    private HANDLE hStderrWrite;
+    private HANDLE hProcess;
+    private HANDLE hStdin;
+    private HANDLE hStdinWidow;
+    private HANDLE hStdout;
+    private HANDLE hStdoutWidow;
+    private HANDLE hStderr;
+    private HANDLE hStderrWidow;
+
+    private int stdinKey;
+    private int stderrKey;
+    private int stdoutKey;
 
     private ByteBuffer outBuffer;
     private ByteBuffer inBuffer;
 
     static
     {
-        namedPipeCounter = new AtomicLong();
+        namedPipeCounter = new AtomicInteger(100);
+
+        PROCESSOR_THREADS = Integer.getInteger("org.nuprocess.threads",
+                                            Boolean.getBoolean("org.nuprocess.threadsEqualCores") ? Runtime.getRuntime().availableProcessors() : 1);
+
+        processors = new ProcessCompletions[PROCESSOR_THREADS];
+        for (int i = 0; i < processors.length; i++)
+        {
+            processors[i] = new ProcessCompletions();
+        }
     }
 
     public WindowsProcess(List<String> commands, String[] env, NuProcessListener processListener)
@@ -68,12 +88,12 @@ public class WindowsProcess implements NuProcess
         this.exitCode = new AtomicInteger();
         this.exitPending = new CountDownLatch(1);
 
-        this.hStdinRead = new HANDLE();
-        this.hStdinWrite = new HANDLE();
-        this.hStdoutRead = new HANDLE();
-        this.hStdoutWrite = new HANDLE();
-        this.hStderrRead = new HANDLE();
-        this.hStderrWrite = new HANDLE();
+        this.hStdinWidow = new HANDLE();
+        this.hStdin = new HANDLE();
+        this.hStdout = new HANDLE();
+        this.hStdoutWidow = new HANDLE();
+        this.hStderr = new HANDLE();
+        this.hStderrWidow = new HANDLE();
     }
 
     @Override
@@ -90,20 +110,31 @@ public class WindowsProcess implements NuProcess
             STARTUPINFO startupInfo = new STARTUPINFO();
             startupInfo.clear();
             startupInfo.cb = new DWORD(startupInfo.size());
-            startupInfo.hStdInput = hStdinRead;
-            startupInfo.hStdError = hStderrWrite;
-            startupInfo.hStdOutput = hStdoutWrite;
+            startupInfo.hStdInput = hStdinWidow;
+            startupInfo.hStdError = hStderrWidow;
+            startupInfo.hStdOutput = hStdoutWidow;
             startupInfo.dwFlags = Kernel32.STARTF_USESTDHANDLES;
 
             PROCESS_INFORMATION processInfo = new PROCESS_INFORMATION();
 
-            DWORD dwCreationFlags = new DWORD(Kernel32.CREATE_NO_WINDOW); // | Kernel32.CREATE_UNICODE_ENVIRONMENT);
+            DWORD dwCreationFlags = new DWORD(Kernel32.CREATE_NO_WINDOW | Kernel32.CREATE_UNICODE_ENVIRONMENT | Kernel32.CREATE_SUSPENDED);
             if (!KERNEL32.CreateProcessW(null, getCommandLine(), null /*lpProcessAttributes*/, null /*lpThreadAttributes*/, true /*bInheritHandles*/,
-                                         dwCreationFlags, /*null*/env, null /*lpCurrentDirectory*/, startupInfo, processInfo))
+                                         dwCreationFlags, env, null /*lpCurrentDirectory*/, startupInfo, processInfo))
             {
                 throw new RuntimeException("CreateProcessW() failed");
             }
 
+            hProcess = processInfo.hThread;
+
+            afterStart();
+
+            registerProcess();
+
+            kickstartProcessors();
+
+            callStart();
+
+            KERNEL32.ResumeThread(hProcess);
         }
         catch (RuntimeException e)
         {
@@ -122,7 +153,11 @@ public class WindowsProcess implements NuProcess
     @Override
     public void wantWrite()
     {
-
+        if (hStdinWidow != null && !WinBase.INVALID_HANDLE_VALUE.getPointer().equals(hStdoutWidow.getPointer()))
+        {
+            userWantsWrite.set(true);
+            myProcessor.requeueRead(hStdinWidow);
+        }
     }
 
     @Override
@@ -136,8 +171,62 @@ public class WindowsProcess implements NuProcess
     {
     }
 
+    HANDLE getPid()
+    {
+        return hProcess;
+    }
+
+    HANDLE getStdin()
+    {
+        return hStdin;
+    }
+
+    int getStdinKey()
+    {
+        return stdinKey;
+    }
+
+    HANDLE getStdout()
+    {
+        return hStdout;
+    }
+
+    int getStdoutKey()
+    {
+        return stdoutKey;
+    }
+
+    HANDLE getStderr()
+    {
+        return hStderr;
+    }
+
+    int getStderrKey()
+    {
+        return stderrKey;
+    }
+
+    ByteBuffer getOutBuffer()
+    {
+        return outBuffer;
+    }
+
+    private void callStart()
+    {
+        try
+        {
+            processListener.onStart(this);
+        }
+        catch (Exception e)
+        {
+            // Don't let an exception thrown from the user's handler interrupt us
+        }
+    }
+
     private void createPipes()
     {
+        int lastError = 0;
+
         SECURITY_ATTRIBUTES sattr = new SECURITY_ATTRIBUTES();
         sattr.dwLength = new DWORD(sattr.size());
         sattr.bInheritHandle = true;
@@ -145,54 +234,131 @@ public class WindowsProcess implements NuProcess
 
         int dwOpenMode = NuKernel32.PIPE_ACCESS_INBOUND | NuKernel32.FILE_FLAG_OVERLAPPED;
 
-        String pipeName = "\\\\.\\pipe\\NuProcess" + namedPipeCounter.getAndIncrement();
-        hStdoutWrite = KERNEL32.CreateNamedPipe(pipeName, dwOpenMode, 0 /*dwPipeMode*/, 1 /*nMaxInstances*/, BUFFER_SIZE, BUFFER_SIZE,
+        /* stdout pipe */
+        stdoutKey = namedPipeCounter.getAndIncrement();
+        String pipeName = "\\\\.\\pipe\\NuProcess" + stdoutKey;
+        hStdoutWidow = KERNEL32.CreateNamedPipe(pipeName, dwOpenMode, 0 /*dwPipeMode*/, 1 /*nMaxInstances*/, BUFFER_SIZE, BUFFER_SIZE,
                                                        0 /*nDefaultTimeOut*/, sattr);
-        if (WinBase.INVALID_HANDLE_VALUE.getPointer().equals(hStdoutWrite.getPointer()))
+        if (WinBase.INVALID_HANDLE_VALUE.getPointer().equals(hStdoutWidow.getPointer()))
         {
             throw new RuntimeException("Unable to create pipe");
         }
 
-        hStdoutRead = KERNEL32.CreateFile(pipeName, Kernel32.GENERIC_READ, Kernel32.FILE_SHARE_READ /*dwShareMode*/, null,
-                                          Kernel32.OPEN_EXISTING /*dwCreationDisposition*/, Kernel32.FILE_ATTRIBUTE_NORMAL /*dwFlagsAndAttributes*/, null /*hTemplateFile*/);
-        if (WinBase.INVALID_HANDLE_VALUE.getPointer().equals(hStdoutRead.getPointer()))
+        hStdout = KERNEL32.CreateFile(pipeName, Kernel32.GENERIC_READ, Kernel32.FILE_SHARE_READ /*dwShareMode*/, null,
+                                          Kernel32.OPEN_EXISTING /*dwCreationDisposition*/, Kernel32.FILE_ATTRIBUTE_NORMAL | Kernel32.FILE_FLAG_OVERLAPPED /*dwFlagsAndAttributes*/,
+                                          null /*hTemplateFile*/);
+        if (WinBase.INVALID_HANDLE_VALUE.getPointer().equals(hStdout.getPointer()))
         {
             throw new RuntimeException("Unable to create pipe");
         }
 
-        //        if (!KERNEL32.SetHandleInformation(hStdoutRead, Kernel32.HANDLE_FLAG_INHERIT, 0))
-        //        {
-        //            throw new RuntimeException("Unable to create pipe");
-        //        }
-        //        hStdoutWrite = ref2.getValue();
-        //
-        //        ref1 = new HANDLEByReference();
-        //        ref2 = new HANDLEByReference();
-        //        if (!KERNEL32.CreatePipe(ref1, ref2, sattr, 0))
-        //        {
-        //            throw new RuntimeException("Unable to create pipe");
-        //        }
-        //
-        //        hStderrRead = ref1.getValue();
-        //        hStderrWrite = ref2.getValue();
-        //        if (!KERNEL32.SetHandleInformation(hStderrRead, Kernel32.HANDLE_FLAG_INHERIT, 0))
-        //        {
-        //            throw new RuntimeException("Unable to create pipe");
-        //        }
-        //
-        //        ref1 = new HANDLEByReference();
-        //        ref2 = new HANDLEByReference();
-        //        if (!KERNEL32.CreatePipe(ref1, ref2, sattr, 0))
-        //        {
-        //            throw new RuntimeException("Unable to create pipe");
-        //        }
-        //
-        //        hStdinRead = ref1.getValue();
-        //        hStdinWrite = ref2.getValue();
-        //        if (!KERNEL32.SetHandleInformation(hStdinWrite, Kernel32.HANDLE_FLAG_INHERIT, 0))
-        //        {
-        //            throw new RuntimeException("Unable to create pipe");
-        //        }
+        OVERLAPPED overlapped = new OVERLAPPED();
+        overlapped.clear();
+        boolean status = KERNEL32.ConnectNamedPipe(hStdoutWidow, overlapped);
+        lastError = KERNEL32.GetLastError();
+        if (!status && (lastError != Kernel32.ERROR_PIPE_CONNECTED))
+        {
+            throw new RuntimeException("Unable to connect pipe, error: " + lastError);
+        }
+
+        /* stderr pipe */
+        stderrKey = namedPipeCounter.getAndIncrement();
+        pipeName = "\\\\.\\pipe\\NuProcess" + stderrKey;
+        hStderrWidow = KERNEL32.CreateNamedPipe(pipeName, dwOpenMode, 0 /*dwPipeMode*/, 1 /*nMaxInstances*/, BUFFER_SIZE, BUFFER_SIZE,
+                                                       0 /*nDefaultTimeOut*/, sattr);
+        if (WinBase.INVALID_HANDLE_VALUE.getPointer().equals(hStderrWidow.getPointer()))
+        {
+            throw new RuntimeException("Unable to create pipe");
+        }
+
+        hStderr = KERNEL32.CreateFile(pipeName, Kernel32.GENERIC_READ, Kernel32.FILE_SHARE_READ /*dwShareMode*/, null,
+                                          Kernel32.OPEN_EXISTING /*dwCreationDisposition*/, Kernel32.FILE_ATTRIBUTE_NORMAL | Kernel32.FILE_FLAG_OVERLAPPED /*dwFlagsAndAttributes*/,
+                                          null /*hTemplateFile*/);
+        if (WinBase.INVALID_HANDLE_VALUE.getPointer().equals(hStderr.getPointer()))
+        {
+            throw new RuntimeException("Unable to create pipe");
+        }
+
+        overlapped = new OVERLAPPED();
+        overlapped.clear();
+        status = KERNEL32.ConnectNamedPipe(hStderrWidow, overlapped);
+        lastError = KERNEL32.GetLastError();
+        if (!status && (lastError != Kernel32.ERROR_PIPE_CONNECTED))
+        {
+            throw new RuntimeException("Unable to connect pipe, error: " + lastError);
+        }
+
+        /* stdin pipe */
+        stdinKey = namedPipeCounter.getAndIncrement();
+        dwOpenMode = NuKernel32.PIPE_ACCESS_OUTBOUND | NuKernel32.FILE_FLAG_OVERLAPPED;
+        pipeName = "\\\\.\\pipe\\NuProcess" + stdinKey;
+        hStdinWidow = KERNEL32.CreateNamedPipe(pipeName, dwOpenMode, 0 /*dwPipeMode*/, 1 /*nMaxInstances*/, BUFFER_SIZE, BUFFER_SIZE,
+                                                       0 /*nDefaultTimeOut*/, sattr);
+        if (WinBase.INVALID_HANDLE_VALUE.getPointer().equals(hStdinWidow.getPointer()))
+        {
+            throw new RuntimeException("Unable to create pipe");
+        }
+
+        hStdin = KERNEL32.CreateFile(pipeName, Kernel32.GENERIC_WRITE, Kernel32.FILE_SHARE_WRITE /*dwShareMode*/, null,
+                                          Kernel32.OPEN_EXISTING /*dwCreationDisposition*/, Kernel32.FILE_ATTRIBUTE_NORMAL | Kernel32.FILE_FLAG_OVERLAPPED /*dwFlagsAndAttributes*/,
+                                          null /*hTemplateFile*/);
+        if (WinBase.INVALID_HANDLE_VALUE.getPointer().equals(hStdin.getPointer()))
+        {
+            throw new RuntimeException("Unable to create pipe");
+        }
+
+        overlapped = new OVERLAPPED();
+        overlapped.clear();
+        status = KERNEL32.ConnectNamedPipe(hStdinWidow, overlapped);
+        lastError = KERNEL32.GetLastError();
+        if (!status && (lastError != Kernel32.ERROR_PIPE_CONNECTED))
+        {
+            throw new RuntimeException("Unable to connect pipe, error: " + lastError);
+        }
+    }
+
+    private void afterStart()
+    {
+        commands = null;
+        environment = null;
+
+        outBuffer = ByteBuffer.allocateDirect(BUFFER_CAPACITY);
+        inBuffer = ByteBuffer.allocateDirect(BUFFER_CAPACITY);
+        inBuffer.flip();
+    }
+
+    private void registerProcess()
+    {
+        synchronized (this.getClass())
+        {
+            myProcessor = processors[processorRoundRobin]; 
+            myProcessor.registerProcess(this);
+            processorRoundRobin = (processorRoundRobin + 1) % processors.length;
+        }
+    }
+
+    private void kickstartProcessors()
+    {
+        for (int i = 0; i < processors.length; i++)
+        {
+            if (processors[i].checkAndSetRunning())
+            {
+                CyclicBarrier spawnBarrier = processors[i].getSpawnBarrier();
+
+                Thread t = new Thread(processors[i], "ProcessIoCompletion" + i);
+                t.setDaemon(true);
+                t.start();
+
+                try
+                {
+                    spawnBarrier.await();
+                }
+                catch (Exception e)
+                {
+                    throw new RuntimeException(e);
+                }
+            }
+        }
     }
 
     private char[] getCommandLine()
@@ -246,7 +412,7 @@ public class WindowsProcess implements NuProcess
         }
 
         // Add final NUL termination
-        sb.append('\u0000');
+        sb.append('\u0000').append('\u0000');
         return sb.toString();
     }
 
