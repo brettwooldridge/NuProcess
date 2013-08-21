@@ -111,7 +111,7 @@ public final class ProcessCompletions implements Runnable
                 if (transferred > 0)
                 {
                     processInput(process, process.getStdoutPipe(), transferred, STDOUT);
-                    queueRead(process, process.getStdoutPipe());
+                    queueRead(process, process.getStdoutPipe(), STDOUT);
                 }
                 else
                 {
@@ -123,7 +123,7 @@ public final class ProcessCompletions implements Runnable
                 if (transferred > 0)
                 {
                     processInput(process, process.getStderrPipe(), transferred, STDERR);
-                    queueRead(process, process.getStderrPipe());
+                    queueRead(process, process.getStderrPipe(), STDERR);
                 }
                 else
                 {
@@ -141,9 +141,16 @@ public final class ProcessCompletions implements Runnable
             if (process.isSoftExit())
             {
                 cleanupProcess(process);
-                deadPool.add(process);
+                IntByReference exitCode = new IntByReference();
+                if (KERNEL32.GetExitCodeProcess(process.getPid(), exitCode) && exitCode.getValue() != Kernel32.STILL_ACTIVE)
+                {
+                    process.onExit(exitCode.getValue());
+                }
+                else
+                {
+                    deadPool.add(process);
+                }
             }
-
         }
 
         return;
@@ -211,11 +218,11 @@ public final class ProcessCompletions implements Runnable
         completionKeyToProcessMap.put(process.getStdoutPipe().ioCompletionKey, process);
         completionKeyToProcessMap.put(process.getStderrPipe().ioCompletionKey, process);
 
-        queueRead(process, process.getStdoutPipe());
-        queueRead(process, process.getStderrPipe());        
+        queueRead(process, process.getStdoutPipe(), STDOUT);
+        queueRead(process, process.getStderrPipe(), STDERR);
     }
 
-    private void queueRead(WindowsProcess process, WindowsProcess.PipeBundle pipe)
+    private void queueRead(WindowsProcess process, WindowsProcess.PipeBundle pipe, int stdX)
     {
         KERNEL32.ReadFile(pipe.pipeHandle, pipe.buffer, NuProcess.BUFFER_CAPACITY, null, pipe.overlapped);
         int lastError = KERNEL32.GetLastError();
@@ -225,17 +232,13 @@ public final class ProcessCompletions implements Runnable
         case Kernel32.ERROR_IO_PENDING:
             break;
         case Kernel32.ERROR_BROKEN_PIPE:
-            if (pipe == process.getStdoutPipe())
+            if (stdX == STDOUT)
             {
-                process.readStdout(true);
-            }
-            else if (pipe == process.getStderrPipe())
-            {
-                process.readStderr(true);
+                process.readStdout(true /*closed*/);
             }
             else
             {
-                // TODO: stdin pipe closed
+                process.readStderr(true /*closed*/);
             }
             break;
         default:
@@ -309,10 +312,9 @@ public final class ProcessCompletions implements Runnable
         completionKeyToProcessMap.remove(process.getStderrPipe().ioCompletionKey);
     }
 
-
     private void checkPortCreated()
     {
-        synchronized (ProcessCompletions.class)
+        synchronized (this)
         {
             if (ioCompletionPort == null)
             {

@@ -32,7 +32,7 @@ public final class WindowsProcess implements NuProcess
 {
     private static final NuKernel32 KERNEL32 = NuKernel32.INSTANCE;
 
-    private static final boolean IS_SOFTEXIT_DETECTION = true;
+    private static final boolean IS_SOFTEXIT_DETECTION;
 
     private static final int PROCESSOR_THREADS;
     private static final int BUFFER_SIZE = 4096;
@@ -70,11 +70,13 @@ public final class WindowsProcess implements NuProcess
     {
         namedPipeCounter = new AtomicInteger(100);
 
-        PROCESSOR_THREADS = Integer.getInteger("org.nuprocess.threads",
-                                            Boolean.getBoolean("org.nuprocess.threadsEqualCores") ? Runtime.getRuntime().availableProcessors() : 1);
+        IS_SOFTEXIT_DETECTION = Boolean.valueOf(System.getProperty("org.nuprocess.windows.softExitDetection", "true"));
+
+        boolean threadPerCore = Boolean.getBoolean("org.nuprocess.threadsEqualCores");
+        PROCESSOR_THREADS = Integer.getInteger("org.nuprocess.threads", threadPerCore ? Runtime.getRuntime().availableProcessors() : 1);
 
         processors = new ProcessCompletions[PROCESSOR_THREADS];
-        for (int i = 0; i < processors.length; i++)
+        for (int i = 0; i < PROCESSOR_THREADS; i++)
         {
             processors[i] = new ProcessCompletions();
         }
@@ -85,16 +87,12 @@ public final class WindowsProcess implements NuProcess
         this.commands = commands.toArray(new String[0]);
         this.environment = env;
         this.processListener = processListener;
+
         this.userWantsWrite = new AtomicBoolean();
         this.exitCode = new AtomicInteger();
         this.exitPending = new CountDownLatch(1);
-
         this.outClosed = true;
         this.errClosed = true;
-
-        this.hStdinWidow = new HANDLE();
-        this.hStdoutWidow = new HANDLE();
-        this.hStderrWidow = new HANDLE();
     }
 
     @Override
@@ -126,10 +124,6 @@ public final class WindowsProcess implements NuProcess
                 throw new RuntimeException("CreateProcessW() failed, error: " + lastError);
             }
 
-            KERNEL32.CloseHandle(hStdinWidow);
-            KERNEL32.CloseHandle(hStdoutWidow);
-            KERNEL32.CloseHandle(hStderrWidow);
-
             afterStart();
 
             registerProcess();
@@ -144,6 +138,12 @@ public final class WindowsProcess implements NuProcess
         {
             onExit(Integer.MIN_VALUE);
         }
+        finally
+        {
+            KERNEL32.CloseHandle(hStdinWidow);
+            KERNEL32.CloseHandle(hStdoutWidow);
+            KERNEL32.CloseHandle(hStderrWidow);
+        }
 
         return this;
     }
@@ -151,6 +151,7 @@ public final class WindowsProcess implements NuProcess
     @Override
     public int waitFor() throws InterruptedException
     {
+        // TODO: implement blocking wait
         return exitCode.get();
     }
 
@@ -177,6 +178,7 @@ public final class WindowsProcess implements NuProcess
     @Override
     public void destroy()
     {
+        // TODO: implement destroy
     }
 
     HANDLE getPid()
@@ -219,6 +221,7 @@ public final class WindowsProcess implements NuProcess
         catch (Exception e)
         {
             // Don't let an exception thrown from the user's handler interrupt us
+            e.printStackTrace();
         }
     }
 
@@ -242,32 +245,15 @@ public final class WindowsProcess implements NuProcess
         catch (Exception e)
         {
             // Don't let an exception thrown from the user's handler interrupt us
+            e.printStackTrace();
         }
     }
 
     boolean writeStdin()
     {
-        ByteBuffer buffer = stdinPipe.buffer;
-//        if (buffer.limit() < buffer.capacity())
-//        {
-//            ByteBuffer slice = buffer.slice();
-//            int wrote = LIBC.write(stdin, slice, slice.capacity());
-//            if (wrote == -1)
-//            {
-//                // EOF?
-//                return false;
-//            }
-//
-//            buffer.position(buffer.position() + wrote);
-//            if (userWantsWrite.compareAndSet(false, false))
-//            {
-//                return (wrote == slice.capacity() ? false : true);
-//            }
-//        }
-
         try
         {
-            boolean wantMore = processListener.onStdinReady(buffer);
+            boolean wantMore = processListener.onStdinReady(stdinPipe.buffer);
             userWantsWrite.set(wantMore);
             return wantMore;
         }
@@ -295,6 +281,7 @@ public final class WindowsProcess implements NuProcess
         catch (Exception e)
         {
             // Don't let an exception thrown from the user's handler interrupt us
+            e.printStackTrace();
         }
         finally
         {
@@ -329,6 +316,7 @@ public final class WindowsProcess implements NuProcess
         catch (Exception e)
         {
             // Don't let an exception thrown from the user's handler interrupt us
+            e.printStackTrace();
         }
     }
 
