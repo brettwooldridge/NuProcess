@@ -1,4 +1,4 @@
-package org.nuprocess.unix;
+package org.nuprocess.windows;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -6,6 +6,7 @@ import java.util.Arrays;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -13,16 +14,29 @@ import org.nuprocess.NuAbstractProcessListener;
 import org.nuprocess.NuProcess;
 import org.nuprocess.NuProcessBuilder;
 import org.nuprocess.NuProcessListener;
-import org.nuprocess.RunOnlyOnUnix;
+import org.nuprocess.RunOnlyOnWindows;
 
 /**
  * @author Brett Wooldridge
  */
-@RunWith(value=RunOnlyOnUnix.class)
+@RunWith(value=RunOnlyOnWindows.class)
 public class CatTest
 {
+    @AfterClass
+    public static void afterClass()
+    {
+        try
+        {
+            Thread.sleep(500);
+        }
+        catch (InterruptedException e)
+        {
+            e.printStackTrace();
+        }
+    }
+
     @Test
-    public void test1() throws IOException
+    public void lotOfData() throws IOException
     {
         // if (true) return;
 
@@ -87,7 +101,7 @@ public class CatTest
             }
         };
 
-        NuProcessBuilder pb = new NuProcessBuilder(Arrays.asList("/bin/cat"), processListener);
+        NuProcessBuilder pb = new NuProcessBuilder(Arrays.asList("src\\test\\java\\org\\nuprocess\\windows\\cat.exe"), processListener);
         NuProcess process = pb.start();
         Assert.assertNotNull(process);
 
@@ -110,10 +124,10 @@ public class CatTest
             }
         };
 
-        NuProcessBuilder pb = new NuProcessBuilder(Arrays.asList("/bin/cat", "/tmp/sdfadsf"), processListener);
+        NuProcessBuilder pb = new NuProcessBuilder(Arrays.asList("src\\test\\java\\org\\nuprocess\\windows\\cat.exe", "sdfadsf"), processListener);
         pb.start();
         semaphore.acquireUninterruptibly();
-        Assert.assertEquals("Exit code did not match expectation", 1, exitCode.get());
+        Assert.assertEquals("Exit code did not match expectation", -1, exitCode.get());
     }
 
     @Test
@@ -151,7 +165,7 @@ public class CatTest
 
             {
                 sb = new StringBuffer();
-                for (int i = 0; i < 1000; i++)
+                for (int i = 0; i < 6000; i++)
                 {
                     sb.append("1234567890");
                 }
@@ -184,7 +198,7 @@ public class CatTest
             @Override
             public boolean onStdinReady(ByteBuffer buffer)
             {
-                if (counter++ > 10)
+                if (counter++ >= 10)
                 {
                     nuProcess.stdinClose();
                     return false;
@@ -196,10 +210,10 @@ public class CatTest
             }
         };
 
-        NuProcessBuilder pb = new NuProcessBuilder(Arrays.asList("/bin/cat"), processListener);
+        NuProcessBuilder pb = new NuProcessBuilder(Arrays.asList("src\\test\\java\\org\\nuprocess\\windows\\cat.exe"), processListener);
         pb.start();
         semaphore.acquireUninterruptibly();
 
-        Assert.assertEquals("Output size did not match input size", size.get(), 10000);
+        Assert.assertEquals("Output size did not match input size", 600000, size.get());
     }
 }
