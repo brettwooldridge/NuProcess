@@ -37,7 +37,7 @@ public final class WindowsProcess implements NuProcess
     private static final int PROCESSOR_THREADS;
     private static final int BUFFER_SIZE = 4096;
 
-    private static ProcessCompletions[] processors;
+    private static final ProcessCompletions[] processors;
     private static int processorRoundRobin;
 
     private static final AtomicInteger namedPipeCounter;
@@ -128,8 +128,6 @@ public final class WindowsProcess implements NuProcess
 
             registerProcess();
 
-            kickstartProcessors();
-
             callStart();
 
             KERNEL32.ResumeThread(processInfo.hThread);
@@ -137,6 +135,7 @@ public final class WindowsProcess implements NuProcess
         catch (RuntimeException e)
         {
             onExit(Integer.MIN_VALUE);
+            e.printStackTrace();
         }
         finally
         {
@@ -158,10 +157,10 @@ public final class WindowsProcess implements NuProcess
     @Override
     public void wantWrite()
     {
-        if (hStdinWidow != null && !WinBase.INVALID_HANDLE_VALUE.getPointer().equals(hStdoutWidow.getPointer()))
+        if (hStdinWidow != null && !WinBase.INVALID_HANDLE_VALUE.getPointer().equals(hStdinWidow.getPointer()))
         {
             userWantsWrite.set(true);
-            myProcessor.requeueRead(this);
+            myProcessor.wantWrite(this);
         }
     }
 
@@ -452,34 +451,31 @@ public final class WindowsProcess implements NuProcess
 
     private void registerProcess()
     {
-        synchronized (this.getClass())
+        int mySlot = 0;
+        synchronized (processors)
         {
-            myProcessor = processors[processorRoundRobin]; 
-            myProcessor.registerProcess(this);
+            mySlot = processorRoundRobin;
             processorRoundRobin = (processorRoundRobin + 1) % processors.length;
         }
-    }
 
-    private void kickstartProcessors()
-    {
-        for (int i = 0; i < processors.length; i++)
+        myProcessor = processors[mySlot];
+        myProcessor.registerProcess(this);
+
+        if (myProcessor.checkAndSetRunning())
         {
-            if (processors[i].checkAndSetRunning())
+            CyclicBarrier spawnBarrier = myProcessor.getSpawnBarrier();
+
+            Thread t = new Thread(myProcessor, "ProcessIoCompletion" + mySlot);
+            t.setDaemon(true);
+            t.start();
+
+            try
             {
-                CyclicBarrier spawnBarrier = processors[i].getSpawnBarrier();
-
-                Thread t = new Thread(processors[i], "ProcessIoCompletion" + i);
-                t.setDaemon(true);
-                t.start();
-
-                try
-                {
-                    spawnBarrier.await();
-                }
-                catch (Exception e)
-                {
-                    throw new RuntimeException(e);
-                }
+                spawnBarrier.await();
+            }
+            catch (Exception e)
+            {
+                throw new RuntimeException(e);
             }
         }
     }

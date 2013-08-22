@@ -1,12 +1,15 @@
 package org.nuprocess.windows;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.nuprocess.NuProcess;
@@ -22,12 +25,16 @@ public final class ProcessCompletions implements Runnable
 {
     private static final NuKernel32 KERNEL32 = NuKernel32.INSTANCE;
     private static final int DEADPOOL_POLL_INTERVAL;
+    private static final int LINGER_ITERATIONS;
     private static final int PROCESSOR_THREADS;
     private static final int STDOUT = 0;
     private static final int STDERR = 1;
 
     private HANDLE ioCompletionPort;
+
     private List<WindowsProcess> deadPool;
+    private BlockingQueue<WindowsProcess> pendingPool;
+    private BlockingQueue<WindowsProcess> wantsWrite;
 
     private Map<Integer, WindowsProcess> completionKeyToProcessMap;
 
@@ -38,13 +45,20 @@ public final class ProcessCompletions implements Runnable
     {
         PROCESSOR_THREADS = Integer.getInteger("org.nuprocess.threads",
                                             Boolean.getBoolean("org.nuprocess.threadsEqualCores") ? Runtime.getRuntime().availableProcessors() : 1);
-        DEADPOOL_POLL_INTERVAL = Integer.getInteger("org.nuprocess.deadPoolPollMs", 250);
+
+        int lingerTimeMs = Math.max(1000, Integer.getInteger("org.nuprocess.lingerTimeMs", 5000));
+
+        DEADPOOL_POLL_INTERVAL = Math.min(lingerTimeMs, Math.max(100, Integer.getInteger("org.nuprocess.deadPoolPollMs", 250)));
+        
+        LINGER_ITERATIONS = lingerTimeMs / DEADPOOL_POLL_INTERVAL;
     }
 
     public ProcessCompletions()
     {
         completionKeyToProcessMap = new ConcurrentHashMap<Integer, WindowsProcess>();
+        pendingPool = new LinkedBlockingQueue<WindowsProcess>();
         deadPool = new LinkedList<WindowsProcess>();
+        wantsWrite = new LinkedBlockingQueue<WindowsProcess>();
         isRunning = new AtomicBoolean();
     }
 
@@ -56,104 +70,116 @@ public final class ProcessCompletions implements Runnable
     {
         try
         {
+            HANDLE completionPort = initCompletionPort();
+            
             startBarrier.await();
 
-            synchronized (this)
+            int idleCount = 0;
+            do
             {
-                checkPortCreated();
-    
-                do
+                if (process())
                 {
-                    process();
+                    idleCount = 0;
                 }
-                while (!isRunning.compareAndSet(completionKeyToProcessMap.isEmpty() && deadPool.isEmpty(), false));
-
-                KERNEL32.CloseHandle(ioCompletionPort);
-                ioCompletionPort = null;
-                isRunning.set(false);
+                else
+                {
+                    idleCount++;
+                }
             }
+            while (!isRunning.compareAndSet(completionKeyToProcessMap.isEmpty() && deadPool.isEmpty() && idleCount > LINGER_ITERATIONS, false));
+
+            destroyCompletionPort(completionPort);
         }
         catch (Exception e)
         {
             // TODO: how to handle this error?
+            e.printStackTrace();
             isRunning.set(false);
         }
     }
     
-    public void process()
+    public boolean process()
     {
-        IntByReference numberOfBytes = new IntByReference();
-        ULONG_PTRByReference completionKey = new ULONG_PTRByReference();
-        PointerByReference lpOverlapped = new PointerByReference();
-        boolean status = KERNEL32.GetQueuedCompletionStatus(ioCompletionPort, numberOfBytes, completionKey, lpOverlapped, DEADPOOL_POLL_INTERVAL);
-        int key = (int) completionKey.getValue().longValue();
-        if (!status)
+        try
         {
-            int lastError = KERNEL32.GetLastError();
-            if (lastError == Kernel32.WAIT_TIMEOUT)
+            IntByReference numberOfBytes = new IntByReference();
+            ULONG_PTRByReference completionKey = new ULONG_PTRByReference();
+            PointerByReference lpOverlapped = new PointerByReference();
+            boolean status = KERNEL32.GetQueuedCompletionStatus(ioCompletionPort, numberOfBytes, completionKey, lpOverlapped, DEADPOOL_POLL_INTERVAL);
+            int key = (int) completionKey.getValue().longValue();
+            if (!status)
             {
-                checkDeadPool();
-                return;
+                int lastError = KERNEL32.GetLastError();
+                if (lastError == Kernel32.WAIT_TIMEOUT)
+                {
+                    return false;
+                }
+    
+                if (lastError != Kernel32.ERROR_BROKEN_PIPE)
+                {
+                    System.err.println("Error " + lastError);
+                }
             }
-
-            if (lastError != Kernel32.ERROR_BROKEN_PIPE)
+    
+            int transferred = numberOfBytes.getValue();
+            WindowsProcess process = completionKeyToProcessMap.get(key);
+            if (process != null)
             {
-                System.err.println("Error " + lastError);
+                if (process.getStdoutPipe().ioCompletionKey == key)
+                {
+                    if (transferred > 0)
+                    {
+                        processInput(process, process.getStdoutPipe(), transferred, STDOUT);
+                        queueRead(process, process.getStdoutPipe(), STDOUT);
+                    }
+                    else
+                    {
+                        process.readStdout(true);
+                    }
+                }
+                else if (process.getStderrPipe().ioCompletionKey == key)
+                {
+                    if (transferred > 0)
+                    {
+                        processInput(process, process.getStderrPipe(), transferred, STDERR);
+                        queueRead(process, process.getStderrPipe(), STDERR);
+                    }
+                    else
+                    {
+                        process.readStderr(true);
+                    }
+                }
+                else if (process.getStdinPipe().ioCompletionKey == key)
+                {
+                    if (processOutput(process, transferred))
+                    {
+                        queueWrite(process);
+                    }
+                }
+    
+                if (process.isSoftExit())
+                {
+                    cleanupProcess(process);
+//                    IntByReference exitCode = new IntByReference();
+//                    if (KERNEL32.GetExitCodeProcess(process.getPid(), exitCode) && exitCode.getValue() != Kernel32.STILL_ACTIVE)
+//                    {
+//                        process.onExit(exitCode.getValue());
+//                    }
+//                    else
+//                    {
+                        deadPool.add(process);
+//                    }
+                }
             }
+    
+            return true;
         }
-
-        int transferred = numberOfBytes.getValue();
-        WindowsProcess process = completionKeyToProcessMap.get(key);
-        if (process != null)
+        finally
         {
-            if (process.getStdoutPipe().ioCompletionKey == key)
-            {
-                if (transferred > 0)
-                {
-                    processInput(process, process.getStdoutPipe(), transferred, STDOUT);
-                    queueRead(process, process.getStdoutPipe(), STDOUT);
-                }
-                else
-                {
-                    process.readStdout(true);
-                }
-            }
-            else if (process.getStderrPipe().ioCompletionKey == key)
-            {
-                if (transferred > 0)
-                {
-                    processInput(process, process.getStderrPipe(), transferred, STDERR);
-                    queueRead(process, process.getStderrPipe(), STDERR);
-                }
-                else
-                {
-                    process.readStderr(true);
-                }
-            }
-            else if (process.getStdinPipe().ioCompletionKey == key)
-            {
-                if (processOutput(process, transferred))
-                {
-                    requeueRead(process);
-                }
-            }
-
-            if (process.isSoftExit())
-            {
-                cleanupProcess(process);
-                IntByReference exitCode = new IntByReference();
-                if (KERNEL32.GetExitCodeProcess(process.getPid(), exitCode) && exitCode.getValue() != Kernel32.STILL_ACTIVE)
-                {
-                    process.onExit(exitCode.getValue());
-                }
-                else
-                {
-                    deadPool.add(process);
-                }
-            }
+            checkWaitWrites();
+            checkPendingPool();
+            checkDeadPool();
         }
-
-        return;
     }
 
     /**
@@ -164,7 +190,7 @@ public final class ProcessCompletions implements Runnable
      *
      * @param processorRunning a CyclicBarrier to join
      */
-    public CyclicBarrier getSpawnBarrier()
+    CyclicBarrier getSpawnBarrier()
     {
         startBarrier = new CyclicBarrier(2);
         return startBarrier;
@@ -173,12 +199,22 @@ public final class ProcessCompletions implements Runnable
     /**
      * @return
      */
-    public boolean checkAndSetRunning()
+    boolean checkAndSetRunning()
     {
         return isRunning.compareAndSet(false, true);
     }
     
-    public void requeueRead(WindowsProcess process)
+    void wantWrite(WindowsProcess process)
+    {
+        wantsWrite.add(process);
+    }
+
+    public void registerProcess(WindowsProcess process)
+    {
+        pendingPool.add(process);
+    }
+
+    private void queueWrite(WindowsProcess process)
     {
         if (!completionKeyToProcessMap.containsKey(process.getStdinPipe().ioCompletionKey))
         {
@@ -193,33 +229,6 @@ public final class ProcessCompletions implements Runnable
         }
 
         KERNEL32.WriteFile(process.getStdinPipe().pipeHandle, process.getStdinPipe().buffer, 0, null, process.getStdinPipe().overlapped);
-    }
-
-    public void registerProcess(WindowsProcess process)
-    {
-        checkPortCreated();
-
-        HANDLE completionPort1 = KERNEL32.CreateIoCompletionPort(process.getStdoutPipe().pipeHandle, ioCompletionPort,
-                                                                 new ULONG_PTR(process.getStdoutPipe().ioCompletionKey),
-                                                                 PROCESSOR_THREADS);
-        if (!ioCompletionPort.equals(completionPort1))
-        {
-            throw new RuntimeException("CreateIoCompletionPort() failed, error code: " + KERNEL32.GetLastError());
-        }
-
-        HANDLE completionPort2 = KERNEL32.CreateIoCompletionPort(process.getStderrPipe().pipeHandle, ioCompletionPort,
-                                                                 new ULONG_PTR(process.getStderrPipe().ioCompletionKey),
-                                                                 PROCESSOR_THREADS);
-        if (!ioCompletionPort.equals(completionPort2))
-        {
-            throw new RuntimeException("CreateIoCompletionPort() failed, error code: " + KERNEL32.GetLastError());
-        }
-
-        completionKeyToProcessMap.put(process.getStdoutPipe().ioCompletionKey, process);
-        completionKeyToProcessMap.put(process.getStderrPipe().ioCompletionKey, process);
-
-        queueRead(process, process.getStdoutPipe(), STDOUT);
-        queueRead(process, process.getStderrPipe(), STDERR);
     }
 
     private void queueRead(WindowsProcess process, WindowsProcess.PipeBundle pipe, int stdX)
@@ -285,6 +294,42 @@ public final class ProcessCompletions implements Runnable
         return false;
     }
 
+    private void checkPendingPool()
+    {
+        if (pendingPool.isEmpty())
+        {
+            return;
+        }
+
+        ArrayList<WindowsProcess> list = new ArrayList<>(pendingPool.size());
+        pendingPool.drainTo(list);
+
+        for (WindowsProcess process : list)
+        {
+            HANDLE completionPort1 = KERNEL32.CreateIoCompletionPort(process.getStdoutPipe().pipeHandle, ioCompletionPort,
+                                                                     new ULONG_PTR(process.getStdoutPipe().ioCompletionKey),
+                                                                     PROCESSOR_THREADS);
+            if (!ioCompletionPort.equals(completionPort1))
+            {
+                throw new RuntimeException("CreateIoCompletionPort() failed, error code: " + KERNEL32.GetLastError());
+            }
+
+            HANDLE completionPort2 = KERNEL32.CreateIoCompletionPort(process.getStderrPipe().pipeHandle, ioCompletionPort,
+                                                                     new ULONG_PTR(process.getStderrPipe().ioCompletionKey),
+                                                                     PROCESSOR_THREADS);
+            if (!ioCompletionPort.equals(completionPort2))
+            {
+                throw new RuntimeException("CreateIoCompletionPort() failed, error code: " + KERNEL32.GetLastError());
+            }
+
+            completionKeyToProcessMap.put(process.getStdoutPipe().ioCompletionKey, process);
+            completionKeyToProcessMap.put(process.getStderrPipe().ioCompletionKey, process);
+
+            queueRead(process, process.getStdoutPipe(), STDOUT);
+            queueRead(process, process.getStderrPipe(), STDERR);
+        }
+    }
+
     private void checkDeadPool()
     {
         if (deadPool.isEmpty())
@@ -305,6 +350,21 @@ public final class ProcessCompletions implements Runnable
         }
     }
 
+    private void checkWaitWrites()
+    {
+        if (wantsWrite.isEmpty())
+        {
+            return;
+        }
+
+        ArrayList<WindowsProcess> list = new ArrayList<>(wantsWrite.size());
+        wantsWrite.drainTo(list);
+        for (WindowsProcess process : list)
+        {
+            queueWrite(process);
+        }
+    }
+
     private void cleanupProcess(WindowsProcess process)
     {
         completionKeyToProcessMap.remove(process.getStdinPipe().ioCompletionKey);
@@ -312,18 +372,22 @@ public final class ProcessCompletions implements Runnable
         completionKeyToProcessMap.remove(process.getStderrPipe().ioCompletionKey);
     }
 
-    private void checkPortCreated()
+    private HANDLE initCompletionPort()
     {
-        synchronized (this)
+        ioCompletionPort = KERNEL32.CreateIoCompletionPort(NuKernel32.INVALID_HANDLE_VALUE, null, new ULONG_PTR(0), PROCESSOR_THREADS);
+        if (ioCompletionPort == null)
         {
-            if (ioCompletionPort == null)
-            {
-                ioCompletionPort = KERNEL32.CreateIoCompletionPort(NuKernel32.INVALID_HANDLE_VALUE, null, new ULONG_PTR(0), PROCESSOR_THREADS);
-                if (ioCompletionPort == null)
-                {
-                    throw new RuntimeException("CreateIoCompletionPort() failed, error code: " + KERNEL32.GetLastError());
-                }
-            }
+            throw new RuntimeException("CreateIoCompletionPort() failed, error code: " + KERNEL32.GetLastError());
+        }
+
+        return ioCompletionPort;
+    }
+
+    private void destroyCompletionPort(HANDLE completionPort)
+    {
+        if (completionPort != null)
+        {
+            KERNEL32.CloseHandle(completionPort);
         }
     }
 }

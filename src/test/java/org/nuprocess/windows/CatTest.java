@@ -6,7 +6,6 @@ import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.zip.Adler32;
 
-import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -22,19 +21,6 @@ import org.nuprocess.RunOnlyOnWindows;
 @RunWith(value=RunOnlyOnWindows.class)
 public class CatTest
 {
-    @AfterClass
-    public static void afterClass()
-    {
-        try
-        {
-            Thread.sleep(500);
-        }
-        catch (InterruptedException e)
-        {
-            e.printStackTrace();
-        }
-    }
-
     @Test
     public void test1()
     {
