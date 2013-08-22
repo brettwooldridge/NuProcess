@@ -1,10 +1,10 @@
 package org.nuprocess.unix;
 
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.zip.Adler32;
 
 import org.junit.Assert;
 import org.junit.Test;
@@ -22,81 +22,56 @@ import org.nuprocess.RunOnlyOnUnix;
 public class CatTest
 {
     @Test
-    public void test1() throws IOException
+    public void lotOfProcesses()
     {
-        // if (true) return;
-
-        final Semaphore semaphore = new Semaphore(0);
-        final StringBuilder sb = new StringBuilder();
-
-        NuProcessListener processListener = new NuProcessListener()
+        for (int times = 0; times < 10; times++)
         {
-            private boolean done;
-            private NuProcess nuProcess;
-
-            @Override
-            public void onStart(NuProcess nuProcess)
+            Semaphore[] semaphores = new Semaphore[10];
+            AtomicInteger[] sizes = new AtomicInteger[10];
+            LottaProcessListener[] listeners = new LottaProcessListener[10];
+    
+            for (int i = 0; i < semaphores.length; i++)
             {
-                this.nuProcess = nuProcess;
-                nuProcess.wantWrite();
+                semaphores[i] = new Semaphore(0);
+                sizes[i] = new AtomicInteger();
+                listeners[i] = new LottaProcessListener(semaphores[i], sizes[i]);
+                NuProcessBuilder pb = new NuProcessBuilder(Arrays.asList("/bin/cat"), listeners[i]);
+                pb.start();
             }
-
-            @Override
-            public void onExit(int statusCode)
+    
+            for (Semaphore sem : semaphores)
             {
-                semaphore.release();
+                sem.acquireUninterruptibly();
             }
-
-            @Override
-            public void onStdout(ByteBuffer buffer)
+            
+            for (AtomicInteger size : sizes)
             {
-                if (buffer == null)
-                {
-                    return;
-                }
-
-                byte[] bytes = new byte[buffer.remaining()];
-                buffer.get(bytes);
-                sb.append(new String(bytes));
+                Assert.assertEquals("Output size did not match input size", 600000, size.get());
             }
-
-            @Override
-            public void onStderr(ByteBuffer buffer)
+            
+            for (LottaProcessListener listen : listeners)
             {
-                onStdout(buffer);
+                Assert.assertTrue("Adler32 mismatch between written and read", listen.checkAdlers());
             }
-
-            @Override
-            public void onStdinClose()
-            {
-            }
-
-            @Override
-            public boolean onStdinReady(ByteBuffer buffer)
-            {
-                if (done)
-                {
-                    nuProcess.stdinClose();
-                    return false;
-                }
-
-                buffer.put("This is a test message\n".getBytes());
-                buffer.flip();
-                done = true;
-                return true;
-            }
-        };
-
-        NuProcessBuilder pb = new NuProcessBuilder(Arrays.asList("/bin/cat"), processListener);
-        NuProcess process = pb.start();
-        Assert.assertNotNull(process);
-
-        semaphore.acquireUninterruptibly();
-        Assert.assertEquals("Output did not matched expected result", "This is a test message\n", sb.toString());
+        }
     }
 
     @Test
-    public void test2()
+    public void lotOfData()
+    {
+        Semaphore semaphore = new Semaphore(0);
+        AtomicInteger size = new AtomicInteger();
+
+        NuProcessListener processListener = new LottaProcessListener(semaphore, size);
+        NuProcessBuilder pb = new NuProcessBuilder(Arrays.asList("/bin/cat"), processListener);
+        pb.start();
+        semaphore.acquireUninterruptibly();
+
+        Assert.assertEquals("Output byte count did not match input size", 600000, size.get());
+    }
+
+    @Test
+    public void badExit()
     {
         final Semaphore semaphore = new Semaphore(0);
         final AtomicInteger exitCode = new AtomicInteger();
@@ -117,7 +92,7 @@ public class CatTest
     }
 
     @Test
-    public void test3()
+    public void noExecutableFound()
     {
         final Semaphore semaphore = new Semaphore(0);
         final AtomicInteger exitCode = new AtomicInteger();
@@ -137,69 +112,79 @@ public class CatTest
         Assert.assertEquals("Output did not matched expected result", Integer.MIN_VALUE, exitCode.get());
     }
 
-    @Test
-    public void test4()
+    private static class LottaProcessListener extends NuAbstractProcessListener
     {
-        final Semaphore semaphore = new Semaphore(0);
-        final AtomicInteger size = new AtomicInteger();
+        private NuProcess nuProcess;
+        private StringBuffer sb;
+        private int counter;
+        private Semaphore semaphore;
+        private AtomicInteger size;
 
-        NuProcessListener processListener = new NuAbstractProcessListener()
+        private Adler32 readAdler32;
+        private Adler32 writeAdler32;
+
+        LottaProcessListener(Semaphore semaphore, AtomicInteger size)
         {
-            private NuProcess nuProcess;
-            private StringBuffer sb;
-            private int counter;
+            this.semaphore = semaphore;
+            this.size = size;
 
+            this.readAdler32 = new Adler32();
+            this.writeAdler32 = new Adler32();
+
+            sb = new StringBuffer();
+            for (int i = 0; i < 6000; i++)
             {
-                sb = new StringBuffer();
-                for (int i = 0; i < 1000; i++)
-                {
-                    sb.append("1234567890");
-                }
+                sb.append("1234567890");
+            }
+        }
+
+        @Override
+        public void onStart(NuProcess nuProcess)
+        {
+            this.nuProcess = nuProcess;
+            nuProcess.wantWrite();
+        }
+
+        @Override
+        public void onExit(int statusCode)
+        {
+            semaphore.release();
+        }
+
+        @Override
+        public void onStdout(ByteBuffer buffer)
+        {
+            if (buffer == null)
+            {
+                return;
             }
 
-            @Override
-            public void onStart(NuProcess nuProcess)
+            byte[] bytes = new byte[buffer.remaining()];
+            buffer.get(bytes);
+            readAdler32.update(bytes);
+            size.addAndGet(bytes.length);
+        }
+
+        @Override
+        public boolean onStdinReady(ByteBuffer buffer)
+        {
+            if (counter++ >= 10)
             {
-                this.nuProcess = nuProcess;
-                nuProcess.wantWrite();
+                nuProcess.stdinClose();
+                return false;
             }
 
-            @Override
-            public void onExit(int statusCode)
-            {
-                semaphore.release();
-            }
+            byte[] bytes = sb.toString().getBytes();
+            writeAdler32.update(bytes);
 
-            @Override
-            public void onStdout(ByteBuffer buffer)
-            {
-                if (buffer == null)
-                {
-                    return;
-                }
+            buffer.put(bytes);
+            buffer.flip();
+            return true;
+        }
 
-                size.addAndGet(buffer.remaining());
-            }
-
-            @Override
-            public boolean onStdinReady(ByteBuffer buffer)
-            {
-                if (counter++ > 10)
-                {
-                    nuProcess.stdinClose();
-                    return false;
-                }
-
-                buffer.put(sb.toString().getBytes());
-                buffer.flip();
-                return true;
-            }
-        };
-
-        NuProcessBuilder pb = new NuProcessBuilder(Arrays.asList("/bin/cat"), processListener);
-        pb.start();
-        semaphore.acquireUninterruptibly();
-
-        Assert.assertEquals("Output size did not match input size", size.get(), 10000);
-    }
+        boolean checkAdlers()
+        {
+            return readAdler32.getValue() == writeAdler32.getValue();
+        }
+    };
 }

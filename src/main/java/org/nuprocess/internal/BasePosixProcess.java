@@ -97,11 +97,6 @@ public abstract class BasePosixProcess implements NuProcess
     
             pid = restrict_pid.getValue();
 
-            // After we've spawned, close the unused ends of our pipes (that were dup'd into the child process space)
-            close(stdinWidow);
-            close(stdoutWidow);
-            close(stderrWidow);
-
             afterStart();
 
             registerProcess();
@@ -122,6 +117,11 @@ public abstract class BasePosixProcess implements NuProcess
         }
         finally
         {
+            // After we've spawned, close the unused ends of our pipes (that were dup'd into the child process space)
+            close(stdinWidow);
+            close(stdoutWidow);
+            close(stderrWidow);
+
             LIBC.posix_spawnattr_destroy(posix_spawnattr);
             LIBC.posix_spawn_file_actions_destroy(posix_spawn_file_actions);
         }
@@ -278,6 +278,10 @@ public abstract class BasePosixProcess implements NuProcess
         {
             rc = LIBC.pipe(in);
             checkReturnCode(rc, "Create pipe() failed");
+            if (in[0] == 0)
+            {
+                throw new RuntimeException("Stdin is 0");
+            }
             
             rc = LIBC.pipe(out);
             checkReturnCode(rc, "Create pipe() failed");
@@ -299,6 +303,10 @@ public abstract class BasePosixProcess implements NuProcess
             
             stdin = in[1];
             stdinWidow = in[0];
+            if (stdinWidow == 0)
+            {
+                throw new RuntimeException("Stdin is 0");
+            }
     
             // Dup the writing end of the pipe into the sub-process, and close our end
             rc = LIBC.posix_spawn_file_actions_adddup2(posix_spawn_file_actions, out[1], 1);

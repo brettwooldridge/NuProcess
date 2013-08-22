@@ -22,22 +22,6 @@ import org.nuprocess.RunOnlyOnWindows;
 public class CatTest
 {
     @Test
-    public void test1()
-    {
-        Semaphore semaphore = new Semaphore(0);
-        AtomicInteger size = new AtomicInteger();
-
-        LottaProcessListener processListener = new LottaProcessListener(semaphore, size);
-        NuProcessBuilder pb = new NuProcessBuilder(Arrays.asList("src\\test\\java\\org\\nuprocess\\windows\\cat.exe"), processListener);
-        NuProcess process = pb.start();
-        Assert.assertNotNull(process);
-
-        semaphore.acquireUninterruptibly();
-        Assert.assertEquals("Output size did not match input size", 600000, size.get());
-        Assert.assertTrue("Adler32 mismatch between written and read", processListener.checkAdlers());
-    }
-
-    @Test
     public void lotOfProcesses()
     {
         for (int times = 0; times < 10; times++)
@@ -73,7 +57,22 @@ public class CatTest
     }
 
     @Test
-    public void test2()
+    public void lotOfData()
+    {
+        Semaphore semaphore = new Semaphore(0);
+        AtomicInteger size = new AtomicInteger();
+
+        LottaProcessListener processListener = new LottaProcessListener(semaphore, size);
+        NuProcessBuilder pb = new NuProcessBuilder(Arrays.asList("src\\test\\java\\org\\nuprocess\\windows\\cat.exe"), processListener);
+        pb.start();
+        semaphore.acquireUninterruptibly();
+
+        Assert.assertEquals("Output byte count did not match input size", 600000, size.get());
+        Assert.assertTrue("Adler32 mismatch between written and read", processListener.checkAdlers());
+    }
+
+    @Test
+    public void badExit()
     {
         final Semaphore semaphore = new Semaphore(0);
         final AtomicInteger exitCode = new AtomicInteger();
@@ -95,7 +94,7 @@ public class CatTest
     }
 
     @Test
-    public void test3()
+    public void noExecutableFound()
     {
         final Semaphore semaphore = new Semaphore(0);
         final AtomicInteger exitCode = new AtomicInteger();
@@ -114,20 +113,6 @@ public class CatTest
         semaphore.acquireUninterruptibly();
 
         Assert.assertEquals("Output did not matched expected result", Integer.MIN_VALUE, exitCode.get());
-    }
-
-    @Test
-    public void lotOfData()
-    {
-        Semaphore semaphore = new Semaphore(0);
-        AtomicInteger size = new AtomicInteger();
-
-        NuProcessListener processListener = new LottaProcessListener(semaphore, size);
-        NuProcessBuilder pb = new NuProcessBuilder(Arrays.asList("src\\test\\java\\org\\nuprocess\\windows\\cat.exe"), processListener);
-        pb.start();
-        semaphore.acquireUninterruptibly();
-
-        Assert.assertEquals("Output byte count did not match input size", 600000, size.get());
     }
 
     private static class LottaProcessListener extends NuAbstractProcessListener
@@ -205,5 +190,4 @@ public class CatTest
             return readAdler32.getValue() == writeAdler32.getValue();
         }
     };
-    
 }

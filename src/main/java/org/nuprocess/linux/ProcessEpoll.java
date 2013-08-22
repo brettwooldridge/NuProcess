@@ -71,9 +71,9 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
     }
 
     @Override
-    public void process()
+    public boolean process()
     {        
-        int nev = LIBC.epoll_wait(epoll, eventList, EVENT_BATCH_SIZE, WAIT_INDEFINTELY);
+        int nev = LIBC.epoll_wait(epoll, eventList, EVENT_BATCH_SIZE, 250); // TODO: WAIT_INDEFINTELY);
         if (nev == -1)
         {
             throw new RuntimeException("Error waiting for epoll");
@@ -135,6 +135,8 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
 
             epEvent.clear();
         }
+
+        return true;
     }
 
     // ************************************************************************

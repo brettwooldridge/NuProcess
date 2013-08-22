@@ -124,7 +124,7 @@ public class OsxProcess extends BasePosixProcess
             return false;
         }
 
-        if (inBuffer.position() < inBuffer.limit())
+        if (inBuffer.remaining() > 0)
         {
             ByteBuffer slice = inBuffer.slice();
             int wrote = LIBC.write(stdin, slice, Math.min(availability, slice.capacity()));
@@ -135,9 +135,9 @@ public class OsxProcess extends BasePosixProcess
             }
 
             inBuffer.position(inBuffer.position() + wrote);
-            if (userWantsWrite.compareAndSet(false, false))
+            if (inBuffer.remaining() > 0)
             {
-                return (wrote == slice.capacity() ? false : true);
+                return true;
             }
         }
 

@@ -10,7 +10,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public abstract class BaseEventProcessor<T extends BasePosixProcess> implements IEventProcessor<T>
 {
-    public static final int EVENT_BATCH_SIZE;
+    protected static final int EVENT_BATCH_SIZE;
+    protected static final int DEADPOOL_POLL_INTERVAL;
+    protected static final int LINGER_ITERATIONS;
 
     protected Map<Integer, T> pidToProcessMap;
     protected Map<Integer, T> fildesToProcessMap;
@@ -21,6 +23,12 @@ public abstract class BaseEventProcessor<T extends BasePosixProcess> implements 
     static
     {
         EVENT_BATCH_SIZE = Integer.getInteger("org.nuprocess.eventBatchSize", 8); 
+
+        int lingerTimeMs = Math.max(1000, Integer.getInteger("org.nuprocess.lingerTimeMs", 5000));
+
+        DEADPOOL_POLL_INTERVAL = Math.min(lingerTimeMs, Math.max(100, Integer.getInteger("org.nuprocess.deadPoolPollMs", 250)));
+        
+        LINGER_ITERATIONS = lingerTimeMs / DEADPOOL_POLL_INTERVAL;
     }
 
     public BaseEventProcessor()
@@ -40,11 +48,19 @@ public abstract class BaseEventProcessor<T extends BasePosixProcess> implements 
         {
             startBarrier.await();
 
+            int idleCount = 0;
             do
             {
-                process();
+                if (process())
+                {
+                    idleCount = 0;
+                }
+                else
+                {
+                    idleCount++;
+                }
             }
-            while (!isRunning.compareAndSet(pidToProcessMap.isEmpty(), false));
+            while (!isRunning.compareAndSet(pidToProcessMap.isEmpty() && idleCount > LINGER_ITERATIONS, false));
             isRunning.set(false);
         }
         catch (Exception e)
