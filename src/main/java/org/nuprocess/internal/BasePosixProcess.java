@@ -17,6 +17,7 @@ import com.sun.jna.Memory;
 import com.sun.jna.Pointer;
 import com.sun.jna.StringArray;
 import com.sun.jna.ptr.IntByReference;
+import com.sun.jna.ptr.PointerByReference;
 
 public abstract class BasePosixProcess implements NuProcess
 {
@@ -71,7 +72,7 @@ public abstract class BasePosixProcess implements NuProcess
     @Override
     public NuProcess start()
     {
-        Pointer posix_spawn_file_actions = createPipes();
+        PointerByReference posix_spawn_file_actions = createPipes();
         Pointer posix_spawnattr = new Memory(340); // Pointer.SIZE);
 
         try
@@ -117,13 +118,13 @@ public abstract class BasePosixProcess implements NuProcess
         }
         finally
         {
-            // After we've spawned, close the unused ends of our pipes (that were dup'd into the child process space)
-            close(stdinWidow);
-            close(stdoutWidow);
-            close(stderrWidow);
-
             LIBC.posix_spawnattr_destroy(posix_spawnattr);
             LIBC.posix_spawn_file_actions_destroy(posix_spawn_file_actions);
+            
+            // After we've spawned, close the unused ends of our pipes (that were dup'd into the child process space)
+            //close(stdinWidow);
+            //close(stdoutWidow);
+            //close(stderrWidow);
         }
         
         return this;
@@ -209,10 +210,12 @@ public abstract class BasePosixProcess implements NuProcess
         }
         finally
         {
-
-            LIBC.close(stdin);
+            // LIBC.close(stdin);
             LIBC.close(stdout);
             LIBC.close(stderr);
+            close(stdinWidow);
+            close(stdoutWidow);
+            close(stderrWidow);
 
             outBuffer = null;
             inBuffer = null;
@@ -265,7 +268,7 @@ public abstract class BasePosixProcess implements NuProcess
         }
     }
 
-    protected Pointer createPipes()
+    protected PointerByReference createPipes()
     {
         int rc = 0;
 
@@ -273,15 +276,11 @@ public abstract class BasePosixProcess implements NuProcess
         int[] out = new int[2];
         int[] err = new int[2];
 
-        Pointer posix_spawn_file_actions = Pointer.NULL;
+        PointerByReference posix_spawn_file_actions = new PointerByReference(); //.NULL;
         try
         {
             rc = LIBC.pipe(in);
             checkReturnCode(rc, "Create pipe() failed");
-            if (in[0] == 0)
-            {
-                throw new RuntimeException("Stdin is 0");
-            }
             
             rc = LIBC.pipe(out);
             checkReturnCode(rc, "Create pipe() failed");
@@ -290,7 +289,7 @@ public abstract class BasePosixProcess implements NuProcess
             checkReturnCode(rc, "Create pipe() failed");
     
             // Create spawn file actions
-            posix_spawn_file_actions = new Memory(80); // Pointer.SIZE);
+            posix_spawn_file_actions = new PointerByReference(); // Memory(80); // Pointer.SIZE);
             rc = LIBC.posix_spawn_file_actions_init(posix_spawn_file_actions);
             checkReturnCode(rc, "Internal call to posix_spawn_file_actions_init() failed");
     
@@ -300,13 +299,9 @@ public abstract class BasePosixProcess implements NuProcess
     
             rc = LIBC.posix_spawn_file_actions_addclose(posix_spawn_file_actions, in[1]);
             checkReturnCode(rc, "Internal call to posix_spawn_file_actions_addclose() failed");
-            
+
             stdin = in[1];
             stdinWidow = in[0];
-            if (stdinWidow == 0)
-            {
-                throw new RuntimeException("Stdin is 0");
-            }
     
             // Dup the writing end of the pipe into the sub-process, and close our end
             rc = LIBC.posix_spawn_file_actions_adddup2(posix_spawn_file_actions, out[1], 1);

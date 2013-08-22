@@ -24,11 +24,11 @@ public class CatTest
     @Test
     public void lotOfProcesses()
     {
-        for (int times = 0; times < 10; times++)
+        for (int times = 0; times < 100; times++)
         {
-            Semaphore[] semaphores = new Semaphore[10];
-            AtomicInteger[] sizes = new AtomicInteger[10];
-            LottaProcessListener[] listeners = new LottaProcessListener[10];
+            Semaphore[] semaphores = new Semaphore[50];
+            AtomicInteger[] sizes = new AtomicInteger[50];
+            LottaProcessListener[] listeners = new LottaProcessListener[50];
     
             for (int i = 0; i < semaphores.length; i++)
             {

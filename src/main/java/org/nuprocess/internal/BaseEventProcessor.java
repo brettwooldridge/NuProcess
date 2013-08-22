@@ -24,7 +24,7 @@ public abstract class BaseEventProcessor<T extends BasePosixProcess> implements 
     {
         EVENT_BATCH_SIZE = Integer.getInteger("org.nuprocess.eventBatchSize", 8); 
 
-        int lingerTimeMs = Math.max(1000, Integer.getInteger("org.nuprocess.lingerTimeMs", 5000));
+        int lingerTimeMs = Math.max(1000, Integer.getInteger("org.nuprocess.lingerTimeMs", 2500));
 
         DEADPOOL_POLL_INTERVAL = Math.min(lingerTimeMs, Math.max(100, Integer.getInteger("org.nuprocess.deadPoolPollMs", 250)));
         

@@ -1,5 +1,7 @@
 package org.nuprocess.osx;
 
+import java.util.concurrent.TimeUnit;
+
 import org.nuprocess.internal.BaseEventProcessor;
 import org.nuprocess.osx.LibC.TimeSpec;
 
@@ -21,7 +23,7 @@ class ProcessKqueue extends BaseEventProcessor<OsxProcess>
     {
         timeSpec = new TimeSpec();
         timeSpec.tv_sec = 0;
-        timeSpec.tv_nsec = 2000000;
+        timeSpec.tv_nsec = TimeUnit.MILLISECONDS.toNanos(DEADPOOL_POLL_INTERVAL);
     }
 
     ProcessKqueue()
@@ -46,6 +48,11 @@ class ProcessKqueue extends BaseEventProcessor<OsxProcess>
         if (nev == -1)
         {
             throw new RuntimeException("Error waiting for kevent");
+        }
+
+        if (nev == 0)
+        {
+            return false;
         }
 
         for (int i = 0; i < nev; i++)
@@ -89,7 +96,7 @@ class ProcessKqueue extends BaseEventProcessor<OsxProcess>
                     }
                 }
             }
-            else if ((kevent.fflags & Kevent.NOTE_EXIT) != 0) // process has exited
+            else if ((kevent.fflags & Kevent.NOTE_EXIT) != 0) // process has exited System.gc()
             {
                 OsxProcess osxProcess = pidToProcessMap.get(ident);
                 if (osxProcess != null)
@@ -166,11 +173,15 @@ class ProcessKqueue extends BaseEventProcessor<OsxProcess>
 
         Kevent.EV_SET(events[0], new NativeLong(osxProcess.getPid()), 
                       Kevent.EVFILT_PROC,
-                      Kevent.EV_DELETE | Kevent.EV_ENABLE | Kevent.EV_ONESHOT,
+                      Kevent.EV_DELETE, // | Kevent.EV_ENABLE | Kevent.EV_ONESHOT,
                       Kevent.NOTE_EXIT | Kevent.NOTE_EXITSTATUS | Kevent.NOTE_REAP,
                       new NativeLong(0), Pointer.NULL);
 
-        LIBC.kevent(kqueue, events, 1, null, 0, null);
+        int rc = LIBC.kevent(kqueue, events, 1, null, 0, null);
+        if (rc < 0)
+        {
+            throw new RuntimeException("Unable to delete interest in process from kqueue");
+        }
 
         pidToProcessMap.remove(osxProcess.getPid());
         fildesToProcessMap.remove(osxProcess.getStdin());

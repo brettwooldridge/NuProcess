@@ -48,11 +48,7 @@ public class OsxProcess extends BasePosixProcess
     @Override
     public void stdinClose()
     {
-        if (stdin != 0)
-        {
-            LIBC.close(stdin);
-            stdin = 0;
-        }
+        LIBC.close(stdin);
     }
 
     // ************************************************************************
@@ -127,7 +123,7 @@ public class OsxProcess extends BasePosixProcess
         if (inBuffer.remaining() > 0)
         {
             ByteBuffer slice = inBuffer.slice();
-            int wrote = LIBC.write(stdin, slice, Math.min(availability, slice.capacity()));
+            int wrote = LIBC.write(stdin, slice, Math.min(availability - 1, slice.capacity()));
             if (wrote == -1)
             {
                 // EOF?

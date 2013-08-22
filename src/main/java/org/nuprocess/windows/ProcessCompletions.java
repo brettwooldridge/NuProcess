@@ -46,7 +46,7 @@ public final class ProcessCompletions implements Runnable
         PROCESSOR_THREADS = Integer.getInteger("org.nuprocess.threads",
                                             Boolean.getBoolean("org.nuprocess.threadsEqualCores") ? Runtime.getRuntime().availableProcessors() : 1);
 
-        int lingerTimeMs = Math.max(1000, Integer.getInteger("org.nuprocess.lingerTimeMs", 5000));
+        int lingerTimeMs = Math.max(1000, Integer.getInteger("org.nuprocess.lingerTimeMs", 2500));
 
         DEADPOOL_POLL_INTERVAL = Math.min(lingerTimeMs, Math.max(100, Integer.getInteger("org.nuprocess.deadPoolPollMs", 250)));
         
