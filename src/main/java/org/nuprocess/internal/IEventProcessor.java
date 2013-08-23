@@ -10,7 +10,7 @@ public interface IEventProcessor<T extends BasePosixProcess> extends Runnable
 
     void registerProcess(T process);
 
-    void requeueRead(int stdin);
+    void queueWrite(int stdin);
 
     boolean process();
 }

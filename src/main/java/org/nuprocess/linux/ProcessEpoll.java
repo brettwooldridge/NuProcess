@@ -57,7 +57,7 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
     }
 
     @Override
-    public void requeueRead(int stdin)
+    public void queueWrite(int stdin)
     {
         EpollEvent event = new EpollEvent();
         event.events = EpollEvent.EPOLLOUT | EpollEvent.EPOLLONESHOT | EpollEvent.EPOLLRDHUP;

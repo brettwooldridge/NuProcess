@@ -14,6 +14,9 @@ public class OsxProcess extends BasePosixProcess
 {
     private static final LibC LIBC;
 
+    private int remainingWrite;
+    private int writeOffset;
+
     static
     {
         LIBC = LibC.INSTANCE;
@@ -48,7 +51,7 @@ public class OsxProcess extends BasePosixProcess
     @Override
     public void stdinClose()
     {
-        LIBC.close(stdin);
+        stdin = close(stdin);
     }
 
     // ************************************************************************
@@ -69,14 +72,15 @@ public class OsxProcess extends BasePosixProcess
                 return;
             }
 
-            outBuffer.clear();
             int read = LIBC.read(stdout, outBuffer, Math.min(availability, BUFFER_CAPACITY));
             if (read == -1)
             {
+                throw new RuntimeException("Unexpected eof");
                 // EOF?
             }
-            outBuffer.limit(read);
-            processListener.onStdout(outBuffer);
+
+            ByteBuffer byteBuffer = ByteBuffer.wrap(outBuffer.getByteArray(0, read));
+            processListener.onStdout(byteBuffer);
         }
         catch (Exception e)
         {
@@ -98,14 +102,15 @@ public class OsxProcess extends BasePosixProcess
                 return;
             }
 
-            outBuffer.clear();
             int read = LIBC.read(stderr, outBuffer, Math.min(availability, BUFFER_CAPACITY));
             if (read == -1)
             {
                 // EOF?
+                return;
             }
-            outBuffer.limit(read);
-            processListener.onStderr(outBuffer);
+            ByteBuffer byteBuffer = ByteBuffer.wrap(outBuffer.getByteArray(0, read));
+
+            processListener.onStderr(byteBuffer);
         }
         catch (Exception e)
         {
@@ -120,29 +125,45 @@ public class OsxProcess extends BasePosixProcess
             return false;
         }
 
-        if (inBuffer.remaining() > 0)
+        if (remainingWrite > 0)
         {
-            ByteBuffer slice = inBuffer.slice();
-            int wrote = LIBC.write(stdin, slice, Math.min(availability - 1, slice.capacity()));
+            int wrote = LIBC.write(stdin, inBuffer.share(writeOffset), Math.min(remainingWrite, availability));
             if (wrote == -1)
             {
                 // EOF?
                 return false;
             }
 
-            inBuffer.position(inBuffer.position() + wrote);
-            if (inBuffer.remaining() > 0)
+            remainingWrite -= wrote;
+            writeOffset += wrote;
+            if (remainingWrite > 0)
             {
                 return true;
             }
+
+            remainingWrite = 0;
+            writeOffset = 0;
+        }
+
+        if (userWantsWrite.compareAndSet(false, false))
+        {
+            return false;
         }
 
         try
         {
-            inBuffer.clear();
-            boolean wantMore = processListener.onStdinReady(inBuffer);
+            ByteBuffer byteBuffer = ByteBuffer.allocate(BUFFER_CAPACITY);
+            boolean wantMore = processListener.onStdinReady(byteBuffer);
             userWantsWrite.set(wantMore);
-            return wantMore;
+
+            if (byteBuffer.hasRemaining())
+            {
+                byte[] array = byteBuffer.array();
+                remainingWrite = byteBuffer.remaining();
+                inBuffer.write(0, array, 0, remainingWrite);
+            }
+
+            return true;
         }
         catch (Exception e)
         {
@@ -151,9 +172,14 @@ public class OsxProcess extends BasePosixProcess
         }
     }
 
-    protected void close(int fildes)
+    protected int close(int fildes)
     {
-        LIBC.close(fildes);
+        if (fildes >= 0)
+        {
+            LIBC.close(fildes);
+        }
+
+        return -1;
     }
 
     @Override

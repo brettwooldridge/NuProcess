@@ -1,6 +1,5 @@
 package org.nuprocess.internal;
 
-import java.nio.ByteBuffer;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -13,7 +12,7 @@ import org.nuprocess.NuProcess;
 import org.nuprocess.NuProcessListener;
 import org.nuprocess.osx.LibC;
 
-import com.sun.jna.Memory;
+import com.sun.jna.Native;
 import com.sun.jna.Pointer;
 import com.sun.jna.StringArray;
 import com.sun.jna.ptr.IntByReference;
@@ -39,8 +38,10 @@ public abstract class BasePosixProcess implements NuProcess
 
     protected AtomicBoolean userWantsWrite;
 
-    protected ByteBuffer outBuffer;
-    protected ByteBuffer inBuffer;
+//    protected ByteBuffer outBuffer;
+//    protected ByteBuffer inBuffer;
+    protected Pointer outBuffer;
+    protected Pointer inBuffer;
 
     protected int stdin;
     protected int stdout;
@@ -73,7 +74,7 @@ public abstract class BasePosixProcess implements NuProcess
     public NuProcess start()
     {
         PointerByReference posix_spawn_file_actions = createPipes();
-        Pointer posix_spawnattr = new Memory(340); // Pointer.SIZE);
+        PointerByReference posix_spawnattr = new PointerByReference(); //  Memory(340); // Pointer.SIZE);
 
         try
         {
@@ -101,8 +102,6 @@ public abstract class BasePosixProcess implements NuProcess
             afterStart();
 
             registerProcess();
-
-            kickstartProcessors();
 
             callStart();
             
@@ -132,7 +131,7 @@ public abstract class BasePosixProcess implements NuProcess
 
     protected abstract ILibC getLibC();
 
-    protected abstract void close(int fd);
+    protected abstract int close(int fd);
 
     /**
      * @return the pid
@@ -175,7 +174,7 @@ public abstract class BasePosixProcess implements NuProcess
         if (stdin != 0)
         {
             userWantsWrite.set(true);
-            myProcessor.requeueRead(stdin);
+            myProcessor.queueWrite(stdin);
         }
     }
 
@@ -210,15 +209,16 @@ public abstract class BasePosixProcess implements NuProcess
         }
         finally
         {
-            // LIBC.close(stdin);
-            LIBC.close(stdout);
-            LIBC.close(stderr);
-            close(stdinWidow);
-            close(stdoutWidow);
-            close(stderrWidow);
+            stdin = close(stdin);
+            stdout = close(stdout);
+            stderr = close(stderr);
+            stdinWidow = close(stdinWidow);
+            stdoutWidow = close(stdoutWidow);
+            stderrWidow = close(stderrWidow);
 
-            outBuffer = null;
-            inBuffer = null;
+            Native.free(Pointer.nativeValue(outBuffer));
+            Native.free(Pointer.nativeValue(inBuffer));
+
             processListener = null;
         }
     }
@@ -226,11 +226,32 @@ public abstract class BasePosixProcess implements NuProcess
     @SuppressWarnings("unchecked")
     protected void registerProcess()
     {
-        synchronized (this.getClass())
+        int mySlot = 0;
+        synchronized (processors)
         {
-            myProcessor = (IEventProcessor<? super BasePosixProcess>) processors[processorRoundRobin]; 
-            myProcessor.registerProcess(this);
+            mySlot = processorRoundRobin;
             processorRoundRobin = (processorRoundRobin + 1) % processors.length;
+        }
+
+        myProcessor = (IEventProcessor<? super BasePosixProcess>) processors[mySlot]; 
+        myProcessor.registerProcess(this);
+
+        if (myProcessor.checkAndSetRunning())
+        {
+            CyclicBarrier spawnBarrier = myProcessor.getSpawnBarrier();
+
+            Thread t = new Thread(myProcessor, "ProcessKqueue" + mySlot);
+            t.setDaemon(true);
+            t.start();
+
+            try
+            {
+                spawnBarrier.await();
+            }
+            catch (Exception e)
+            {
+                throw new RuntimeException(e);
+            }
         }
     }
 
@@ -239,33 +260,11 @@ public abstract class BasePosixProcess implements NuProcess
         commands = null;
         environment = null;
 
-        outBuffer = ByteBuffer.allocateDirect(BUFFER_CAPACITY);
-        inBuffer = ByteBuffer.allocateDirect(BUFFER_CAPACITY);
-        inBuffer.flip();
-    }
+        long peer = Native.malloc(BUFFER_CAPACITY);
+        outBuffer = new Pointer(peer);
 
-    protected void kickstartProcessors()
-    {
-        for (int i = 0; i < processors.length; i++)
-        {
-            if (processors[i].checkAndSetRunning())
-            {
-                CyclicBarrier spawnBarrier = processors[i].getSpawnBarrier();
-
-                Thread t = new Thread(processors[i], "ProcessKqueue" + i);
-                t.setDaemon(true);
-                t.start();
-
-                try
-                {
-                    spawnBarrier.await();
-                }
-                catch (Exception e)
-                {
-                    throw new RuntimeException(e);
-                }
-            }
-        }
+        peer = Native.malloc(BUFFER_CAPACITY);
+        inBuffer = new Pointer(peer);
     }
 
     protected PointerByReference createPipes()

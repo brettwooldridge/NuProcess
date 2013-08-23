@@ -24,7 +24,7 @@ public class CatTest
     @Test
     public void lotOfProcesses()
     {
-        for (int times = 0; times < 100; times++)
+        for (int times = 0; times < 1000; times++)
         {
             Semaphore[] semaphores = new Semaphore[50];
             AtomicInteger[] sizes = new AtomicInteger[50];
@@ -54,20 +54,26 @@ public class CatTest
                 Assert.assertTrue("Adler32 mismatch between written and read", listen.checkAdlers());
             }
         }
+        System.gc();
     }
 
     @Test
-    public void lotOfData()
+    public void lotOfData() throws Exception
     {
-        Semaphore semaphore = new Semaphore(0);
-        AtomicInteger size = new AtomicInteger();
-
-        NuProcessListener processListener = new LottaProcessListener(semaphore, size);
-        NuProcessBuilder pb = new NuProcessBuilder(Arrays.asList("/bin/cat"), processListener);
-        pb.start();
-        semaphore.acquireUninterruptibly();
-
-        Assert.assertEquals("Output byte count did not match input size", 600000, size.get());
+        for (int i = 0; i < 20000; i++)
+        {
+            Semaphore semaphore = new Semaphore(0);
+            AtomicInteger size = new AtomicInteger();
+    
+            LottaProcessListener processListener = new LottaProcessListener(semaphore, size);
+            NuProcessBuilder pb = new NuProcessBuilder(Arrays.asList("/bin/cat"), processListener);
+            pb.start();
+            semaphore.acquireUninterruptibly();
+    
+            Assert.assertEquals("Output byte count did not match input size, iteration " + i, 600000, size.get());
+            Assert.assertTrue("Adler32 mismatch between written and read", processListener.checkAdlers());
+        }
+        System.gc();
     }
 
     @Test
@@ -116,7 +122,9 @@ public class CatTest
     {
         private NuProcess nuProcess;
         private StringBuffer sb;
-        private int counter;
+        private int writes;
+        private int reads;
+        private int[] track;
         private Semaphore semaphore;
         private AtomicInteger size;
 
@@ -130,6 +138,8 @@ public class CatTest
 
             this.readAdler32 = new Adler32();
             this.writeAdler32 = new Adler32();
+
+            this.track = new int[100];
 
             sb = new StringBuffer();
             for (int i = 0; i < 6000; i++)
@@ -148,6 +158,11 @@ public class CatTest
         @Override
         public void onExit(int statusCode)
         {
+            sb.setLength(0);
+            if (size.get() != 600000)
+            {
+                sb.length();
+            }
             semaphore.release();
         }
 
@@ -159,27 +174,29 @@ public class CatTest
                 return;
             }
 
+            track[reads] = buffer.remaining();
+            reads++;
+
             byte[] bytes = new byte[buffer.remaining()];
             buffer.get(bytes);
             readAdler32.update(bytes);
             size.addAndGet(bytes.length);
+
+            if (size.get() == 600000 || reads == 100)
+            {
+                nuProcess.stdinClose();
+            }
         }
 
         @Override
         public boolean onStdinReady(ByteBuffer buffer)
         {
-            if (counter++ >= 10)
-            {
-                nuProcess.stdinClose();
-                return false;
-            }
-
             byte[] bytes = sb.toString().getBytes();
             writeAdler32.update(bytes);
 
             buffer.put(bytes);
             buffer.flip();
-            return true;
+            return ++writes < 10;
         }
 
         boolean checkAdlers()

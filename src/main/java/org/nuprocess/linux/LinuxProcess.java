@@ -1,6 +1,5 @@
 package org.nuprocess.linux;
 
-import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -87,12 +86,14 @@ public class LinuxProcess extends BasePosixProcess
     // ************************************************************************
 
     @Override
-    protected void close(int fd)
+    protected int close(int fd)
     {
-        if (fd != 0)
+        if (fd >= 0)
         {
             LIBC.close(fd);
         }
+
+        return -1;
     }
 
     @Override
@@ -128,14 +129,14 @@ public class LinuxProcess extends BasePosixProcess
                 return;
             }
 
-            outBuffer.clear();
-            int read = LIBC.read(stdout, outBuffer, BUFFER_CAPACITY);
-            if (read == -1)
-            {
-                // EOF?
-            }
-            outBuffer.limit(read);
-            processListener.onStdout(outBuffer);
+//            outBuffer.clear();
+//            int read = LIBC.read(stdout, outBuffer, BUFFER_CAPACITY);
+//            if (read == -1)
+//            {
+//                // EOF?
+//            }
+//            outBuffer.limit(read);
+//            processListener.onStdout(outBuffer);
         }
         catch (Exception e)
         {
@@ -158,14 +159,14 @@ public class LinuxProcess extends BasePosixProcess
                 return;
             }
 
-            outBuffer.clear();
-            int read = LIBC.read(stderr, outBuffer, BUFFER_CAPACITY);
-            if (read == -1)
-            {
-                // EOF?
-            }
-            outBuffer.limit(read);
-            processListener.onStderr(outBuffer);
+//            outBuffer.clear();
+//            int read = LIBC.read(stderr, outBuffer, BUFFER_CAPACITY);
+//            if (read == -1)
+//            {
+//                // EOF?
+//            }
+//            outBuffer.limit(read);
+//            processListener.onStderr(outBuffer);
         }
         catch (Exception e)
         {
@@ -175,38 +176,38 @@ public class LinuxProcess extends BasePosixProcess
 
     boolean writeStdin()
     {
-        while (true)
-        {
-            if (inBuffer.limit() < inBuffer.capacity())
-            {
-                ByteBuffer slice = inBuffer.slice();
-                int wrote = LIBC.write(stdin, slice, slice.capacity());
-                if (wrote == -1)
-                {
-                    // EOF?
-                    return false;
-                }
-
-                inBuffer.position(inBuffer.position() + wrote);
-                if (userWantsWrite.compareAndSet(false, false))
-                {
-                    return (wrote == slice.capacity() ? false : true);
-                }
-            }
-
-            try
-            {
-                inBuffer.clear();
-                boolean wantMore = processListener.onStdinReady(inBuffer);
-                userWantsWrite.set(wantMore);
-                return wantMore;
-            }
-            catch (Exception e)
-            {
-                // Don't let an exception thrown from the user's handler interrupt us
+//        while (true)
+//        {
+//            if (inBuffer.limit() < inBuffer.capacity())
+//            {
+//                ByteBuffer slice = inBuffer.slice();
+//                int wrote = LIBC.write(stdin, slice, slice.capacity());
+//                if (wrote == -1)
+//                {
+//                    // EOF?
+//                    return false;
+//                }
+//
+//                inBuffer.position(inBuffer.position() + wrote);
+//                if (userWantsWrite.compareAndSet(false, false))
+//                {
+//                    return (wrote == slice.capacity() ? false : true);
+//                }
+//            }
+//
+//            try
+//            {
+//                inBuffer.clear();
+//                boolean wantMore = processListener.onStdinReady(inBuffer);
+//                userWantsWrite.set(wantMore);
+//                return wantMore;
+//            }
+//            catch (Exception e)
+//            {
+//                // Don't let an exception thrown from the user's handler interrupt us
                 return false;
-            }
-        }
+//            }
+//        }
     }
 
     boolean isSoftExit()

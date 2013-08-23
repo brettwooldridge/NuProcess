@@ -22,7 +22,7 @@ public abstract class BaseEventProcessor<T extends BasePosixProcess> implements 
 
     static
     {
-        EVENT_BATCH_SIZE = Integer.getInteger("org.nuprocess.eventBatchSize", 8); 
+        EVENT_BATCH_SIZE = Integer.getInteger("org.nuprocess.eventBatchSize", 1); 
 
         int lingerTimeMs = Math.max(1000, Integer.getInteger("org.nuprocess.lingerTimeMs", 2500));
 

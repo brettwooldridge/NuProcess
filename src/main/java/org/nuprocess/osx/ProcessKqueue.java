@@ -7,6 +7,7 @@ import org.nuprocess.osx.LibC.TimeSpec;
 
 import com.sun.jna.NativeLong;
 import com.sun.jna.Pointer;
+import com.sun.jna.ptr.IntByReference;
 
 /**
  * @author Brett Wooldridge
@@ -73,6 +74,10 @@ class ProcessKqueue extends BaseEventProcessor<OsxProcess>
                         {
                             osxProcess.readStdout(-1);
                         }
+                        else
+                        {
+                            queueRead(osxProcess.getStdout());                            
+                        }
                     }
                     else
                     {
@@ -80,6 +85,10 @@ class ProcessKqueue extends BaseEventProcessor<OsxProcess>
                         if ((kevent.flags & Kevent.EV_EOF) != 0)
                         {
                             osxProcess.readStderr(-1);
+                        }
+                        else
+                        {
+                            queueRead(osxProcess.getStderr());                            
                         }
                     }
                 }
@@ -92,7 +101,7 @@ class ProcessKqueue extends BaseEventProcessor<OsxProcess>
                     int available = kevent.data != null ? kevent.data.intValue() : -1;
                     if (osxProcess.writeStdin(available))
                     {
-                        requeueRead(osxProcess.getStdin());
+                        queueWrite(osxProcess.getStdin());
                     }
                 }
             }
@@ -101,11 +110,10 @@ class ProcessKqueue extends BaseEventProcessor<OsxProcess>
                 OsxProcess osxProcess = pidToProcessMap.get(ident);
                 if (osxProcess != null)
                 {
+                    cleanupProcess(osxProcess);
                     int rc = (kevent.data.intValue() & 0xff00) >> 8;
                     osxProcess.onExit(rc);
                 }
-
-                cleanupProcess(osxProcess);                
             }
 
             kevent.clear();
@@ -115,7 +123,33 @@ class ProcessKqueue extends BaseEventProcessor<OsxProcess>
     }
 
     @Override
-    public void requeueRead(int stdin)
+    public void registerProcess(OsxProcess process)
+    {
+        pidToProcessMap.put(process.getPid(), process);
+        fildesToProcessMap.put(process.getStdin(), process);
+        fildesToProcessMap.put(process.getStdout(), process);
+        fildesToProcessMap.put(process.getStderr(), process);
+
+        Kevent[] events = (Kevent[]) new Kevent().toArray(1);
+
+        Kevent.EV_SET(events[0], new NativeLong(process.getPid()),
+                      Kevent.EVFILT_PROC,
+                      Kevent.EV_ADD | Kevent.EV_ONESHOT,
+                      Kevent.NOTE_EXIT | Kevent.NOTE_EXITSTATUS | Kevent.NOTE_REAP,
+                      new NativeLong(0), Pointer.NULL);
+
+        int rc = LIBC.kevent(kqueue, events, 1, null, 0, null);
+        if (rc == -1)
+        {
+            throw new RuntimeException("Unable to register new events to kqueue");
+        }
+
+        queueRead(process.getStdout());
+        queueRead(process.getStderr());
+    }
+
+    @Override
+    public void queueWrite(int stdin)
     {
         Kevent[] events = (Kevent[]) new Kevent().toArray(1);
 
@@ -128,60 +162,26 @@ class ProcessKqueue extends BaseEventProcessor<OsxProcess>
         LIBC.kevent(kqueue, events, 1, null, 0, null);
     }
 
-    @Override
-    public void registerProcess(OsxProcess process)
-    {
-        pidToProcessMap.put(process.getPid(), process);
-        fildesToProcessMap.put(process.getStdin(), process);
-        fildesToProcessMap.put(process.getStdout(), process);
-        fildesToProcessMap.put(process.getStderr(), process);
-
-        Kevent[] events = (Kevent[]) new Kevent().toArray(3);
-
-        Kevent.EV_SET(events[0], new NativeLong(process.getPid()),
-                      Kevent.EVFILT_PROC,
-                      Kevent.EV_ADD,
-                      Kevent.NOTE_EXIT | Kevent.NOTE_EXITSTATUS | Kevent.NOTE_REAP,
-                      new NativeLong(0), Pointer.NULL);
-
-        Kevent.EV_SET(events[1], new NativeLong(process.getStdout()),
-                      Kevent.EVFILT_READ,
-                      Kevent.EV_ADD,
-                      0,
-                      new NativeLong(0), Pointer.NULL);
-
-        Kevent.EV_SET(events[2], new NativeLong(process.getStderr()),
-                      Kevent.EVFILT_READ,
-                      Kevent.EV_ADD,
-                      0,
-                      new NativeLong(0), Pointer.NULL);
-
-        int rc = LIBC.kevent(kqueue, events, events.length, null, 0, null);
-        if (rc == -1)
-        {
-            throw new RuntimeException("Unable to register new events to kqueue");
-        }
-    }
-
     // ************************************************************************
     //                             Private methods
     // ************************************************************************
 
-    private void cleanupProcess(OsxProcess osxProcess)
+    private void queueRead(int stdX)
     {
         Kevent[] events = (Kevent[]) new Kevent().toArray(1);
 
-        Kevent.EV_SET(events[0], new NativeLong(osxProcess.getPid()), 
-                      Kevent.EVFILT_PROC,
-                      Kevent.EV_DELETE, // | Kevent.EV_ENABLE | Kevent.EV_ONESHOT,
-                      Kevent.NOTE_EXIT | Kevent.NOTE_EXITSTATUS | Kevent.NOTE_REAP,
+        Kevent.EV_SET(events[0], new NativeLong(stdX),
+                      Kevent.EVFILT_READ,
+                      Kevent.EV_ADD | Kevent.EV_ONESHOT,
+                      0,
                       new NativeLong(0), Pointer.NULL);
 
-        int rc = LIBC.kevent(kqueue, events, 1, null, 0, null);
-        if (rc < 0)
-        {
-            throw new RuntimeException("Unable to delete interest in process from kqueue");
-        }
+        LIBC.kevent(kqueue, events, 1, null, 0, null);
+    }
+
+    private void cleanupProcess(OsxProcess osxProcess)
+    {
+        LIBC.waitpid(osxProcess.getPid(), new IntByReference(), LibC.WNOHANG);
 
         pidToProcessMap.remove(osxProcess.getPid());
         fildesToProcessMap.remove(osxProcess.getStdin());
