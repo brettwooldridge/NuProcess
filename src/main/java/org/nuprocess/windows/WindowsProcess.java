@@ -72,8 +72,19 @@ public final class WindowsProcess implements NuProcess
 
         IS_SOFTEXIT_DETECTION = Boolean.valueOf(System.getProperty("org.nuprocess.windows.softExitDetection", "true"));
 
-        boolean threadPerCore = Boolean.getBoolean("org.nuprocess.threadsEqualCores");
-        PROCESSOR_THREADS = Integer.getInteger("org.nuprocess.threads", threadPerCore ? Runtime.getRuntime().availableProcessors() : 1);
+        String threads = System.getProperty("org.nuprocess.threads", "auto");
+        if ("auto".equals(threads))
+        {
+            PROCESSOR_THREADS = Math.max(1, Runtime.getRuntime().availableProcessors() / 2);
+        }
+        else if ("cores".equals(threads))
+        {
+            PROCESSOR_THREADS = Runtime.getRuntime().availableProcessors();
+        }
+        else
+        {
+            PROCESSOR_THREADS = Math.max(1, Integer.parseInt(threads));
+        }
 
         processors = new ProcessCompletions[PROCESSOR_THREADS];
         for (int i = 0; i < PROCESSOR_THREADS; i++)

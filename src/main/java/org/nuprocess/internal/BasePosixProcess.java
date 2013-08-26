@@ -35,8 +35,6 @@ public abstract class BasePosixProcess implements NuProcess
 
     protected AtomicBoolean userWantsWrite;
 
-//    protected ByteBuffer outBuffer;
-//    protected ByteBuffer inBuffer;
     protected Pointer outBuffer;
     protected Pointer inBuffer;
 
@@ -51,8 +49,21 @@ public abstract class BasePosixProcess implements NuProcess
 
     static
     {
-        int numThreads = Integer.getInteger("org.nuprocess.threads",
-                                            Boolean.getBoolean("org.nuprocess.threadsEqualCores") ? Runtime.getRuntime().availableProcessors() : 1);
+        int numThreads = 1;
+        String threads = System.getProperty("org.nuprocess.threads", "auto");
+        if ("auto".equals(threads))
+        {
+            numThreads = Math.max(1, Runtime.getRuntime().availableProcessors() / 2);
+        }
+        else if ("cores".equals(threads))
+        {
+            numThreads = Runtime.getRuntime().availableProcessors();
+        }
+        else
+        {
+            numThreads = Math.max(1, Integer.parseInt(threads));
+        }
+
         processors = new IEventProcessor<?>[numThreads];
 
     }
