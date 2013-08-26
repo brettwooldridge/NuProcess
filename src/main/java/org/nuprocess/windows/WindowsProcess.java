@@ -17,6 +17,8 @@ import org.nuprocess.NuProcessListener;
 import org.nuprocess.windows.NuKernel32.OVERLAPPED;
 
 import com.sun.jna.Memory;
+import com.sun.jna.Native;
+import com.sun.jna.Pointer;
 import com.sun.jna.platform.win32.Kernel32;
 import com.sun.jna.platform.win32.WinBase;
 import com.sun.jna.platform.win32.WinBase.PROCESS_INFORMATION;
@@ -30,11 +32,12 @@ import com.sun.jna.platform.win32.WinNT.HANDLE;
  */
 public final class WindowsProcess implements NuProcess
 {
+    public static final int PROCESSOR_THREADS;
+
     private static final NuKernel32 KERNEL32 = NuKernel32.INSTANCE;
 
     private static final boolean IS_SOFTEXIT_DETECTION;
 
-    private static final int PROCESSOR_THREADS;
     private static final int BUFFER_SIZE = 4096;
 
     private static final ProcessCompletions[] processors;
@@ -59,6 +62,9 @@ public final class WindowsProcess implements NuProcess
     private HANDLE hStdinWidow;
     private HANDLE hStdoutWidow;
     private HANDLE hStderrWidow;
+
+    private int remainingWrite;
+    private int writeOffset;
 
     private volatile boolean inClosed;
     private volatile boolean outClosed;
@@ -211,22 +217,29 @@ public final class WindowsProcess implements NuProcess
         return stderrPipe;
     }
 
-    void readStdout(boolean closed)
+    void readStdout(int transferred)
     {
+        if (outClosed)
+        {
+            return;
+        }
+
         try
         {
-            if (outClosed)
-            {
-                return;
-            }
-            else if (closed)
+            if (transferred < 0)
             {
                 outClosed = true;
                 processListener.onStdout(null);
                 return;
             }
+            else if (transferred == 0)
+            {
+                return;
+            }
 
-            processListener.onStdout(stdoutPipe.buffer);
+            ByteBuffer byteBuffer = ByteBuffer.wrap(stdoutPipe.buffer.getByteArray(0, transferred));
+
+            processListener.onStdout(byteBuffer);
         }
         catch (Exception e)
         {
@@ -235,22 +248,29 @@ public final class WindowsProcess implements NuProcess
         }
     }
 
-    void readStderr(boolean closed)
+    void readStderr(int transferred)
     {
+        if (errClosed)
+        {
+            return;
+        }
+
         try
         {
-            if (errClosed)
-            {
-                return;
-            }
-            else if (closed)
+            if (transferred < 0)
             {
                 errClosed = true;
                 processListener.onStderr(null);
                 return;
             }
+            else if (transferred == 0)
+            {
+                return;
+            }
 
-            processListener.onStderr(stderrPipe.buffer);
+            ByteBuffer byteBuffer = ByteBuffer.wrap(stdoutPipe.buffer.getByteArray(0, transferred));
+
+            processListener.onStderr(byteBuffer);
         }
         catch (Exception e)
         {
@@ -259,20 +279,46 @@ public final class WindowsProcess implements NuProcess
         }
     }
 
-    boolean writeStdin()
+    boolean writeStdin(int transferred)
     {
-        try
+        writeOffset += transferred;
+        remainingWrite -= transferred;
+        if (remainingWrite > 0)
         {
-            boolean wantMore = processListener.onStdinReady(stdinPipe.buffer);
-            userWantsWrite.set(wantMore);
-            return wantMore;
-        }
-        catch (Exception e)
-        {
-            // Don't let an exception thrown from the user's handler interrupt us
-            e.printStackTrace();
+            KERNEL32.WriteFile(stdinPipe.pipeHandle, stdinPipe.buffer.share(writeOffset), remainingWrite, null,stdinPipe.overlapped);
+
             return false;
         }
+        
+        if (userWantsWrite.compareAndSet(true, false))
+        {
+            remainingWrite = 0;
+            writeOffset = 0;
+
+            try
+            {
+                ByteBuffer byteBuffer = ByteBuffer.allocate(BUFFER_CAPACITY);
+                boolean wantMore = processListener.onStdinReady(byteBuffer);
+                userWantsWrite.set(wantMore);
+
+                if (byteBuffer.hasRemaining())
+                {
+                    byte[] array = byteBuffer.array();
+                    remainingWrite = byteBuffer.remaining();
+                    stdinPipe.buffer.write(0, array, 0, remainingWrite);
+                }
+
+                return wantMore;
+            }
+            catch (Exception e)
+            {
+                // Don't let an exception thrown from the user's handler interrupt us
+                e.printStackTrace();
+                return false;
+            }
+        }
+
+        return false;
     }
 
     public void onExit(int statusCode)
@@ -304,6 +350,10 @@ public final class WindowsProcess implements NuProcess
             KERNEL32.CloseHandle(stderrPipe.pipeHandle);
             KERNEL32.CloseHandle(processInfo.hThread);
             KERNEL32.CloseHandle(processInfo.hProcess);
+
+            Native.free(Pointer.nativeValue(stdoutPipe.buffer));
+            Native.free(Pointer.nativeValue(stderrPipe.buffer));
+            Native.free(Pointer.nativeValue(stdinPipe.buffer));
 
             stderrPipe = null;
             stdoutPipe = null;
@@ -454,10 +504,19 @@ public final class WindowsProcess implements NuProcess
         outClosed = false;
         errClosed = false;
 
-        stdoutPipe.buffer = ByteBuffer.allocateDirect(BUFFER_CAPACITY);
-        stderrPipe.buffer = ByteBuffer.allocateDirect(BUFFER_CAPACITY);
-        stdinPipe.buffer = ByteBuffer.allocateDirect(BUFFER_CAPACITY);
-        stdinPipe.buffer.flip();
+        // stdoutPipe.buffer = ByteBuffer.allocateDirect(BUFFER_CAPACITY);
+        // stderrPipe.buffer = ByteBuffer.allocateDirect(BUFFER_CAPACITY);
+        // stdinPipe.buffer = ByteBuffer.allocateDirect(BUFFER_CAPACITY);
+        // stdinPipe.buffer.flip();
+
+        long peer = Native.malloc(BUFFER_CAPACITY);
+        stdoutPipe.buffer = new Pointer(peer);
+
+        peer = Native.malloc(BUFFER_CAPACITY);
+        stderrPipe.buffer = new Pointer(peer);
+
+        peer = Native.malloc(BUFFER_CAPACITY);
+        stdinPipe.buffer = new Pointer(peer);
     }
 
     private void registerProcess()
@@ -585,7 +644,8 @@ public final class WindowsProcess implements NuProcess
     {
         int ioCompletionKey;
         HANDLE pipeHandle;
-        ByteBuffer buffer;
+        // ByteBuffer buffer;
+        Pointer buffer;
         final OVERLAPPED overlapped;
 
         {

@@ -24,7 +24,7 @@ public class CatTest
     @Test
     public void lotOfProcesses()
     {
-        for (int times = 0; times < 10; times++)
+        for (int times = 0; times < 100; times++)
         {
             Semaphore[] semaphores = new Semaphore[50];
             AtomicInteger[] sizes = new AtomicInteger[50];
@@ -54,21 +54,25 @@ public class CatTest
                 Assert.assertTrue("Adler32 mismatch between written and read", listen.checkAdlers());
             }
         }
+        System.gc();
     }
 
     @Test
     public void lotOfData()
     {
-        Semaphore semaphore = new Semaphore(0);
-        AtomicInteger size = new AtomicInteger();
-
-        LottaProcessListener processListener = new LottaProcessListener(semaphore, size);
-        NuProcessBuilder pb = new NuProcessBuilder(Arrays.asList("src\\test\\java\\org\\nuprocess\\windows\\cat.exe"), processListener);
-        pb.start();
-        semaphore.acquireUninterruptibly();
-
-        Assert.assertEquals("Output byte count did not match input size", 600000, size.get());
-        Assert.assertTrue("Adler32 mismatch between written and read", processListener.checkAdlers());
+        for (int i = 0; i < 100; i++)
+        {
+            Semaphore semaphore = new Semaphore(0);
+            AtomicInteger size = new AtomicInteger();
+    
+            LottaProcessListener processListener = new LottaProcessListener(semaphore, size);
+            NuProcessBuilder pb = new NuProcessBuilder(Arrays.asList("src\\test\\java\\org\\nuprocess\\windows\\cat.exe"), processListener);
+            pb.start();
+            semaphore.acquireUninterruptibly();
+    
+            Assert.assertEquals("Output byte count did not match input size", 600000, size.get());
+            Assert.assertTrue("Adler32 mismatch between written and read", processListener.checkAdlers());
+        }
     }
 
     @Test

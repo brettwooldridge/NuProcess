@@ -1,6 +1,5 @@
 package org.nuprocess.windows;
 
-import java.nio.Buffer;
 import java.util.Arrays;
 import java.util.List;
 
@@ -117,7 +116,7 @@ public interface NuKernel32 extends Kernel32
      *         designates the read operation is pending completion
      *         asynchronously. For more information, see Remarks.
      */
-    boolean ReadFile(HANDLE hFile, Buffer lpBuffer, int nNumberOfBytesToRead,
+    boolean ReadFile(HANDLE hFile, Pointer lpBuffer, int nNumberOfBytesToRead,
                      IntByReference lpNumberOfBytesRead, NuKernel32.OVERLAPPED lpOverlapped);
 
     /**
@@ -144,16 +143,15 @@ public interface NuKernel32 extends Kernel32
      *         value is zero (FALSE). To get extended error information, call
      *         the GetLastError function.
      */
-    boolean WriteFile(HANDLE hFile,Buffer lpBuffer, int nNumberOfBytesToWrite,
+    boolean WriteFile(HANDLE hFile, Pointer lpBuffer, int nNumberOfBytesToWrite,
                       IntByReference lpNumberOfBytesWritten, NuKernel32.OVERLAPPED lpOverlapped);
 
     /**
      * The OVERLAPPED structure contains information used in 
      * asynchronous (or overlapped) input and output (I/O).
      */
-    public static class OVERLAPPED extends Structure {
-        public static class ByReference extends OVERLAPPED implements Structure.ByReference { }
-
+    public static class OVERLAPPED extends Structure
+    {
         public ULONG_PTR Internal;
         public ULONG_PTR InternalHigh;
         public int Offset;
