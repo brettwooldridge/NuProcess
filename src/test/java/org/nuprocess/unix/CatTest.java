@@ -24,7 +24,7 @@ public class CatTest
     @Test
     public void lotOfProcesses()
     {
-        for (int times = 0; times < 1000; times++)
+        for (int times = 0; times < 10; times++)
         {
             Semaphore[] semaphores = new Semaphore[50];
             AtomicInteger[] sizes = new AtomicInteger[50];
@@ -54,13 +54,12 @@ public class CatTest
                 Assert.assertTrue("Adler32 mismatch between written and read", listen.checkAdlers());
             }
         }
-        System.gc();
     }
 
     @Test
     public void lotOfData() throws Exception
     {
-        for (int i = 0; i < 20000; i++)
+        for (int i = 0; i < 100; i++)
         {
             Semaphore semaphore = new Semaphore(0);
             AtomicInteger size = new AtomicInteger();
@@ -73,7 +72,6 @@ public class CatTest
             Assert.assertEquals("Output byte count did not match input size, iteration " + i, 600000, size.get());
             Assert.assertTrue("Adler32 mismatch between written and read", processListener.checkAdlers());
         }
-        System.gc();
     }
 
     @Test

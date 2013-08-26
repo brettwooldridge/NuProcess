@@ -1,11 +1,12 @@
 package org.nuprocess.osx;
 
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
 
 import org.nuprocess.internal.BaseEventProcessor;
 import org.nuprocess.osx.LibC.TimeSpec;
 
-import com.sun.jna.NativeLong;
 import com.sun.jna.Pointer;
 import com.sun.jna.ptr.IntByReference;
 
@@ -15,10 +16,12 @@ import com.sun.jna.ptr.IntByReference;
 class ProcessKqueue extends BaseEventProcessor<OsxProcess>
 {
     private static final LibC LIBC = LibC.INSTANCE;
+    private static final int KEVENT_POOL_SIZE = 16;
     private static final TimeSpec timeSpec;
 
     private int kqueue;
-    private Kevent[] eventList;
+    private Kevent triggeredEvent;
+    private BlockingQueue<Kevent> keventPool;
 
     static
     {
@@ -35,7 +38,13 @@ class ProcessKqueue extends BaseEventProcessor<OsxProcess>
             throw new RuntimeException("Unable to create kqueue");
         }
 
-        eventList = (Kevent[]) new Kevent().toArray(EVENT_BATCH_SIZE);
+        triggeredEvent = new Kevent();
+
+        keventPool = new ArrayBlockingQueue<Kevent>(KEVENT_POOL_SIZE);
+        for (int i = 0; i < KEVENT_POOL_SIZE; i++)
+        {
+            keventPool.add(new Kevent());
+        }
     }
 
     // ************************************************************************
@@ -45,7 +54,7 @@ class ProcessKqueue extends BaseEventProcessor<OsxProcess>
     @Override
     public boolean process()
     {
-        int nev = LIBC.kevent(kqueue, null, 0, eventList, eventList.length, timeSpec); //Pointer.NULL);
+        int nev = LIBC.kevent(kqueue, null, 0, triggeredEvent.getPointer(), 1, timeSpec); //Pointer.NULL);
         if (nev == -1)
         {
             throw new RuntimeException("Error waiting for kevent");
@@ -58,19 +67,23 @@ class ProcessKqueue extends BaseEventProcessor<OsxProcess>
 
         for (int i = 0; i < nev; i++)
         {
-            Kevent kevent = eventList[i];
-            int ident = kevent.ident.intValue();
+            Kevent kevent = triggeredEvent;
+            int ident = (int) kevent.getIdent();
+            int filter = kevent.getFilter();
+            int flags = kevent.getFlags();
+            int fflags = kevent.getFilterFlags();
+            int data = (int) kevent.getData();
 
-            if (kevent.filter == Kevent.EVFILT_READ)  // stdout/stderr data available to read
+            if (filter == Kevent.EVFILT_READ)  // stdout/stderr data available to read
             {
                 OsxProcess osxProcess = fildesToProcessMap.get(ident);
                 if (osxProcess != null)
                 {
-                    int available = kevent.data != null ? kevent.data.intValue() : -1;
+                    int available = data;
                     if (ident == osxProcess.getStdout())
                     {
                         osxProcess.readStdout(available);
-                        if ((kevent.flags & Kevent.EV_EOF) != 0)
+                        if ((flags & Kevent.EV_EOF) != 0)
                         {
                             osxProcess.readStdout(-1);
                         }
@@ -82,7 +95,7 @@ class ProcessKqueue extends BaseEventProcessor<OsxProcess>
                     else
                     {
                         osxProcess.readStderr(available);
-                        if ((kevent.flags & Kevent.EV_EOF) != 0)
+                        if ((flags & Kevent.EV_EOF) != 0)
                         {
                             osxProcess.readStderr(-1);
                         }
@@ -93,25 +106,25 @@ class ProcessKqueue extends BaseEventProcessor<OsxProcess>
                     }
                 }
             }
-            else if (kevent.filter == Kevent.EVFILT_WRITE) // Room in stdin pipe available to write
+            else if (filter == Kevent.EVFILT_WRITE) // Room in stdin pipe available to write
             {
                 OsxProcess osxProcess = fildesToProcessMap.get(ident);
                 if (osxProcess != null)
                 {
-                    int available = kevent.data != null ? kevent.data.intValue() : -1;
-                    if (osxProcess.writeStdin(available))
+                    int available = data;
+                    if (available == 0 || osxProcess.writeStdin(available))
                     {
                         queueWrite(osxProcess.getStdin());
                     }
                 }
             }
-            else if ((kevent.fflags & Kevent.NOTE_EXIT) != 0) // process has exited System.gc()
+            else if ((fflags & Kevent.NOTE_EXIT) != 0) // process has exited System.gc()
             {
                 OsxProcess osxProcess = pidToProcessMap.get(ident);
                 if (osxProcess != null)
                 {
                     cleanupProcess(osxProcess);
-                    int rc = (kevent.data.intValue() & 0xff00) >> 8;
+                    int rc = (data & 0xff00) >> 8;
                     osxProcess.onExit(rc);
                 }
             }
@@ -130,19 +143,7 @@ class ProcessKqueue extends BaseEventProcessor<OsxProcess>
         fildesToProcessMap.put(process.getStdout(), process);
         fildesToProcessMap.put(process.getStderr(), process);
 
-        Kevent[] events = (Kevent[]) new Kevent().toArray(1);
-
-        Kevent.EV_SET(events[0], new NativeLong(process.getPid()),
-                      Kevent.EVFILT_PROC,
-                      Kevent.EV_ADD | Kevent.EV_ONESHOT,
-                      Kevent.NOTE_EXIT | Kevent.NOTE_EXITSTATUS | Kevent.NOTE_REAP,
-                      new NativeLong(0), Pointer.NULL);
-
-        int rc = LIBC.kevent(kqueue, events, 1, null, 0, null);
-        if (rc == -1)
-        {
-            throw new RuntimeException("Unable to register new events to kqueue");
-        }
+        queueEvent(process.getPid(), Kevent.EVFILT_PROC, Kevent.EV_ADD | Kevent.EV_ONESHOT, Kevent.NOTE_EXIT | Kevent.NOTE_EXITSTATUS | Kevent.NOTE_REAP);
 
         queueRead(process.getStdout());
         queueRead(process.getStderr());
@@ -151,15 +152,7 @@ class ProcessKqueue extends BaseEventProcessor<OsxProcess>
     @Override
     public void queueWrite(int stdin)
     {
-        Kevent[] events = (Kevent[]) new Kevent().toArray(1);
-
-        Kevent.EV_SET(events[0], new NativeLong(stdin),
-                Kevent.EVFILT_WRITE,
-                Kevent.EV_ADD | Kevent.EV_ONESHOT,
-                0,
-                new NativeLong(0), Pointer.NULL);
-
-        LIBC.kevent(kqueue, events, 1, null, 0, null);
+        queueEvent(stdin, Kevent.EVFILT_WRITE, Kevent.EV_ADD | Kevent.EV_ONESHOT, 0);
     }
 
     // ************************************************************************
@@ -168,15 +161,33 @@ class ProcessKqueue extends BaseEventProcessor<OsxProcess>
 
     private void queueRead(int stdX)
     {
-        Kevent[] events = (Kevent[]) new Kevent().toArray(1);
+        queueEvent(stdX, Kevent.EVFILT_READ, Kevent.EV_ADD | Kevent.EV_ONESHOT, 0);
+    }
 
-        Kevent.EV_SET(events[0], new NativeLong(stdX),
-                      Kevent.EVFILT_READ,
-                      Kevent.EV_ADD | Kevent.EV_ONESHOT,
-                      0,
-                      new NativeLong(0), Pointer.NULL);
-
-        LIBC.kevent(kqueue, events, 1, null, 0, null);
+    private void queueEvent(int handle, int filter, int fflags, int data)
+    {
+        try
+        {
+            Kevent kevent = null;
+            try
+            {
+                kevent = keventPool.take();
+        
+                Kevent.EV_SET(kevent, (long) handle, filter, fflags, data, 0l, Pointer.NULL);
+                LIBC.kevent(kqueue, kevent.getPointer(), 1, null, 0, null);
+            }            
+            finally
+            {
+                if (kevent != null)
+                {
+                    keventPool.put(kevent);
+                }
+            }
+        }
+        catch (InterruptedException e)
+        {
+            return;
+        }
     }
 
     private void cleanupProcess(OsxProcess osxProcess)

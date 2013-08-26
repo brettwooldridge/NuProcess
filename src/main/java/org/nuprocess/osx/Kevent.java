@@ -1,53 +1,105 @@
 package org.nuprocess.osx;
 
-import java.util.Arrays;
-import java.util.List;
-
+import com.sun.jna.Native;
 import com.sun.jna.NativeLong;
 import com.sun.jna.Pointer;
-import com.sun.jna.PointerType;
-import com.sun.jna.Structure;
 
 /**
  * @author Brett Wooldridge
  */
-public class Kevent extends Structure
+public final class Kevent
 {
-    public static class KeventPointer extends PointerType { };
-
-    // uintptr_t       ident;          /* identifier for this event */
-    public NativeLong ident;
-    // int16_t        filter;         /* filter for event */
-    public short filter;
-    // uint16_t       flags;          /* general flags */
-    public short flags;
-    // uint32_t       fflags;         /* filter-specific flags */
-    public int fflags;
-    // intptr_t       data;           /* filter-specific data */
-    public NativeLong data;
-    // void           *udata;         /* opaque user data identifier */
-    public Pointer udata;
+    private Pointer pointer;
 
     public Kevent()
     {
-        super(ALIGN_DEFAULT);
+        long memory = Native.malloc(32);
+        pointer = new Pointer(memory);
     }
 
-    @Override
-    @SuppressWarnings("rawtypes")
-    protected List getFieldOrder()
+    void free()
     {
-        return Arrays.asList("ident", "filter", "flags", "fflags", "data", "udata");
+        Native.free(Pointer.nativeValue(pointer));
     }
 
-    protected static Kevent EV_SET(Kevent kev, NativeLong ident, int filter, int flags, int fflags, NativeLong data, Pointer udata)
+    void clear()
     {
-        kev.ident = ident;
-        kev.filter = (short) filter;
-        kev.flags = (short) flags;
-        kev.fflags = fflags;
-        kev.data = data;
-        kev.udata = udata;
+        pointer.clear(32);
+    }
+
+    Pointer getPointer()
+    {
+        return pointer;
+    }
+
+    long getIdent()
+    {
+        return pointer.getNativeLong(0).longValue();
+    }
+
+    void setIdent(long ident)
+    {
+        pointer.setNativeLong(0, new NativeLong(ident));
+    }
+
+    short getFilter()
+    {
+        return pointer.getShort(NativeLong.SIZE);
+    }
+
+    void setFilter(short filter)
+    {
+        pointer.setShort(NativeLong.SIZE, filter);
+    }
+
+    short getFlags()
+    {
+        return pointer.getShort(NativeLong.SIZE + 2);
+    }
+
+    void setFlags(short flags)
+    {
+        pointer.setShort(NativeLong.SIZE + 2, flags);
+    }
+
+    int getFilterFlags()
+    {
+        return pointer.getInt(NativeLong.SIZE + 2 + 2);
+    }
+
+    void setFilterFlags(int filterFlags)
+    {
+        pointer.setInt(NativeLong.SIZE + 2 + 2, filterFlags);
+    }
+
+    long getData()
+    {
+        return pointer.getNativeLong(NativeLong.SIZE + 2 + 2 + 4).longValue();
+    }
+
+    void setData(long data)
+    {
+        pointer.setNativeLong(NativeLong.SIZE + 2 + 2 + 4, new NativeLong(data));
+    }
+
+    Pointer getUserData()
+    {
+        return pointer.getPointer(NativeLong.SIZE + 2 + 2 + 4 + NativeLong.SIZE);
+    }
+
+    void setUserData(Pointer ptr)
+    {
+        pointer.setPointer(NativeLong.SIZE + 2 + 2 + 4 + NativeLong.SIZE, ptr);
+    }
+    
+    protected static Kevent EV_SET(Kevent kev, long ident, int filter, int flags, int fflags, long data, Pointer udata)
+    {
+        kev.setIdent(ident);
+        kev.setFilter((short) filter);
+        kev.setFlags((short) flags);
+        kev.setFilterFlags(fflags);
+        kev.setData(data);
+        kev.setUserData(udata);
 
         return kev;
     }
