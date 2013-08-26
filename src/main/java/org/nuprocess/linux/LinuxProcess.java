@@ -16,7 +16,6 @@ public class LinuxProcess extends BasePosixProcess
     private static final boolean IS_SOFTEXIT_DETECTION;
 
     private AtomicInteger openFdCount;
-    private CountDownLatch exitPending;
     private boolean outClosed;
     private boolean errClosed;
 
@@ -37,40 +36,6 @@ public class LinuxProcess extends BasePosixProcess
         this.openFdCount = new AtomicInteger();
         this.outClosed = true;
         this.errClosed = true;
-    }
-
-    @Override
-    public int waitFor() throws InterruptedException
-    {
-        if (exitPending.getCount() > 0)
-        {
-            // TODO: call native wait
-        }
-        return exitCode.get();
-    }
-
-    @Override
-    public void stdinClose()
-    {
-        stdin = close(stdin);
-    }
-
-    @Override
-    public void destroy()
-    {
-        try
-        {
-            // destroyProcess.invoke(unixProcessInstance, new Object[] { pid });
-        }
-        catch (Exception e)
-        {
-            // eat it
-            return;
-        }
-        finally
-        {
-            exitPending.countDown();
-        }
     }
 
     // ************************************************************************

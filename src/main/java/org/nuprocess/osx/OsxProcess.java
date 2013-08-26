@@ -28,28 +28,6 @@ public class OsxProcess extends BasePosixProcess
         super(commands, env, processListener);
     }
 
-    @Override
-    public int waitFor() throws InterruptedException
-    {
-        exitPending.await();
-        return exitCode.get();
-    }
-
-    @Override
-    public void destroy()
-    {
-        if (exitPending.getCount() != 0)
-        {
-            LibC.kill(pid, LibC.SIGTERM);
-        }
-    }
-
-    @Override
-    public void stdinClose()
-    {
-        stdin = close(stdin);
-    }
-
     // ************************************************************************
     //                             Package methods
     // ************************************************************************

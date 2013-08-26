@@ -126,6 +126,31 @@ public abstract class BasePosixProcess implements NuProcess
         return this;
     }
 
+    @Override
+    public int waitFor() throws InterruptedException
+    {
+        exitPending.await();
+        return exitCode.get();
+    }
+
+    @Override
+    public void destroy()
+    {
+        if (exitPending.getCount() != 0)
+        {
+            LibC.kill(pid, LibC.SIGTERM);
+            IntByReference exit = new IntByReference();
+            LibC.waitpid(pid, exit, 0);
+            exitCode.set(exit.getValue());
+        }
+    }
+
+    @Override
+    public void stdinClose()
+    {
+        stdin = close(stdin);
+    }
+
     protected abstract int close(int fd);
 
     /**
