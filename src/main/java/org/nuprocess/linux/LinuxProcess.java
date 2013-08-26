@@ -6,15 +6,13 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import org.nuprocess.NuProcessListener;
 import org.nuprocess.internal.BasePosixProcess;
-import org.nuprocess.internal.ILibC;
+import org.nuprocess.internal.LibC;
 
 /**
  * @author Brett Wooldridge
  */
 public class LinuxProcess extends BasePosixProcess
 {
-    private static final LibC LIBC;
-
     private static final boolean IS_SOFTEXIT_DETECTION;
 
     private AtomicInteger openFdCount;
@@ -24,8 +22,6 @@ public class LinuxProcess extends BasePosixProcess
 
     static
     {
-        LIBC = LibC.INSTANCE;
-
         IS_SOFTEXIT_DETECTION = Boolean.valueOf(System.getProperty("org.nuprocess.linux.softExitDetection", "true"));
 
         for (int i = 0; i < processors.length; i++)
@@ -56,11 +52,7 @@ public class LinuxProcess extends BasePosixProcess
     @Override
     public void stdinClose()
     {
-        if (stdin != 0)
-        {
-            LIBC.close(stdin);
-            // stdin = 0;
-        }
+        stdin = close(stdin);
     }
 
     @Override
@@ -90,16 +82,10 @@ public class LinuxProcess extends BasePosixProcess
     {
         if (fd >= 0)
         {
-            LIBC.close(fd);
+            LibC.close(fd);
         }
 
         return -1;
-    }
-
-    @Override
-    protected ILibC getLibC()
-    {
-        return LIBC;
     }
 
     @Override

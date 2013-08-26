@@ -5,22 +5,18 @@ import java.util.List;
 
 import org.nuprocess.NuProcessListener;
 import org.nuprocess.internal.BasePosixProcess;
-import org.nuprocess.internal.ILibC;
+import org.nuprocess.internal.LibC;
 
 /**
  * @author Brett Wooldridge
  */
 public class OsxProcess extends BasePosixProcess
 {
-    private static final LibC LIBC;
-
     private int remainingWrite;
     private int writeOffset;
 
     static
     {
-        LIBC = LibC.INSTANCE;
-
         for (int i = 0; i < processors.length; i++)
         {
             processors[i] = new ProcessKqueue();
@@ -44,7 +40,7 @@ public class OsxProcess extends BasePosixProcess
     {
         if (exitPending.getCount() != 0)
         {
-            LIBC.kill(pid, LibC.SIGTERM);
+            LibC.kill(pid, LibC.SIGTERM);
         }
     }
 
@@ -72,7 +68,7 @@ public class OsxProcess extends BasePosixProcess
                 return;
             }
 
-            int read = LIBC.read(stdout, outBuffer, Math.min(availability, BUFFER_CAPACITY));
+            int read = LibC.read(stdout, outBuffer, Math.min(availability, BUFFER_CAPACITY));
             if (read == -1)
             {
                 throw new RuntimeException("Unexpected eof");
@@ -102,7 +98,7 @@ public class OsxProcess extends BasePosixProcess
                 return;
             }
 
-            int read = LIBC.read(stderr, outBuffer, Math.min(availability, BUFFER_CAPACITY));
+            int read = LibC.read(stderr, outBuffer, Math.min(availability, BUFFER_CAPACITY));
             if (read == -1)
             {
                 // EOF?
@@ -127,7 +123,7 @@ public class OsxProcess extends BasePosixProcess
 
         if (remainingWrite > 0)
         {
-            int wrote = LIBC.write(stdin, inBuffer.share(writeOffset), Math.min(remainingWrite, availability));
+            int wrote = LibC.write(stdin, inBuffer.share(writeOffset), Math.min(remainingWrite, availability));
             if (wrote == -1)
             {
                 // EOF?
@@ -172,20 +168,15 @@ public class OsxProcess extends BasePosixProcess
         }
     }
 
+    @Override
     protected int close(int fildes)
     {
         if (fildes >= 0)
         {
-            LIBC.close(fildes);
+            LibC.close(fildes);
         }
 
         return -1;
-    }
-
-    @Override
-    protected ILibC getLibC()
-    {
-        return LIBC;
     }
 
     // ************************************************************************

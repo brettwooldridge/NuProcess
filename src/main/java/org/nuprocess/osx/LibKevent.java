@@ -3,9 +3,6 @@ package org.nuprocess.osx;
 import java.util.Arrays;
 import java.util.List;
 
-import org.nuprocess.internal.ILibC;
-
-import com.sun.jna.Library;
 import com.sun.jna.Native;
 import com.sun.jna.Pointer;
 import com.sun.jna.Structure;
@@ -13,15 +10,16 @@ import com.sun.jna.Structure;
 /**
  * @author Brett Wooldridge
  */
-public interface LibC extends Library, ILibC
+public class LibKevent
 {
-    LibC INSTANCE = (LibC) Native.loadLibrary("c", LibC.class);
+    static
+    {
+        Native.register("c");
+    }
 
-    int kqueue();
+    public static native int kqueue();
 
-    int kevent(int kq, Pointer changeList, int nchanges, Pointer eventList, int nevents, TimeSpec timespec);
-
-    int O_NONBLOCK = 0x0004;
+    public static native int kevent(int kq, Pointer changeList, int nchanges, Pointer eventList, int nevents, TimeSpec timespec);
 
     public static class TimeSpec extends Structure
     {

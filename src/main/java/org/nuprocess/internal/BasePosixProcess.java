@@ -10,7 +10,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import org.nuprocess.NuProcess;
 import org.nuprocess.NuProcessListener;
-import org.nuprocess.osx.LibC;
 
 import com.sun.jna.Native;
 import com.sun.jna.Pointer;
@@ -25,8 +24,6 @@ public abstract class BasePosixProcess implements NuProcess
 
     protected static IEventProcessor<? extends BasePosixProcess>[] processors;
     protected static int processorRoundRobin;
-
-    protected ILibC LIBC = getLibC();
 
     protected IEventProcessor<? super BasePosixProcess> myProcessor;
     protected NuProcessListener processListener;
@@ -78,7 +75,7 @@ public abstract class BasePosixProcess implements NuProcess
 
         try
         {
-            int rc = LIBC.posix_spawnattr_init(posix_spawnattr);
+            int rc = LibC.posix_spawnattr_init(posix_spawnattr);
             checkReturnCode(rc, "Internal call to posix_spawnattr_init() failed");
 
             // Start the spawned process in suspended mode
@@ -91,10 +88,10 @@ public abstract class BasePosixProcess implements NuProcess
             {
                 flags = LibC.POSIX_SPAWN_START_SUSPENDED | LibC.POSIX_SPAWN_CLOEXEC_DEFAULT;
             }
-            LIBC.posix_spawnattr_setflags(posix_spawnattr, flags);
+            LibC.posix_spawnattr_setflags(posix_spawnattr, flags);
 
             IntByReference restrict_pid = new IntByReference();
-            rc = LIBC.posix_spawn(restrict_pid, commands[0], posix_spawn_file_actions, posix_spawnattr, new StringArray(commands), new StringArray(environment));
+            rc = LibC.posix_spawn(restrict_pid, commands[0], posix_spawn_file_actions, posix_spawnattr, new StringArray(commands), new StringArray(environment));
             checkReturnCode(rc, "Invocation of posix_spawn() failed");
     
             pid = restrict_pid.getValue();
@@ -108,7 +105,7 @@ public abstract class BasePosixProcess implements NuProcess
             // Signal the spawned process to continue (unsuspend)
             if (OSNAME.contains("mac"))
             {
-                LIBC.kill(pid, LibC.SIGCONT);
+                LibC.kill(pid, LibC.SIGCONT);
             }
         }
         catch (RuntimeException re)
@@ -117,8 +114,8 @@ public abstract class BasePosixProcess implements NuProcess
         }
         finally
         {
-            LIBC.posix_spawnattr_destroy(posix_spawnattr);
-            LIBC.posix_spawn_file_actions_destroy(posix_spawn_file_actions);
+            LibC.posix_spawnattr_destroy(posix_spawnattr);
+            LibC.posix_spawn_file_actions_destroy(posix_spawn_file_actions);
             
             // After we've spawned, close the unused ends of our pipes (that were dup'd into the child process space)
             //close(stdinWidow);
@@ -128,8 +125,6 @@ public abstract class BasePosixProcess implements NuProcess
         
         return this;
     }
-
-    protected abstract ILibC getLibC();
 
     protected abstract int close(int fd);
 
@@ -278,45 +273,45 @@ public abstract class BasePosixProcess implements NuProcess
         PointerByReference posix_spawn_file_actions = new PointerByReference(); //.NULL;
         try
         {
-            rc = LIBC.pipe(in);
+            rc = LibC.pipe(in);
             checkReturnCode(rc, "Create pipe() failed");
             
-            rc = LIBC.pipe(out);
+            rc = LibC.pipe(out);
             checkReturnCode(rc, "Create pipe() failed");
     
-            rc = LIBC.pipe(err);
+            rc = LibC.pipe(err);
             checkReturnCode(rc, "Create pipe() failed");
     
             // Create spawn file actions
             posix_spawn_file_actions = new PointerByReference(); // Memory(80); // Pointer.SIZE);
-            rc = LIBC.posix_spawn_file_actions_init(posix_spawn_file_actions);
+            rc = LibC.posix_spawn_file_actions_init(posix_spawn_file_actions);
             checkReturnCode(rc, "Internal call to posix_spawn_file_actions_init() failed");
     
             // Dup the reading end of the pipe into the sub-process, and close our end
-            rc = LIBC.posix_spawn_file_actions_adddup2(posix_spawn_file_actions, in[0], 0);
+            rc = LibC.posix_spawn_file_actions_adddup2(posix_spawn_file_actions, in[0], 0);
             checkReturnCode(rc, "Internal call to posix_spawn_file_actions_adddup2() failed");
     
-            rc = LIBC.posix_spawn_file_actions_addclose(posix_spawn_file_actions, in[1]);
+            rc = LibC.posix_spawn_file_actions_addclose(posix_spawn_file_actions, in[1]);
             checkReturnCode(rc, "Internal call to posix_spawn_file_actions_addclose() failed");
 
             stdin = in[1];
             stdinWidow = in[0];
     
             // Dup the writing end of the pipe into the sub-process, and close our end
-            rc = LIBC.posix_spawn_file_actions_adddup2(posix_spawn_file_actions, out[1], 1);
+            rc = LibC.posix_spawn_file_actions_adddup2(posix_spawn_file_actions, out[1], 1);
             checkReturnCode(rc, "Internal call to posix_spawn_file_actions_adddup2() failed");
     
-            rc = LIBC.posix_spawn_file_actions_addclose(posix_spawn_file_actions, out[0]);
+            rc = LibC.posix_spawn_file_actions_addclose(posix_spawn_file_actions, out[0]);
             checkReturnCode(rc, "Internal call to posix_spawn_file_actions_addclose() failed");
     
             stdout = out[0];
             stdoutWidow = out[1];
 
             // Dup the writing end of the pipe into the sub-process, and close our end
-            rc = LIBC.posix_spawn_file_actions_adddup2(posix_spawn_file_actions, err[1], 2);
+            rc = LibC.posix_spawn_file_actions_adddup2(posix_spawn_file_actions, err[1], 2);
             checkReturnCode(rc, "Internal call to posix_spawn_file_actions_adddup2() failed");
     
-            rc = LIBC.posix_spawn_file_actions_addclose(posix_spawn_file_actions, err[0]);
+            rc = LibC.posix_spawn_file_actions_addclose(posix_spawn_file_actions, err[0]);
             checkReturnCode(rc, "Internal call to posix_spawn_file_actions_addclose() failed");
 
             stderr = err[0];
@@ -326,7 +321,7 @@ public abstract class BasePosixProcess implements NuProcess
         }
         catch (RuntimeException e)
         {
-            LIBC.posix_spawn_file_actions_destroy(posix_spawn_file_actions);
+            LibC.posix_spawn_file_actions_destroy(posix_spawn_file_actions);
 
             initFailureCleanup(in, out, err);
             throw e;

@@ -1,6 +1,7 @@
 package org.nuprocess.linux;
 
 import org.nuprocess.internal.BaseEventProcessor;
+import org.nuprocess.internal.LibC;
 
 import com.sun.jna.Native;
 import com.sun.jna.ptr.IntByReference;
@@ -10,15 +11,17 @@ import com.sun.jna.ptr.IntByReference;
  */
 class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
 {
-    private static final LibC LIBC = LibC.INSTANCE;;
-    private static final int WAIT_INDEFINTELY = -1;
-
     private int epoll;
     private EpollEvent[] eventList;
 
+    static
+    {
+        
+    }
+
     ProcessEpoll()
     {
-        epoll = LIBC.epoll_create(1024);
+        epoll = LibEpoll.epoll_create(1024);
         if (epoll < 0)
         {
             throw new RuntimeException("Unable to create kqueue: " + Native.getLastError());
@@ -39,7 +42,7 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
 
         event.events = EpollEvent.EPOLLIN;
         event.fd = process.getStdout();
-        int rc = LIBC.epoll_ctl(epoll, EpollEvent.EPOLL_CTL_ADD, process.getStdout(), event);
+        int rc = LibEpoll.epoll_ctl(epoll, EpollEvent.EPOLL_CTL_ADD, process.getStdout(), event);
         if (rc == -1)
         {
             throw new RuntimeException("Unable to register new events to epoll");
@@ -49,7 +52,7 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
 
         event.events = EpollEvent.EPOLLIN;
         event.fd = process.getStderr();
-        rc = LIBC.epoll_ctl(epoll, EpollEvent.EPOLL_CTL_ADD, process.getStderr(), event);
+        rc = LibEpoll.epoll_ctl(epoll, EpollEvent.EPOLL_CTL_ADD, process.getStderr(), event);
         if (rc == -1)
         {
             throw new RuntimeException("Unable to register new events to epoll");
@@ -62,8 +65,8 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
         EpollEvent event = new EpollEvent();
         event.events = EpollEvent.EPOLLOUT | EpollEvent.EPOLLONESHOT | EpollEvent.EPOLLRDHUP;
         event.fd = stdin;
-        int rc = LIBC.epoll_ctl(epoll, EpollEvent.EPOLL_CTL_DEL, stdin, event);
-        rc= LIBC.epoll_ctl(epoll, EpollEvent.EPOLL_CTL_ADD, stdin, event);
+        int rc = LibEpoll.epoll_ctl(epoll, EpollEvent.EPOLL_CTL_DEL, stdin, event);
+        rc= LibEpoll.epoll_ctl(epoll, EpollEvent.EPOLL_CTL_ADD, stdin, event);
         if (rc == -1)
         {
             throw new RuntimeException("Unable to register new events to kqueue");
@@ -73,7 +76,7 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
     @Override
     public boolean process()
     {        
-        int nev = LIBC.epoll_wait(epoll, eventList, EVENT_BATCH_SIZE, 250); // TODO: WAIT_INDEFINTELY);
+        int nev = LibEpoll.epoll_wait(epoll, eventList, EVENT_BATCH_SIZE, DEADPOOL_POLL_INTERVAL);
         if (nev == -1)
         {
             throw new RuntimeException("Error waiting for epoll");
@@ -106,7 +109,7 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
                 	if (linuxProcess.writeStdin())
                 	{
                 	    epEvent.events = EpollEvent.EPOLLOUT | EpollEvent.EPOLLONESHOT;
-                	    LIBC.epoll_ctl(epoll, EpollEvent.EPOLL_CTL_MOD, ident, epEvent);
+                	    LibEpoll.epoll_ctl(epoll, EpollEvent.EPOLL_CTL_MOD, ident, epEvent);
                 	}
                 }
             }
@@ -124,7 +127,7 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
                         linuxProcess.readStderr(true);
                     }
                 }
-                LIBC.epoll_ctl(epoll, EpollEvent.EPOLL_CTL_DEL, ident, null);
+                LibEpoll.epoll_ctl(epoll, EpollEvent.EPOLL_CTL_DEL, ident, null);
             }
 
             if (linuxProcess != null && linuxProcess.isSoftExit())
@@ -148,13 +151,13 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
         try
         {
             int rc = 0;
-            rc = LIBC.epoll_ctl(epoll, EpollEvent.EPOLL_CTL_DEL, linuxProcess.getStdout(), null);
-            rc = LIBC.epoll_ctl(epoll, EpollEvent.EPOLL_CTL_DEL, linuxProcess.getStderr(), null);
-            rc = LIBC.epoll_ctl(epoll, EpollEvent.EPOLL_CTL_DEL, linuxProcess.getStdin(), null);
+            rc = LibEpoll.epoll_ctl(epoll, EpollEvent.EPOLL_CTL_DEL, linuxProcess.getStdout(), null);
+            rc = LibEpoll.epoll_ctl(epoll, EpollEvent.EPOLL_CTL_DEL, linuxProcess.getStderr(), null);
+            rc = LibEpoll.epoll_ctl(epoll, EpollEvent.EPOLL_CTL_DEL, linuxProcess.getStdin(), null);
             boolean stdinWasRegistered = (rc == 0);
 
             IntByReference status = new IntByReference();
-            rc = LIBC.waitpid(linuxProcess.getPid(), status, 0);
+            rc = LibC.waitpid(linuxProcess.getPid(), status, 0);
             if (rc == -1)
             {
                 return Integer.MAX_VALUE;

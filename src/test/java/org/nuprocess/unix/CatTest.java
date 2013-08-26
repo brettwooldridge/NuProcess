@@ -24,7 +24,7 @@ public class CatTest
     @Test
     public void lotOfProcesses()
     {
-        for (int times = 0; times < 10; times++)
+        for (int times = 0; times < 100; times++)
         {
             Semaphore[] semaphores = new Semaphore[50];
             AtomicInteger[] sizes = new AtomicInteger[50];

@@ -5,7 +5,8 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
 
 import org.nuprocess.internal.BaseEventProcessor;
-import org.nuprocess.osx.LibC.TimeSpec;
+import org.nuprocess.internal.LibC;
+import org.nuprocess.osx.LibKevent.TimeSpec;
 
 import com.sun.jna.Pointer;
 import com.sun.jna.ptr.IntByReference;
@@ -15,7 +16,6 @@ import com.sun.jna.ptr.IntByReference;
  */
 class ProcessKqueue extends BaseEventProcessor<OsxProcess>
 {
-    private static final LibC LIBC = LibC.INSTANCE;
     private static final int KEVENT_POOL_SIZE = 16;
     private static final TimeSpec timeSpec;
 
@@ -32,7 +32,7 @@ class ProcessKqueue extends BaseEventProcessor<OsxProcess>
 
     ProcessKqueue()
     {
-        kqueue = LIBC.kqueue();
+        kqueue = LibKevent.kqueue();
         if (kqueue < 0)
         {
             throw new RuntimeException("Unable to create kqueue");
@@ -54,7 +54,7 @@ class ProcessKqueue extends BaseEventProcessor<OsxProcess>
     @Override
     public boolean process()
     {
-        int nev = LIBC.kevent(kqueue, null, 0, triggeredEvent.getPointer(), 1, timeSpec); //Pointer.NULL);
+        int nev = LibKevent.kevent(kqueue, null, 0, triggeredEvent.getPointer(), 1, timeSpec); //Pointer.NULL);
         if (nev == -1)
         {
             throw new RuntimeException("Error waiting for kevent");
@@ -174,7 +174,7 @@ class ProcessKqueue extends BaseEventProcessor<OsxProcess>
                 kevent = keventPool.take();
         
                 Kevent.EV_SET(kevent, (long) handle, filter, fflags, data, 0l, Pointer.NULL);
-                LIBC.kevent(kqueue, kevent.getPointer(), 1, null, 0, null);
+                LibKevent.kevent(kqueue, kevent.getPointer(), 1, null, 0, null);
             }            
             finally
             {
@@ -192,7 +192,7 @@ class ProcessKqueue extends BaseEventProcessor<OsxProcess>
 
     private void cleanupProcess(OsxProcess osxProcess)
     {
-        LIBC.waitpid(osxProcess.getPid(), new IntByReference(), LibC.WNOHANG);
+        LibC.waitpid(osxProcess.getPid(), new IntByReference(), LibC.WNOHANG);
 
         pidToProcessMap.remove(osxProcess.getPid());
         fildesToProcessMap.remove(osxProcess.getStdin());
