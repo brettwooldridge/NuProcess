@@ -29,10 +29,10 @@ you feed into ``stdin`` and spits it back out of ``stdout``.  Perfect for testin
 
 Let's say for fun we want to spawn 50 instances of ``/bin/cat`` at one time, pump 600K of data into *each* one (stdin) 
 while simultaneously reading the data out (stdout).  Actually, we don't have a choice about the reading otherwise the
-output pipe would fill up and the processes would stall.  Anyway, then when they're all done, we'll do it another 99 times.
-So just to recap, in total we're going to start 5000 ``/bin/cat`` processes (up to 50 at a time), pump 600K of data into each
-and every one while pulling all the data out.  Oh and running an Adler32 checksum to verify that everything went
-through okay.
+output pipe would fill up and the processes would stall.  When they're done, we'll do it another 99 times.  So to recap,
+in total we're going to start 5000 ``/bin/cat`` processes (in batches of 50), pump 600K of data into each and every one 
+while pulling all the data out the other side.  Oh and running an Adler32 checksum to verify that everything went through
+okay.
 
 ##### Old school #####
 The conventional approach is to create a thread for pumping data in (stdin) and a thread for pumping data out (stdout).
