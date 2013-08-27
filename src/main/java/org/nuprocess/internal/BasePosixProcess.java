@@ -143,12 +143,13 @@ public abstract class BasePosixProcess implements NuProcess
             LibC.posix_spawnattr_destroy(posix_spawnattr);
             LibC.posix_spawn_file_actions_destroy(posix_spawn_file_actions);
 
-            if (IS_LINUX) // On OS X closing our side of the pipes causes data to be dropped
+            // After we've spawned, close the unused ends of our pipes (that were dup'd into the child process space)
+            LibC.close(stdinWidow);
+            LibC.close(stdoutWidow);
+            LibC.close(stderrWidow);
+
+            if (IS_LINUX)
             {
-                // After we've spawned, close the unused ends of our pipes (that were dup'd into the child process space)
-                LibC.close(stdinWidow);
-                LibC.close(stdoutWidow);
-                LibC.close(stderrWidow);
                 Native.free(Pointer.nativeValue(posix_spawn_file_actions));
                 Native.free(Pointer.nativeValue(posix_spawnattr));
             }
@@ -182,7 +183,14 @@ public abstract class BasePosixProcess implements NuProcess
         close(stdin);
     }
 
-    protected abstract void close(AtomicInteger fd);
+    public void close(AtomicInteger stdX)
+    {
+        int fd = stdX.getAndSet(-1);
+        if (fd != -1)
+        {
+            LibC.close(fd);
+        }
+    }
 
     /**
      * @return the pid
@@ -220,7 +228,7 @@ public abstract class BasePosixProcess implements NuProcess
     public void wantWrite()
     {
         int fd = stdin.get();
-        if (fd >= 0)
+        if (fd != -1)
         {
             userWantsWrite.set(true);
             myProcessor.queueWrite(fd);
@@ -377,7 +385,7 @@ public abstract class BasePosixProcess implements NuProcess
             stderr.set(err[0]);
             stderrWidow = err[1];
 
-            if (IS_LINUX)
+            if (IS_LINUX || IS_MAC)
             {
                 rc = LibC.fcntl(in[1], LibC.F_SETFL, LibC.fcntl(in[1], LibC.F_GETFL) | LibC.O_NONBLOCK);
                 rc = LibC.fcntl(out[0], LibC.F_SETFL, LibC.fcntl(out[0], LibC.F_GETFL) | LibC.O_NONBLOCK);

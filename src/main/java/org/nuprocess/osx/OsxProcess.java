@@ -28,6 +28,17 @@ public class OsxProcess extends BasePosixProcess
         super(commands, env, processListener);
     }
 
+    @Override
+    public void stdinClose()
+    {
+        int fd = stdin.get();
+        if (fd != -1)
+        {
+            myProcessor.closeStdin(fd);
+            close(stdin);
+        }
+    }
+
     // ************************************************************************
     //                             Package methods
     // ************************************************************************
@@ -46,7 +57,7 @@ public class OsxProcess extends BasePosixProcess
                 return;
             }
 
-            int read = LibC.read(stdout, outBuffer, Math.min(availability, BUFFER_CAPACITY));
+            int read = LibC.read(stdout.get(), outBuffer, Math.min(availability, BUFFER_CAPACITY));
             if (read == -1)
             {
                 throw new RuntimeException("Unexpected eof");
@@ -59,6 +70,7 @@ public class OsxProcess extends BasePosixProcess
         catch (Exception e)
         {
             // Don't let an exception thrown from the user's handler interrupt us
+            e.printStackTrace(System.err);
         }
     }
 
@@ -76,7 +88,7 @@ public class OsxProcess extends BasePosixProcess
                 return;
             }
 
-            int read = LibC.read(stderr, outBuffer, Math.min(availability, BUFFER_CAPACITY));
+            int read = LibC.read(stderr.get(), outBuffer, Math.min(availability, BUFFER_CAPACITY));
             if (read == -1)
             {
                 // EOF?
@@ -101,7 +113,7 @@ public class OsxProcess extends BasePosixProcess
 
         if (remainingWrite > 0)
         {
-            int wrote = LibC.write(stdin, inBuffer.share(writeOffset), Math.min(remainingWrite, availability));
+            int wrote = LibC.write(stdin.get(), inBuffer.share(writeOffset), Math.min(remainingWrite, availability));
             if (wrote == -1)
             {
                 // EOF?
@@ -119,7 +131,7 @@ public class OsxProcess extends BasePosixProcess
             writeOffset = 0;
         }
 
-        if (userWantsWrite.compareAndSet(false, false))
+        if (!userWantsWrite.get())
         {
             return false;
         }
@@ -146,16 +158,6 @@ public class OsxProcess extends BasePosixProcess
         }
     }
 
-    @Override
-    protected int close(int fildes)
-    {
-        if (fildes >= 0)
-        {
-            LibC.close(fildes);
-        }
-
-        return -1;
-    }
 
     // ************************************************************************
     //                             Private methods

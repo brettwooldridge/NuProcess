@@ -77,8 +77,9 @@ class ProcessKqueue extends BaseEventProcessor<OsxProcess>
             OsxProcess osxProcess = fildesToProcessMap.get(ident);
             if (osxProcess != null)
             {
+                int stdX;
                 int available = data;
-                if (ident == osxProcess.getStdout())
+                if (ident == (stdX = osxProcess.getStdout().get()))
                 {
                     osxProcess.readStdout(available);
                     if ((flags & Kevent.EV_EOF) != 0)
@@ -87,7 +88,7 @@ class ProcessKqueue extends BaseEventProcessor<OsxProcess>
                     }
                     else
                     {
-                        queueRead(osxProcess.getStdout());                            
+                        queueRead(stdX);                            
                     }
                 }
                 else
@@ -99,7 +100,7 @@ class ProcessKqueue extends BaseEventProcessor<OsxProcess>
                     }
                     else
                     {
-                        queueRead(osxProcess.getStderr());                            
+                        queueRead(osxProcess.getStderr().get());                  
                     }
                 }
             }
@@ -112,7 +113,7 @@ class ProcessKqueue extends BaseEventProcessor<OsxProcess>
                 int available = data;
                 if (available == 0 || osxProcess.writeStdin(available))
                 {
-                    queueWrite(osxProcess.getStdin());
+                    queueWrite(osxProcess.getStdin().get());
                 }
             }
         }
@@ -136,14 +137,14 @@ class ProcessKqueue extends BaseEventProcessor<OsxProcess>
     public void registerProcess(OsxProcess process)
     {
         pidToProcessMap.put(process.getPid(), process);
-        fildesToProcessMap.put(process.getStdin(), process);
-        fildesToProcessMap.put(process.getStdout(), process);
-        fildesToProcessMap.put(process.getStderr(), process);
+        fildesToProcessMap.put(process.getStdin().get(), process);
+        fildesToProcessMap.put(process.getStdout().get(), process);
+        fildesToProcessMap.put(process.getStderr().get(), process);
 
         queueEvent(process.getPid(), Kevent.EVFILT_PROC, Kevent.EV_ADD | Kevent.EV_ONESHOT, Kevent.NOTE_EXIT | Kevent.NOTE_EXITSTATUS | Kevent.NOTE_REAP);
 
-        queueRead(process.getStdout());
-        queueRead(process.getStderr());
+        queueRead(process.getStdout().get());
+        queueRead(process.getStderr().get());
     }
 
     @Override
@@ -195,7 +196,11 @@ class ProcessKqueue extends BaseEventProcessor<OsxProcess>
 
     private void cleanupProcess(OsxProcess osxProcess)
     {
-        LibC.waitpid(osxProcess.getPid(), new IntByReference(), LibC.WNOHANG);
+        int rc = LibC.waitpid(osxProcess.getPid(), new IntByReference(), LibC.WNOHANG);
+        if (rc == 0)
+        {
+            System.err.println("Wait on pid retured 0");
+        }
 
         pidToProcessMap.remove(osxProcess.getPid());
         fildesToProcessMap.remove(osxProcess.getStdin());
