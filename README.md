@@ -15,7 +15,7 @@ Threads are "cheap" so why does it matter?  Well, sorry to break the bad news bu
 significant time spent firing up threads, and under heavy load context-switching overhead, CPU instruction pipeline
 flushing, and L1/L2/L3 cache-line invalidation start taking their toll.
 
-If a single thread is allowed to get up-to-speed with little to no context-switching and little to no cache-line 
+But if a single thread is allowed to get up-to-speed with little to no context-switching and little to no cache-line 
 invalidation, and allowed to take advantage of CPU instruction pipelining and data prefetching, you'll be amazed at what
 what a modern CPU can do.  Many of our attempts at parallelization of processing actually have a paradoxically negative
 impact on performance.
