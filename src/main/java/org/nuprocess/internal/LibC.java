@@ -4,7 +4,6 @@ import com.sun.jna.Native;
 import com.sun.jna.Pointer;
 import com.sun.jna.StringArray;
 import com.sun.jna.ptr.IntByReference;
-import com.sun.jna.ptr.PointerByReference;
 
 public class LibC
 {
@@ -29,25 +28,30 @@ public class LibC
 
     public static native int waitpid(int pid, IntByReference status, int options);
 
-    public static native int posix_spawnattr_init(PointerByReference posix_spawnattr_t);
+    public static native int posix_spawnattr_init(Pointer posix_spawnattr_t);
 
-    public static native int posix_spawnattr_destroy(PointerByReference posix_spawnattr_t);
+    public static native int posix_spawnattr_destroy(Pointer posix_spawnattr_t);
 
-    public static native int posix_spawnattr_setflags(PointerByReference posix_spawnattr_t, short flags);
+    public static native int posix_spawnattr_setflags(Pointer posix_spawnattr_t, short flags);
 
-    public static native int posix_spawn_file_actions_init(PointerByReference posix_spawn_file_actions_t);
+    public static native int posix_spawn_file_actions_init(Pointer posix_spawn_file_actions_t);
 
-    public static native int posix_spawn_file_actions_destroy(PointerByReference posix_spawn_file_actions_t);
+    public static native int posix_spawn_file_actions_destroy(Pointer posix_spawn_file_actions_t);
 
-    public static native int posix_spawn_file_actions_addclose(PointerByReference actions, int filedes);
+    public static native int posix_spawn_file_actions_addclose(Pointer actions, int filedes);
 
-    public static native int posix_spawn_file_actions_adddup2(PointerByReference actions, int fildes, int newfildes);
+    public static native int posix_spawn_file_actions_adddup2(Pointer actions, int fildes, int newfildes);
 
-    public static native int posix_spawn_file_actions_addinherit_np(PointerByReference actions, int filedes);
+    // public static native int posix_spawn_file_actions_addinherit_np(PointerByReference actions, int filedes);
 
-    public static native int posix_spawn(IntByReference restrict_pid, String restrict_path, PointerByReference file_actions,
-                                         PointerByReference /*const posix_spawnattr_t*/ restrict_attrp, StringArray /*String[]*/ argv,
+    public static native int posix_spawn(IntByReference restrict_pid, String restrict_path, Pointer file_actions,
+                                         Pointer /*const posix_spawnattr_t*/ restrict_attrp, StringArray /*String[]*/ argv,
                                          Pointer /*String[]*/ envp);
+
+    public static final int F_GETFL = 3;
+    public static final int F_SETFL = 4;
+
+    public static final int O_NONBLOCK = 2048;
 
     // from /usr/include/sys/wait.h
     public static final int WNOHANG =0x00000001;

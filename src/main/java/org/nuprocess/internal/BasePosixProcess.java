@@ -11,16 +11,17 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.nuprocess.NuProcess;
 import org.nuprocess.NuProcessListener;
 
+import com.sun.jna.Memory;
 import com.sun.jna.Native;
 import com.sun.jna.Pointer;
 import com.sun.jna.StringArray;
 import com.sun.jna.ptr.IntByReference;
-import com.sun.jna.ptr.PointerByReference;
 
 public abstract class BasePosixProcess implements NuProcess
 {
     private static final boolean LINUX_USE_VFORK = Boolean.getBoolean("org.nuprocess.linuxUseVfork");
-    protected static final String OSNAME = System.getProperty("os.name").toLowerCase();
+    protected static final boolean IS_MAC = System.getProperty("os.name").toLowerCase().contains("mac");
+    protected static final boolean IS_LINUX = System.getProperty("os.name").toLowerCase().contains("linux");
 
     protected static IEventProcessor<? extends BasePosixProcess>[] processors;
     protected static int processorRoundRobin;
@@ -38,14 +39,14 @@ public abstract class BasePosixProcess implements NuProcess
     protected Pointer outBuffer;
     protected Pointer inBuffer;
 
-    protected int stdin;
-    protected int stdout;
-    protected int stderr;
-    protected int pid;
+    protected AtomicInteger stdin;
+    protected AtomicInteger stdout;
+    protected AtomicInteger stderr;
+    protected volatile int pid;
 
-    protected int stdinWidow;
-    protected int stdoutWidow;
-    protected int stderrWidow;
+    protected volatile int stdinWidow;
+    protected volatile int stdoutWidow;
+    protected volatile int stderrWidow;
 
     static
     {
@@ -76,13 +77,26 @@ public abstract class BasePosixProcess implements NuProcess
         this.userWantsWrite = new AtomicBoolean();
         this.exitCode = new AtomicInteger();
         this.exitPending = new CountDownLatch(1);
+        this.stdin = new AtomicInteger(-1);
+        this.stdout = new AtomicInteger(-1);
+        this.stderr = new AtomicInteger(-1);
     }
 
     @Override
     public NuProcess start()
     {
-        PointerByReference posix_spawn_file_actions = createPipes();
-        PointerByReference posix_spawnattr = new PointerByReference(); //  Memory(340); // Pointer.SIZE);
+        Pointer posix_spawn_file_actions = createPipes();
+
+        Pointer posix_spawnattr = null;
+        if (IS_LINUX)
+        {
+            long peer = Native.malloc(340);
+            posix_spawnattr = new Pointer(peer);
+        }
+        else
+        {
+            posix_spawnattr = new Memory(Pointer.SIZE);
+        }
 
         try
         {
@@ -91,11 +105,11 @@ public abstract class BasePosixProcess implements NuProcess
 
             // Start the spawned process in suspended mode
             short flags = 0;
-            if (OSNAME.contains("linux") && LINUX_USE_VFORK)
+            if (IS_LINUX && LINUX_USE_VFORK)
             {
                 flags = 0x40; // POSIX_SPAWN_USEVFORK
             }
-            else if (OSNAME.contains("mac"))
+            else if (IS_MAC)
             {
                 flags = LibC.POSIX_SPAWN_START_SUSPENDED | LibC.POSIX_SPAWN_CLOEXEC_DEFAULT;
             }
@@ -104,7 +118,7 @@ public abstract class BasePosixProcess implements NuProcess
             IntByReference restrict_pid = new IntByReference();
             rc = LibC.posix_spawn(restrict_pid, commands[0], posix_spawn_file_actions, posix_spawnattr, new StringArray(commands), new StringArray(environment));
             checkReturnCode(rc, "Invocation of posix_spawn() failed");
-    
+
             pid = restrict_pid.getValue();
 
             afterStart();
@@ -112,28 +126,34 @@ public abstract class BasePosixProcess implements NuProcess
             registerProcess();
 
             callStart();
-            
+
             // Signal the spawned process to continue (unsuspend)
-            if (OSNAME.contains("mac"))
+            if (IS_MAC)
             {
                 LibC.kill(pid, LibC.SIGCONT);
             }
         }
         catch (RuntimeException re)
         {
+            // TODO remove from event processor pid map?
             onExit(Integer.MIN_VALUE);
         }
         finally
         {
             LibC.posix_spawnattr_destroy(posix_spawnattr);
             LibC.posix_spawn_file_actions_destroy(posix_spawn_file_actions);
-            
-            // After we've spawned, close the unused ends of our pipes (that were dup'd into the child process space)
-            //close(stdinWidow);
-            //close(stdoutWidow);
-            //close(stderrWidow);
+
+            if (IS_LINUX) // On OS X closing our side of the pipes causes data to be dropped
+            {
+                // After we've spawned, close the unused ends of our pipes (that were dup'd into the child process space)
+                LibC.close(stdinWidow);
+                LibC.close(stdoutWidow);
+                LibC.close(stderrWidow);
+                Native.free(Pointer.nativeValue(posix_spawn_file_actions));
+                Native.free(Pointer.nativeValue(posix_spawnattr));
+            }
         }
-        
+
         return this;
     }
 
@@ -159,10 +179,10 @@ public abstract class BasePosixProcess implements NuProcess
     @Override
     public void stdinClose()
     {
-        stdin = close(stdin);
+        close(stdin);
     }
 
-    protected abstract int close(int fd);
+    protected abstract void close(AtomicInteger fd);
 
     /**
      * @return the pid
@@ -172,29 +192,26 @@ public abstract class BasePosixProcess implements NuProcess
         return pid;
     }
 
-
     /**
      * @return the stdin
      */
-    public int getStdin()
+    public AtomicInteger getStdin()
     {
         return stdin;
     }
 
-
     /**
      * @return the stdout
      */
-    public int getStdout()
+    public AtomicInteger getStdout()
     {
         return stdout;
     }
 
-
     /**
      * @return the stderr
      */
-    public int getStderr()
+    public AtomicInteger getStderr()
     {
         return stderr;
     }
@@ -202,10 +219,11 @@ public abstract class BasePosixProcess implements NuProcess
     @Override
     public void wantWrite()
     {
-        if (stdin != 0)
+        int fd = stdin.get();
+        if (fd >= 0)
         {
             userWantsWrite.set(true);
-            myProcessor.queueWrite(stdin);
+            myProcessor.queueWrite(fd);
         }
     }
 
@@ -225,11 +243,16 @@ public abstract class BasePosixProcess implements NuProcess
     {
         if (exitPending.getCount() == 0)
         {
+            // TODO: handle SIGCHLD
             return;
         }
 
         try
         {
+            close(stdin);
+            close(stdout);
+            close(stderr);
+
             exitPending.countDown();
             exitCode.set(statusCode);
             processListener.onExit(statusCode);
@@ -240,13 +263,6 @@ public abstract class BasePosixProcess implements NuProcess
         }
         finally
         {
-            stdin = close(stdin);
-            stdout = close(stdout);
-            stderr = close(stderr);
-            stdinWidow = close(stdinWidow);
-            stdoutWidow = close(stdoutWidow);
-            stderrWidow = close(stderrWidow);
-
             Native.free(Pointer.nativeValue(outBuffer));
             Native.free(Pointer.nativeValue(inBuffer));
 
@@ -264,7 +280,7 @@ public abstract class BasePosixProcess implements NuProcess
             processorRoundRobin = (processorRoundRobin + 1) % processors.length;
         }
 
-        myProcessor = (IEventProcessor<? super BasePosixProcess>) processors[mySlot]; 
+        myProcessor = (IEventProcessor<? super BasePosixProcess>) processors[mySlot];
         myProcessor.registerProcess(this);
 
         if (myProcessor.checkAndSetRunning())
@@ -298,7 +314,7 @@ public abstract class BasePosixProcess implements NuProcess
         inBuffer = new Pointer(peer);
     }
 
-    protected PointerByReference createPipes()
+    protected Pointer createPipes()
     {
         int rc = 0;
 
@@ -306,52 +322,67 @@ public abstract class BasePosixProcess implements NuProcess
         int[] out = new int[2];
         int[] err = new int[2];
 
-        PointerByReference posix_spawn_file_actions = new PointerByReference(); //.NULL;
+        Pointer posix_spawn_file_actions = null;
+        if (IS_LINUX)
+        {
+            long peer = Native.malloc(80);
+            posix_spawn_file_actions = new Pointer(peer);
+        }
+        else
+        {
+            posix_spawn_file_actions = new Memory(Pointer.SIZE);
+        }
+
         try
         {
             rc = LibC.pipe(in);
             checkReturnCode(rc, "Create pipe() failed");
-            
             rc = LibC.pipe(out);
             checkReturnCode(rc, "Create pipe() failed");
-    
+
             rc = LibC.pipe(err);
             checkReturnCode(rc, "Create pipe() failed");
-    
+
             // Create spawn file actions
-            posix_spawn_file_actions = new PointerByReference(); // Memory(80); // Pointer.SIZE);
             rc = LibC.posix_spawn_file_actions_init(posix_spawn_file_actions);
             checkReturnCode(rc, "Internal call to posix_spawn_file_actions_init() failed");
-    
+
             // Dup the reading end of the pipe into the sub-process, and close our end
             rc = LibC.posix_spawn_file_actions_adddup2(posix_spawn_file_actions, in[0], 0);
             checkReturnCode(rc, "Internal call to posix_spawn_file_actions_adddup2() failed");
-    
+
             rc = LibC.posix_spawn_file_actions_addclose(posix_spawn_file_actions, in[1]);
             checkReturnCode(rc, "Internal call to posix_spawn_file_actions_addclose() failed");
 
-            stdin = in[1];
+            stdin.set(in[1]);
             stdinWidow = in[0];
-    
+
             // Dup the writing end of the pipe into the sub-process, and close our end
             rc = LibC.posix_spawn_file_actions_adddup2(posix_spawn_file_actions, out[1], 1);
             checkReturnCode(rc, "Internal call to posix_spawn_file_actions_adddup2() failed");
-    
+
             rc = LibC.posix_spawn_file_actions_addclose(posix_spawn_file_actions, out[0]);
             checkReturnCode(rc, "Internal call to posix_spawn_file_actions_addclose() failed");
-    
-            stdout = out[0];
+
+            stdout.set(out[0]);
             stdoutWidow = out[1];
 
             // Dup the writing end of the pipe into the sub-process, and close our end
             rc = LibC.posix_spawn_file_actions_adddup2(posix_spawn_file_actions, err[1], 2);
             checkReturnCode(rc, "Internal call to posix_spawn_file_actions_adddup2() failed");
-    
+
             rc = LibC.posix_spawn_file_actions_addclose(posix_spawn_file_actions, err[0]);
             checkReturnCode(rc, "Internal call to posix_spawn_file_actions_addclose() failed");
 
-            stderr = err[0];
+            stderr.set(err[0]);
             stderrWidow = err[1];
+
+            if (IS_LINUX)
+            {
+                rc = LibC.fcntl(in[1], LibC.F_SETFL, LibC.fcntl(in[1], LibC.F_GETFL) | LibC.O_NONBLOCK);
+                rc = LibC.fcntl(out[0], LibC.F_SETFL, LibC.fcntl(out[0], LibC.F_GETFL) | LibC.O_NONBLOCK);
+                rc = LibC.fcntl(err[0], LibC.F_SETFL, LibC.fcntl(err[0], LibC.F_GETFL) | LibC.O_NONBLOCK);
+            }
 
             return posix_spawn_file_actions;
         }
@@ -389,7 +420,7 @@ public abstract class BasePosixProcess implements NuProcess
         {
             if (fildes != 0)
             {
-                close(fildes);
+                LibC.close(fildes);
             }
         }
     }
@@ -398,7 +429,7 @@ public abstract class BasePosixProcess implements NuProcess
     {
         if (rc != 0)
         {
-            throw new RuntimeException(failureMessage + ", return code: "+ rc);
+            throw new RuntimeException(failureMessage + ", return code: " + rc);
         }
     }
 }

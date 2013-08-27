@@ -52,6 +52,7 @@ public class CatTest
             for (LottaProcessListener listen : listeners)
             {
                 Assert.assertTrue("Adler32 mismatch between written and read", listen.checkAdlers());
+                Assert.assertEquals("Exit code mismatch", 0, listen.getExitCode());
             }
         }
     }
@@ -74,7 +75,7 @@ public class CatTest
         }
     }
 
-    @Test
+    //@Test
     public void badExit()
     {
         final Semaphore semaphore = new Semaphore(0);
@@ -123,6 +124,7 @@ public class CatTest
         private int writes;
         private int reads;
         private int[] track;
+        private int exitCode;
         private Semaphore semaphore;
         private AtomicInteger size;
 
@@ -137,7 +139,7 @@ public class CatTest
             this.readAdler32 = new Adler32();
             this.writeAdler32 = new Adler32();
 
-            this.track = new int[100];
+            this.track = new int[10000];
 
             sb = new StringBuffer();
             for (int i = 0; i < 6000; i++)
@@ -156,6 +158,7 @@ public class CatTest
         @Override
         public void onExit(int statusCode)
         {
+            exitCode = statusCode;
             sb.setLength(0);
             if (size.get() != 600000)
             {
@@ -180,7 +183,7 @@ public class CatTest
             readAdler32.update(bytes);
             size.addAndGet(bytes.length);
 
-            if (size.get() == 600000 || reads == 100)
+            if (size.get() == 600000 || reads == 10000)
             {
                 nuProcess.stdinClose();
             }
@@ -195,6 +198,11 @@ public class CatTest
             buffer.put(bytes);
             buffer.flip();
             return ++writes < 10;
+        }
+
+        int getExitCode()
+        {
+            return exitCode;
         }
 
         boolean checkAdlers()

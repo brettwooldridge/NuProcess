@@ -80,10 +80,10 @@ public class OsxProcess extends BasePosixProcess
             if (read == -1)
             {
                 // EOF?
-                return;
+                throw new RuntimeException("Unexpected eof");
             }
-            ByteBuffer byteBuffer = ByteBuffer.wrap(outBuffer.getByteArray(0, read));
 
+            ByteBuffer byteBuffer = ByteBuffer.wrap(outBuffer.getByteArray(0, read));
             processListener.onStderr(byteBuffer);
         }
         catch (Exception e)

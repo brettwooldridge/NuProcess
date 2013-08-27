@@ -1,21 +1,61 @@
 package org.nuprocess.linux;
 
-import java.util.Arrays;
-import java.util.List;
+import com.sun.jna.Native;
+import com.sun.jna.Pointer;
 
-import com.sun.jna.Structure;
-
-public class EpollEvent extends Structure
+public class EpollEvent
 {
-    public int events;
-    public int fd;
-    public int unused;
+    private Pointer pointer;
 
-    @Override
-    @SuppressWarnings("rawtypes")
-    protected List getFieldOrder()
+    EpollEvent()
     {
-        return Arrays.asList("events", "fd", "unused");
+        long memory = Native.malloc(16);
+        pointer = new Pointer(memory);
+    }
+
+    void free()
+    {
+        Native.free(Pointer.nativeValue(pointer));
+    }
+
+    void clear()
+    {
+        pointer.clear(12);
+    }
+
+    Pointer getPointer()
+    {
+        return pointer;
+    }
+
+    int getEvents()
+    {
+        return pointer.getInt(0);
+    }
+
+    void setEvents(int events)
+    {
+        pointer.setInt(0, events);
+    }
+
+    int getFd()
+    {
+        return pointer.getInt(4);
+    }
+
+    void setFd(int fd)
+    {
+        pointer.setInt(4, fd);
+    }
+
+    int getUnused()
+    {
+        return pointer.getInt(8);
+    }
+
+    void setUnused(int unused)
+    {
+        pointer.setInt(8, unused);
     }
 
     /* from /usr/include/sys/epoll.h */
