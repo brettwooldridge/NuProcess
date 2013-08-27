@@ -5,8 +5,9 @@ A low-overhead, non-blocking I/O, external Process execution implementation for 
 and ``java.lang.Process`` on steroids.
 
 Have you ever been annoyed by the fact that for every process you launch in Java there is a ProcessReaper thread created?
-And are you even more annoyed by having to create one or two "pumper" threads (for every process) to pull data out of the
-``stdout`` and ``stderr`` pipes?  That's a total of three threads per-process (two if you merge stderr w/stdout).
+And are you even more annoyed by having to create two or three "pumper" threads (for every process) to pull data out of the
+``stdout`` and ``stderr`` pipes and pump data into ``stdin``?  That's a total of four threads per-process!  Three if you merge
+stderr w/stdout, and two if you can forego pumping stdin.
 
 Maybe you've wondered, as I have, why there isn't a single-threaded non-blocking way to do all of this.  **Well, now there is.**
 
