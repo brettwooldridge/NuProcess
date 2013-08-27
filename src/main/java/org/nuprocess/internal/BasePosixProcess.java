@@ -19,7 +19,7 @@ import com.sun.jna.ptr.IntByReference;
 
 public abstract class BasePosixProcess implements NuProcess
 {
-    private static final boolean LINUX_USE_VFORK = Boolean.getBoolean("org.nuprocess.linuxUseVfork");
+    private static final boolean LINUX_USE_VFORK = Boolean.parseBoolean(System.getProperty("org.nuprocess.linuxUseVfork", "true"));
     protected static final boolean IS_MAC = System.getProperty("os.name").toLowerCase().contains("mac");
     protected static final boolean IS_LINUX = System.getProperty("os.name").toLowerCase().contains("linux");
 
