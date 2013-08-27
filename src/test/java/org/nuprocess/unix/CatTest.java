@@ -139,7 +139,7 @@ public class CatTest
             this.readAdler32 = new Adler32();
             this.writeAdler32 = new Adler32();
 
-            this.track = new int[10000];
+            this.track = new int[1000];
 
             sb = new StringBuffer();
             for (int i = 0; i < 6000; i++)
@@ -172,6 +172,10 @@ public class CatTest
         {
             if (buffer == null)
             {
+                if (size.get() != 600000)
+                {
+                    System.err.println("Premature close of stdout");
+                }
                 return;
             }
 
@@ -183,7 +187,7 @@ public class CatTest
             readAdler32.update(bytes);
             size.addAndGet(bytes.length);
 
-            if (size.get() == 600000 || reads == 10000)
+            if (size.get() == 600000 || reads == 1000)
             {
                 nuProcess.stdinClose();
             }

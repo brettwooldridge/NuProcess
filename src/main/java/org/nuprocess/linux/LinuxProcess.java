@@ -69,15 +69,6 @@ public class LinuxProcess extends BasePosixProcess
     //                             Protected methods
     // ************************************************************************
 
-    @Override
-    protected void close(AtomicInteger stdX)
-    {
-        int fd = stdX.getAndSet(-1);
-        if (fd >= 0)
-        {
-            LibC.close(fd);
-        }
-    }
 
     @Override
     protected void afterStart()
