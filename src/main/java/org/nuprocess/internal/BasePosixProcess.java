@@ -1,5 +1,6 @@
 package org.nuprocess.internal;
 
+import java.nio.ByteBuffer;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -19,9 +20,9 @@ import com.sun.jna.ptr.IntByReference;
 
 public abstract class BasePosixProcess implements NuProcess
 {
-    private static final boolean LINUX_USE_VFORK = Boolean.parseBoolean(System.getProperty("org.nuprocess.linuxUseVfork", "true"));
     protected static final boolean IS_MAC = System.getProperty("os.name").toLowerCase().contains("mac");
     protected static final boolean IS_LINUX = System.getProperty("os.name").toLowerCase().contains("linux");
+    private static final boolean LINUX_USE_VFORK = Boolean.parseBoolean(System.getProperty("org.nuprocess.linuxUseVfork", "true"));
 
     protected static IEventProcessor<? extends BasePosixProcess>[] processors;
     protected static int processorRoundRobin;
@@ -36,8 +37,11 @@ public abstract class BasePosixProcess implements NuProcess
 
     protected AtomicBoolean userWantsWrite;
 
-    protected Pointer outBuffer;
-    protected Pointer inBuffer;
+    protected ByteBuffer outBuffer;
+    protected ByteBuffer inBuffer;
+
+    protected Pointer outBufferPointer;
+    protected Pointer inBufferPointer;
 
     protected AtomicInteger stdin;
     protected AtomicInteger stdout;
@@ -47,6 +51,12 @@ public abstract class BasePosixProcess implements NuProcess
     protected volatile int stdinWidow;
     protected volatile int stdoutWidow;
     protected volatile int stderrWidow;
+
+    protected boolean outClosed;
+    protected boolean errClosed;
+
+    private int remainingWrite;
+    private int writeOffset;
 
     static
     {
@@ -80,6 +90,8 @@ public abstract class BasePosixProcess implements NuProcess
         this.stdin = new AtomicInteger(-1);
         this.stdout = new AtomicInteger(-1);
         this.stderr = new AtomicInteger(-1);
+        this.outClosed = true;
+        this.errClosed = true;
     }
 
     @Override
@@ -180,7 +192,12 @@ public abstract class BasePosixProcess implements NuProcess
     @Override
     public void stdinClose()
     {
-        close(stdin);
+        int fd = stdin.get();
+        if (fd != -1)
+        {
+            myProcessor.closeStdin(fd);
+            close(stdin);
+        }
     }
 
     public void close(AtomicInteger stdX)
@@ -235,18 +252,6 @@ public abstract class BasePosixProcess implements NuProcess
         }
     }
 
-    protected void callStart()
-    {
-        try
-        {
-            processListener.onStart(this);
-        }
-        catch (Exception e)
-        {
-            // Don't let an exception thrown from the user's handler interrupt us
-        }
-    }
-
     public void onExit(int statusCode)
     {
         if (exitPending.getCount() == 0)
@@ -271,15 +276,158 @@ public abstract class BasePosixProcess implements NuProcess
         }
         finally
         {
-            Native.free(Pointer.nativeValue(outBuffer));
-            Native.free(Pointer.nativeValue(inBuffer));
+            Native.free(Pointer.nativeValue(outBufferPointer));
+            Native.free(Pointer.nativeValue(inBufferPointer));
 
             processListener = null;
         }
     }
 
+    public void readStdout(int availability)
+    {
+        if (outClosed || availability == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            if (availability < 0)
+            {
+                outClosed = true;
+                processListener.onStdout(null);
+                return;
+            }
+            else if (availability == 0)
+            {
+                return;
+            }
+
+            int read = LibC.read(stdout.get(), outBufferPointer, Math.min(availability, BUFFER_CAPACITY));
+            if (read == -1)
+            {
+                outClosed = true;
+                throw new RuntimeException("Unexpected eof");
+                // EOF?
+            }
+
+            outBuffer.position(0);
+            outBuffer.limit(read);
+            processListener.onStdout(outBuffer);
+        }
+        catch (Exception e)
+        {
+            // Don't let an exception thrown from the user's handler interrupt us
+            e.printStackTrace(System.err);
+        }
+    }
+
+    public void readStderr(int availability)
+    {
+        if (errClosed || availability == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            if (availability < 0)
+            {
+                errClosed = true;
+                processListener.onStderr(null);
+                return;
+            }
+
+            int read = LibC.read(stderr.get(), outBufferPointer, Math.min(availability, BUFFER_CAPACITY));
+            if (read == -1)
+            {
+                // EOF?
+                errClosed = true;
+                throw new RuntimeException("Unexpected eof");
+            }
+
+            outBuffer.position(0);
+            outBuffer.limit(read);
+            processListener.onStderr(outBuffer);
+        }
+        catch (Exception e)
+        {
+            // Don't let an exception thrown from the user's handler interrupt us
+        }
+    }
+
+    public boolean writeStdin(int availability)
+    {
+        if (availability == 0)
+        {
+            return false;
+        }
+
+        if (remainingWrite > 0)
+        {
+            int wrote = LibC.write(stdin.get(), inBufferPointer.share(writeOffset), Math.min(remainingWrite, availability));
+            if (wrote == -1)
+            {
+                // EOF?
+                stdinClose();
+                // int rc = Native.getLastError();
+                return false;
+            }
+
+            remainingWrite -= wrote;
+            writeOffset += wrote;
+            if (remainingWrite > 0)
+            {
+                return true;
+            }
+
+            remainingWrite = 0;
+            writeOffset = 0;
+        }
+
+        if (!userWantsWrite.get())
+        {
+            return false;
+        }
+
+        try
+        {
+            inBuffer.clear();
+            boolean wantMore = processListener.onStdinReady(inBuffer);
+            userWantsWrite.set(wantMore);
+            remainingWrite = inBuffer.remaining();
+
+            return true;
+        }
+        catch (Exception e)
+        {
+            // Don't let an exception thrown from the user's handler interrupt us
+            return false;
+        }
+    }
+
+    // ************************************************************************
+    //                             Private methods
+    // ************************************************************************
+    
+    private void afterStart()
+    {
+        commands = null;
+        environment = null;
+        outClosed = false;
+        errClosed = false;
+
+        long peer = Native.malloc(BUFFER_CAPACITY);
+        outBuffer = UnsafeHelper.wrapNativeMemory(peer, BUFFER_CAPACITY);
+        outBufferPointer = new Pointer(peer);
+
+        peer = Native.malloc(BUFFER_CAPACITY);
+        inBuffer = UnsafeHelper.wrapNativeMemory(peer, BUFFER_CAPACITY);
+        inBufferPointer = new Pointer(peer);
+    }
+
     @SuppressWarnings("unchecked")
-    protected void registerProcess()
+    private void registerProcess()
     {
         int mySlot = 0;
         synchronized (processors)
@@ -310,19 +458,19 @@ public abstract class BasePosixProcess implements NuProcess
         }
     }
 
-    protected void afterStart()
+    private void callStart()
     {
-        commands = null;
-        environment = null;
-
-        long peer = Native.malloc(BUFFER_CAPACITY);
-        outBuffer = new Pointer(peer);
-
-        peer = Native.malloc(BUFFER_CAPACITY);
-        inBuffer = new Pointer(peer);
+        try
+        {
+            processListener.onStart(this);
+        }
+        catch (Exception e)
+        {
+            // Don't let an exception thrown from the user's handler interrupt us
+        }
     }
 
-    protected Pointer createPipes()
+    private Pointer createPipes()
     {
         int rc = 0;
 
@@ -403,7 +551,7 @@ public abstract class BasePosixProcess implements NuProcess
         }
     }
 
-    protected void initFailureCleanup(int[] in, int[] out, int[] err)
+    private void initFailureCleanup(int[] in, int[] out, int[] err)
     {
         Set<Integer> unique = new HashSet<Integer>();
         if (in != null)
@@ -433,7 +581,7 @@ public abstract class BasePosixProcess implements NuProcess
         }
     }
 
-    protected void checkReturnCode(int rc, String failureMessage)
+    private void checkReturnCode(int rc, String failureMessage)
     {
         if (rc != 0)
         {

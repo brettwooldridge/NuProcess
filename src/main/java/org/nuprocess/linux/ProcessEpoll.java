@@ -4,6 +4,7 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 
+import org.nuprocess.NuProcess;
 import org.nuprocess.internal.BaseEventProcessor;
 import org.nuprocess.internal.LibC;
 
@@ -30,6 +31,10 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
         triggeredEvent = new EpollEvent();
         deadPool = new LinkedList<LinuxProcess>();
     }
+
+    // ************************************************************************
+    //                         IEventProcessor methods
+    // ************************************************************************
 
     @Override
     public void registerProcess(LinuxProcess process)
@@ -111,68 +116,63 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
             EpollEvent epEvent = triggeredEvent;
             int ident = epEvent.getFd();
             int events = epEvent.getEvents();
+
             LinuxProcess linuxProcess = fildesToProcessMap.get(ident);
+            if (linuxProcess == null)
+            {
+                return true;
+            }
     
             if ((events & EpollEvent.EPOLLIN) != 0)  // stdout/stderr data available to read
             {
-                if (linuxProcess != null)
+                if (ident == linuxProcess.getStdout().get())
                 {
-                    if (ident == linuxProcess.getStdout().get())
-                    {
-                    	linuxProcess.readStdout(false);
-                    }
-                    else
-                    {
-                    	linuxProcess.readStderr(false);
-                    }
+                	linuxProcess.readStdout(NuProcess.BUFFER_CAPACITY);
+                }
+                else
+                {
+                	linuxProcess.readStderr(NuProcess.BUFFER_CAPACITY);
                 }
             }
             else if ((events & EpollEvent.EPOLLOUT) != 0) // Room in stdin pipe available to write
             {
-                if (linuxProcess != null)
-                {
-                	if (linuxProcess.getStdin().get() != -1)
-                	{
-                	    if (linuxProcess.writeStdin())
-                	    {
-                	        epEvent.setEvents(EpollEvent.EPOLLOUT | EpollEvent.EPOLLONESHOT | EpollEvent.EPOLLRDHUP | EpollEvent.EPOLLHUP);
-                	        LibEpoll.epoll_ctl(epoll, EpollEvent.EPOLL_CTL_MOD, ident, epEvent.getPointer());
-                	    }
-                	}
-                }
+            	if (linuxProcess.getStdin().get() != -1)
+            	{
+            	    if (linuxProcess.writeStdin(NuProcess.BUFFER_CAPACITY))
+            	    {
+            	        epEvent.setEvents(EpollEvent.EPOLLOUT | EpollEvent.EPOLLONESHOT | EpollEvent.EPOLLRDHUP | EpollEvent.EPOLLHUP);
+            	        LibEpoll.epoll_ctl(epoll, EpollEvent.EPOLL_CTL_MOD, ident, epEvent.getPointer());
+            	    }
+            	}
             }
     
             if ((events & EpollEvent.EPOLLHUP) != 0 || (events & EpollEvent.EPOLLRDHUP) != 0 || (events & EpollEvent.EPOLLERR) != 0)
             {
                 LibEpoll.epoll_ctl(epoll, EpollEvent.EPOLL_CTL_DEL, ident, null);
-                if (linuxProcess != null)
+                if (ident == linuxProcess.getStdout().get())
                 {
-                    if (ident == linuxProcess.getStdout().get())
-                    {
-                        linuxProcess.readStdout(true);
-                    }
-                    else if (ident == linuxProcess.getStderr().get())
-                    {
-                        linuxProcess.readStderr(true);
-                    }
-                    else if (ident == linuxProcess.getStdin().get())
-                    {
-                        linuxProcess.stdinClose();
-                    }
+                    linuxProcess.readStdout(-1);
+                }
+                else if (ident == linuxProcess.getStderr().get())
+                {
+                    linuxProcess.readStderr(-1);
+                }
+                else if (ident == linuxProcess.getStdin().get())
+                {
+                    linuxProcess.stdinClose();
                 }
             }
     
-            if (linuxProcess != null && linuxProcess.isSoftExit())
+            if (linuxProcess.isSoftExit())
             {
                 cleanupProcess(linuxProcess);
             }
             
-            epEvent.clear();
-    
             return true;
         }
         finally
         {
+            triggeredEvent.clear();
             checkDeadPool();
         }
     }
