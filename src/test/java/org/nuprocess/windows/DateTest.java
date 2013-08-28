@@ -8,9 +8,9 @@ import org.junit.AfterClass;
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.nuprocess.NuAbstractProcessListener;
+import org.nuprocess.NuAbstractProcessHandler;
 import org.nuprocess.NuProcessBuilder;
-import org.nuprocess.NuProcessListener;
+import org.nuprocess.NuProcessHandler;
 import org.nuprocess.RunOnlyOnWindows;
 
 @RunWith(value=RunOnlyOnWindows.class)
@@ -22,7 +22,7 @@ public class DateTest
         final Semaphore semaphore = new Semaphore(0);
         final AtomicInteger exitCode = new AtomicInteger();
 
-        NuProcessListener processListener = new NuAbstractProcessListener() {
+        NuProcessHandler processListener = new NuAbstractProcessHandler() {
             @Override
             public void onExit(int statusCode)
             {

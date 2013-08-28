@@ -5,7 +5,7 @@ import java.nio.ByteBuffer;
 /**
  * @author Brett Wooldridge
  */
-public interface NuProcessListener
+public interface NuProcessHandler
 {
 	/**
 	 * This method is invoked when you call the {@link ProcessBuilder#start()}

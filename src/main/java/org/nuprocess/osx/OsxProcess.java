@@ -2,7 +2,7 @@ package org.nuprocess.osx;
 
 import java.util.List;
 
-import org.nuprocess.NuProcessListener;
+import org.nuprocess.NuProcessHandler;
 import org.nuprocess.internal.BasePosixProcess;
 
 /**
@@ -18,7 +18,7 @@ public class OsxProcess extends BasePosixProcess
         }
     }
 
-    public OsxProcess(List<String> commands, String[] env, NuProcessListener processListener)
+    public OsxProcess(List<String> commands, String[] env, NuProcessHandler processListener)
     {
         super(commands, env, processListener);
     }

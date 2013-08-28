@@ -8,7 +8,7 @@ import java.nio.ByteBuffer;
  * 
  * @author Brett Wooldridge
  */
-public abstract class NuAbstractProcessListener implements NuProcessListener
+public abstract class NuAbstractProcessHandler implements NuProcessHandler
 {
     @Override
     public void onStart(NuProcess nuProcess)

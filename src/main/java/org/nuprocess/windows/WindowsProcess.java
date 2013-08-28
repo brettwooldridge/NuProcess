@@ -13,7 +13,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.nuprocess.NuProcess;
-import org.nuprocess.NuProcessListener;
+import org.nuprocess.NuProcessHandler;
 import org.nuprocess.windows.NuKernel32.OVERLAPPED;
 
 import com.sun.jna.Memory;
@@ -46,7 +46,7 @@ public final class WindowsProcess implements NuProcess
     private static final AtomicInteger namedPipeCounter;
 
     private ProcessCompletions myProcessor;
-    private NuProcessListener processListener;
+    private NuProcessHandler processListener;
 
     private String[] environment;
     private String[] commands;
@@ -99,7 +99,7 @@ public final class WindowsProcess implements NuProcess
         }
     }
 
-    public WindowsProcess(List<String> commands, String[] env, NuProcessListener processListener)
+    public WindowsProcess(List<String> commands, String[] env, NuProcessHandler processListener)
     {
         this.commands = commands.toArray(new String[0]);
         this.environment = env;

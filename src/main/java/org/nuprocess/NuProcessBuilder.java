@@ -15,7 +15,7 @@ public class NuProcessBuilder
 
     private List<String> command;
     private TreeMap<String, String> environment;
-    private NuProcessListener processListener;
+    private NuProcessHandler processListener;
 
     static
     {
@@ -54,7 +54,7 @@ public class NuProcessBuilder
         }
     }
 
-    public NuProcessBuilder(List<String> command, NuProcessListener listener)
+    public NuProcessBuilder(List<String> command, NuProcessHandler listener)
     {
         if (command == null || command.isEmpty())
         {
@@ -81,7 +81,7 @@ public class NuProcessBuilder
         return environment;
     }
 
-    public void setProcessListener(NuProcessListener listener)
+    public void setProcessListener(NuProcessHandler listener)
     {
         if (listener == null)
         {

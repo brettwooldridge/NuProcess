@@ -4,7 +4,7 @@
 
 	<groupId>org.nuproces</groupId>
 	<artifactId>nuprocess</artifactId>
-	<version>0.0.1-SNAPSHOT</version>
+	<version>0.9.0-SNAPSHOT</version>
 	<packaging>jar</packaging>
 
 	<name>nuprocess</name>
@@ -36,30 +36,21 @@
 	<build>
 		<plugins>
 			<plugin>
-				<artifactId>maven-shade-plugin</artifactId>
-				<executions>
-					<execution>
-						<phase>package</phase>
-						<goals>
-							<goal>shade</goal>
-						</goals>
-					</execution>
-				</executions>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-compiler-plugin</artifactId>
+				<version>3.1</version>
 				<configuration>
-					<keepDependenciesWithProvidedScope>true</keepDependenciesWithProvidedScope>
-					<artifactSet>
-						<includes>
-							<include>org.objenesis:objenesis</include>
-						</includes>
-					</artifactSet>
-					<relocations>
-						<relocation>
-							<pattern>org.objenesis</pattern>
-							<shadedPattern>org.nuprocess.objensis</shadedPattern>
-						</relocation>
-					</relocations>
+					<target>1.6</target>
 				</configuration>
-			</plugin>
+				</plugin>
 		</plugins>
 	</build>
+	<organization>
+		<name>Brett Wooldridge</name>
+		<url>https://github.com/brettwooldridge</url>
+	</organization>
+	<scm>
+		<url>https://github.com/brettwooldridge/NuProcess</url>
+	</scm>
+	<description>A low-overhead, non-blocking I/O, external Process execution implementation for Java. Think of it as java.lang.ProcessBuilder and java.lang.Process on steroids.</description>
 </project>

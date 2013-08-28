@@ -9,10 +9,10 @@ import java.util.zip.Adler32;
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.nuprocess.NuAbstractProcessListener;
+import org.nuprocess.NuAbstractProcessHandler;
 import org.nuprocess.NuProcess;
 import org.nuprocess.NuProcessBuilder;
-import org.nuprocess.NuProcessListener;
+import org.nuprocess.NuProcessHandler;
 import org.nuprocess.RunOnlyOnWindows;
 
 /**
@@ -81,7 +81,7 @@ public class CatTest
         final Semaphore semaphore = new Semaphore(0);
         final AtomicInteger exitCode = new AtomicInteger();
 
-        NuProcessListener processListener = new NuAbstractProcessListener() {
+        NuProcessHandler processListener = new NuAbstractProcessHandler() {
             @Override
             public void onExit(int statusCode)
             {
@@ -103,7 +103,7 @@ public class CatTest
         final Semaphore semaphore = new Semaphore(0);
         final AtomicInteger exitCode = new AtomicInteger();
 
-        NuProcessListener processListener = new NuAbstractProcessListener() {
+        NuProcessHandler processListener = new NuAbstractProcessHandler() {
             @Override
             public void onExit(int statusCode)
             {
@@ -119,7 +119,7 @@ public class CatTest
         Assert.assertEquals("Output did not matched expected result", Integer.MIN_VALUE, exitCode.get());
     }
 
-    private static class LottaProcessListener extends NuAbstractProcessListener
+    private static class LottaProcessListener extends NuAbstractProcessHandler
     {
         private NuProcess nuProcess;
         private StringBuffer sb;

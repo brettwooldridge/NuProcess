@@ -2,7 +2,7 @@ package org.nuprocess.linux;
 
 import java.util.List;
 
-import org.nuprocess.NuProcessListener;
+import org.nuprocess.NuProcessHandler;
 import org.nuprocess.internal.BasePosixProcess;
 
 /**
@@ -26,7 +26,7 @@ public class LinuxProcess extends BasePosixProcess
         }
     }
 
-    public LinuxProcess(List<String> commands, String[] env, NuProcessListener processListener)
+    public LinuxProcess(List<String> commands, String[] env, NuProcessHandler processListener)
     {
         super(commands, env, processListener);
     }

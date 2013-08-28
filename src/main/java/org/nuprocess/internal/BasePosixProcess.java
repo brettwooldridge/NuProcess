@@ -10,7 +10,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.nuprocess.NuProcess;
-import org.nuprocess.NuProcessListener;
+import org.nuprocess.NuProcessHandler;
 
 import com.sun.jna.Memory;
 import com.sun.jna.Native;
@@ -28,7 +28,7 @@ public abstract class BasePosixProcess implements NuProcess
     protected static int processorRoundRobin;
 
     protected IEventProcessor<? super BasePosixProcess> myProcessor;
-    protected NuProcessListener processListener;
+    protected NuProcessHandler processListener;
 
     protected String[] environment;
     protected String[] commands;
@@ -79,7 +79,7 @@ public abstract class BasePosixProcess implements NuProcess
 
     }
 
-    protected BasePosixProcess(List<String> command, String[] env, NuProcessListener processListener)
+    protected BasePosixProcess(List<String> command, String[] env, NuProcessHandler processListener)
     {
         this.commands = command.toArray(new String[0]);
         this.environment = env;
