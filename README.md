@@ -4,20 +4,21 @@ NuProcess
 A low-overhead, non-blocking I/O, external Process execution implementation for Java.  Think of it as ``java.lang.ProcessBuilder``
 and ``java.lang.Process`` on steroids.
 
-Have you ever been annoyed by the fact that whenever you spawn a process in Java there is a ProcessReaper thread created?
-And are you even more annoyed by having to create two or three "pumper" threads (for every process) to pull data out of the
-``stdout`` and ``stderr`` pipes and pump data into ``stdin``?  That's a total of three threads per-process + 1 reaper!
+Have you ever been annoyed by the fact that whenever you spawn a process in Java you have to create two or three "pumper"
+threads (for every process) to pull data out of the ``stdout`` and ``stderr`` pipes and pump data into ``stdin``?  If your
+code starts a lot of processes you can have dozens or hundreds of threads doing nothing but pumping data!
 
-Maybe you've wondered, as I have, why there isn't a single-threaded non-blocking way to do all of this.  **Well, now there is.**
+On top of that, because the ``java.lang.Process`` class exposes classic ``java.io`` blocking streams, there is no possibility
+of using direct memory buffers, meaning your data must be copied at least once in the transition from Java to native code.
 
-#### Threads are cheap, right? ####
-Threads are "cheap" so why does it matter?  Well, sorry to break the bad news but threads aren't cheap.  There is 
-significant time spent firing up threads, and under heavy load context-switching overhead, CPU instruction pipeline
-flushing, and L1/L2/L3 cache-line invalidation start taking their toll.
+#### But threads are cheap, right? ####
+Sorry to break the bad news but threads aren't cheap.  There is significant time spent firing up threads, and under 
+heavy load context-switching overhead, CPU instruction pipeline flushing, and L1/L2/L3 cache-line invalidation start
+taking their toll.
 
 But if a single thread is allowed to get up-to-speed with little to no context-switching and little to no cache-line 
 invalidation, and allowed to take advantage of CPU instruction pipelining and data prefetching, you'll be amazed at what
-what a modern CPU can do.  Many of our attempts at parallelization of processing actually have a paradoxically negative
+what a modern CPU can do.  Many of our attempts at parallelization of processing can have a paradoxically negative
 impact on performance.
 
 #### What kinda speed are we talking? ####
