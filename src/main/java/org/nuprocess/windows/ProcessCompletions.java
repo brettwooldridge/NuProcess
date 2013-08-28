@@ -306,7 +306,7 @@ public final class ProcessCompletions implements Runnable
             return;
         }
 
-        ArrayList<WindowsProcess> list = new ArrayList<>(wantsWrite.size());
+        ArrayList<WindowsProcess> list = new ArrayList<WindowsProcess>(wantsWrite.size());
         wantsWrite.drainTo(list);
         for (WindowsProcess process : list)
         {
