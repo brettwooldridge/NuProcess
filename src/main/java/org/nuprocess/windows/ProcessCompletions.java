@@ -250,7 +250,7 @@ public final class ProcessCompletions implements Runnable
             return;
         }
 
-        ArrayList<WindowsProcess> list = new ArrayList<>(pendingPool.size());
+        ArrayList<WindowsProcess> list = new ArrayList<WindowsProcess>(pendingPool.size());
         pendingPool.drainTo(list);
 
         for (WindowsProcess process : list)

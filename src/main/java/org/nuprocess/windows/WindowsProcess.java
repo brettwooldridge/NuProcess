@@ -591,7 +591,7 @@ public final class WindowsProcess implements NuProcess
     private String getEnvironmentBlock(Map<String, String> env)
     {
         // Sort by name using UPPERCASE collation
-        List<Map.Entry<String, String>> list = new ArrayList<>(env.entrySet());
+        List<Map.Entry<String, String>> list = new ArrayList<Map.Entry<String, String>>(env.entrySet());
         Collections.sort(list, new EntryComparator());
 
         StringBuilder sb = new StringBuilder(32 * env.size());
