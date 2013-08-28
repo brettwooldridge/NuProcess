@@ -10,7 +10,7 @@ And are you even more annoyed by having to create two or three "pumper" threads 
 
 Maybe you've wondered, as I have, why there isn't a single-threaded non-blocking way to do all of this.  **Well, now there is.**
 
-#### Threads are cheap ####
+#### Threads are cheap, right? ####
 Threads are "cheap" so why does it matter?  Well, sorry to break the bad news but threads aren't cheap.  There is 
 significant time spent firing up threads, and under heavy load context-switching overhead, CPU instruction pipeline
 flushing, and L1/L2/L3 cache-line invalidation start taking their toll.
@@ -20,7 +20,7 @@ invalidation, and allowed to take advantage of CPU instruction pipelining and da
 what a modern CPU can do.  Many of our attempts at parallelization of processing actually have a paradoxically negative
 impact on performance.
 
-#### What kinda speed? ####
+#### What kinda speed are we talking? ####
 Well, if course it depends on your workload, but let's take an example.  Artifical though it may be, it likely stresses
 the system more than what you might throw at it.
 
