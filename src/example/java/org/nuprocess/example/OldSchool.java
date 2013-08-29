@@ -11,10 +11,7 @@ import java.util.zip.Adler32;
 
 import org.junit.Assert;
 import org.junit.Test;
-import org.junit.runner.RunWith;
-import org.nuprocess.RunOnlyOnUnix;
 
-@RunWith(value=RunOnlyOnUnix.class)
 public class OldSchool
 {
     @Test
@@ -23,7 +20,12 @@ public class OldSchool
         ThreadPoolExecutor outExecutor = new ThreadPoolExecutor(50, 50, 10, TimeUnit.SECONDS, new LinkedBlockingQueue<Runnable>());
         ThreadPoolExecutor inExecutor = new ThreadPoolExecutor(50, 50, 10, TimeUnit.SECONDS, new LinkedBlockingQueue<Runnable>());
         
-        ProcessBuilder pb = new ProcessBuilder("/bin/cat");
+        String command = "/bin/cat";
+        if (System.getProperty("os.name").toLowerCase().contains("win"))
+        {
+            command = "src\\test\\java\\org\\nuprocess\\windows\\cat.exe";
+        }
+        ProcessBuilder pb = new ProcessBuilder(command);
         pb.redirectErrorStream(true);
 
         for (int times = 0; times < 100; times++)
@@ -34,7 +36,6 @@ public class OldSchool
     
             for (int i = 0; i < processes.length; i++)
             {
-                
                 Process process = pb.start();
                 processes[i] = process;
                 
