@@ -411,9 +411,8 @@ public final class WindowsProcess implements NuProcess
         int dwOpenMode = NuKernel32.PIPE_ACCESS_INBOUND | NuKernel32.FILE_FLAG_OVERLAPPED;
 
         /* stdout pipe */
-        stdoutPipe = new PipeBundle();
-        stdoutPipe.ioCompletionKey = namedPipeCounter.getAndIncrement();
-        WString pipeName = new WString("\\\\.\\pipe\\NuProcess" + stdoutPipe.ioCompletionKey);
+        int ioCompletionKey = namedPipeCounter.getAndIncrement();
+        WString pipeName = new WString("\\\\.\\pipe\\NuProcess" + ioCompletionKey);
         hStdoutWidow = NuKernel32.CreateNamedPipeW(pipeName, dwOpenMode, 0 /*dwPipeMode*/, 1 /*nMaxInstances*/, BUFFER_SIZE, BUFFER_SIZE,
                                                        0 /*nDefaultTimeOut*/, sattr);
         if (WinBase.INVALID_HANDLE_VALUE.getPointer().equals(hStdoutWidow.getPointer()))
@@ -421,13 +420,14 @@ public final class WindowsProcess implements NuProcess
             throw new RuntimeException("Unable to create pipe");
         }
 
-        stdoutPipe.pipeHandle = NuKernel32.CreateFile(pipeName, WinNT.GENERIC_READ, WinNT.FILE_SHARE_READ /*dwShareMode*/, null,
+        HANDLE stdoutHandle = NuKernel32.CreateFile(pipeName, WinNT.GENERIC_READ, WinNT.FILE_SHARE_READ /*dwShareMode*/, null,
                                                       WinNT.OPEN_EXISTING /*dwCreationDisposition*/, WinNT.FILE_ATTRIBUTE_NORMAL | WinNT.FILE_FLAG_OVERLAPPED /*dwFlagsAndAttributes*/,
                                           null /*hTemplateFile*/);
-        if (stdoutPipe.pipeHandle == null || WinBase.INVALID_HANDLE_VALUE.getPointer().equals(stdoutPipe.pipeHandle.getPointer()))
+        if (stdoutHandle == null || WinBase.INVALID_HANDLE_VALUE.getPointer().equals(stdoutHandle.getPointer()))
         {
             throw new RuntimeException("Unable to create pipe");
         }
+        stdoutPipe = new PipeBundle(stdoutHandle, ioCompletionKey);
 
         OVERLAPPED overlapped = new OVERLAPPED();
         overlapped.clear();
@@ -446,9 +446,8 @@ public final class WindowsProcess implements NuProcess
         }
 
         /* stderr pipe */
-        stderrPipe = new PipeBundle();
-        stderrPipe.ioCompletionKey = namedPipeCounter.getAndIncrement();
-        pipeName = new WString("\\\\.\\pipe\\NuProcess" + stderrPipe.ioCompletionKey);
+        ioCompletionKey = namedPipeCounter.getAndIncrement();
+        pipeName = new WString("\\\\.\\pipe\\NuProcess" + ioCompletionKey);
         hStderrWidow = NuKernel32.CreateNamedPipeW(pipeName, dwOpenMode, 0 /*dwPipeMode*/, 1 /*nMaxInstances*/, BUFFER_SIZE, BUFFER_SIZE,
                                                        0 /*nDefaultTimeOut*/, sattr);
         if (WinBase.INVALID_HANDLE_VALUE.getPointer().equals(hStderrWidow.getPointer()))
@@ -456,13 +455,14 @@ public final class WindowsProcess implements NuProcess
             throw new RuntimeException("Unable to create pipe");
         }
 
-        stderrPipe.pipeHandle = NuKernel32.CreateFile(pipeName, WinNT.GENERIC_READ, WinNT.FILE_SHARE_READ /*dwShareMode*/, null,
+        HANDLE stderrHandle = NuKernel32.CreateFile(pipeName, WinNT.GENERIC_READ, WinNT.FILE_SHARE_READ /*dwShareMode*/, null,
                                                       WinNT.OPEN_EXISTING /*dwCreationDisposition*/, WinNT.FILE_ATTRIBUTE_NORMAL | WinNT.FILE_FLAG_OVERLAPPED /*dwFlagsAndAttributes*/,
                                           null /*hTemplateFile*/);
-        if (stderrPipe.pipeHandle == null || WinBase.INVALID_HANDLE_VALUE.getPointer().equals(stderrPipe.pipeHandle.getPointer()))
+        if (stderrHandle == null || WinBase.INVALID_HANDLE_VALUE.getPointer().equals(stderrHandle.getPointer()))
         {
             throw new RuntimeException("Unable to create pipe");
         }
+        stderrPipe = new PipeBundle(stderrHandle, ioCompletionKey);
 
         overlapped.clear();
         overlapped.hEvent = NuKernel32.CreateEvent(null, true, false, null);
@@ -480,10 +480,9 @@ public final class WindowsProcess implements NuProcess
         }
 
         /* stdin pipe */
-        stdinPipe = new PipeBundle();
-        stdinPipe.ioCompletionKey = namedPipeCounter.getAndIncrement();
+        ioCompletionKey = namedPipeCounter.getAndIncrement();
         dwOpenMode = NuKernel32.PIPE_ACCESS_OUTBOUND | NuKernel32.FILE_FLAG_OVERLAPPED;
-        pipeName = new WString("\\\\.\\pipe\\NuProcess" + stdinPipe.ioCompletionKey);
+        pipeName = new WString("\\\\.\\pipe\\NuProcess" + ioCompletionKey);
         hStdinWidow = NuKernel32.CreateNamedPipeW(pipeName, dwOpenMode, 0 /*dwPipeMode*/, 1 /*nMaxInstances*/, BUFFER_SIZE, BUFFER_SIZE,
                                                        0 /*nDefaultTimeOut*/, sattr);
         if (WinBase.INVALID_HANDLE_VALUE.getPointer().equals(hStdinWidow.getPointer()))
@@ -491,13 +490,14 @@ public final class WindowsProcess implements NuProcess
             throw new RuntimeException("Unable to create pipe");
         }
 
-        stdinPipe.pipeHandle = NuKernel32.CreateFile(pipeName, WinNT.GENERIC_WRITE, WinNT.FILE_SHARE_WRITE /*dwShareMode*/, null,
+        HANDLE stdinHandle = NuKernel32.CreateFile(pipeName, WinNT.GENERIC_WRITE, WinNT.FILE_SHARE_WRITE /*dwShareMode*/, null,
                                                      WinNT.OPEN_EXISTING /*dwCreationDisposition*/, WinNT.FILE_ATTRIBUTE_NORMAL | WinNT.FILE_FLAG_OVERLAPPED /*dwFlagsAndAttributes*/,
                                           null /*hTemplateFile*/);
-        if (WinBase.INVALID_HANDLE_VALUE.getPointer().equals(stdinPipe.pipeHandle.getPointer()))
+        if (WinBase.INVALID_HANDLE_VALUE.getPointer().equals(stdinHandle.getPointer()))
         {
             throw new RuntimeException("Unable to create pipe");
         }
+        stdinPipe = new PipeBundle(stdinHandle, ioCompletionKey);
 
         overlapped.clear();
         overlapped.hEvent = NuKernel32.CreateEvent(null, true, false, null);
@@ -659,15 +659,18 @@ public final class WindowsProcess implements NuProcess
 
     static final class PipeBundle
     {
-        int ioCompletionKey;
-        HANDLE pipeHandle;
+        final OVERLAPPED overlapped;
+        final int ioCompletionKey;
+        final HANDLE pipeHandle;
         ByteBuffer buffer;
         Pointer bufferPointer;
         boolean registered;
-        final OVERLAPPED overlapped;
 
+        PipeBundle(HANDLE pipeHandle, int ioCompletionKey)
         {
-            overlapped = new OVERLAPPED();
+            this.pipeHandle = pipeHandle;
+            this.ioCompletionKey = ioCompletionKey;
+            this.overlapped = new OVERLAPPED();
         }
     }
 }
