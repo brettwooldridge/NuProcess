@@ -110,8 +110,6 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
         final Kevent kevent = triggeredEvent;
         int ident = (int) kevent.getIdent();
         int filter = kevent.getFilter();
-        int flags = kevent.getFlags();
-        int fflags = kevent.getFilterFlags();
         int data = (int) kevent.getData();
 
         OsxProcess osxProcess = fildesToProcessMap.get(ident);
@@ -130,7 +128,7 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
             if (ident == osxProcess.getStdout().get())
             {
                 osxProcess.readStdout(available);
-                if ((flags & Kevent.EV_EOF) != 0)
+                if ((kevent.getFlags() & Kevent.EV_EOF) != 0)
                 {
                     osxProcess.readStdout(-1);
                 }
@@ -142,7 +140,7 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
             else
             {
                 osxProcess.readStderr(available);
-                if ((flags & Kevent.EV_EOF) != 0)
+                if ((kevent.getFlags() & Kevent.EV_EOF) != 0)
                 {
                     osxProcess.readStderr(-1);
                 }
@@ -160,7 +158,7 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
                 queueWrite(osxProcess.getStdin().get());
             }
         }
-        else if ((fflags & Kevent.NOTE_EXIT) != 0) // process has exited System.gc()
+        else if ((kevent.getFilterFlags() & Kevent.NOTE_EXIT) != 0) // process has exited System.gc()
         {
             cleanupProcess(osxProcess);
             int rc = (data & 0xff00) >> 8;

@@ -136,7 +136,6 @@ public class CatTest
     private static class LottaProcessListener extends NuAbstractProcessHandler
     {
         private NuProcess nuProcess;
-        private StringBuffer sb;
         private int writes;
         private int reads;
         private int[] track;
@@ -146,6 +145,8 @@ public class CatTest
 
         private Adler32 readAdler32;
         private Adler32 writeAdler32;
+        private byte[] bytes;
+        
 
         LottaProcessListener(Semaphore semaphore, AtomicInteger size)
         {
@@ -157,11 +158,13 @@ public class CatTest
 
             this.track = new int[1000];
 
-            sb = new StringBuffer();
+            StringBuffer sb = new StringBuffer();
             for (int i = 0; i < 6000; i++)
             {
                 sb.append("1234567890");
             }
+
+            bytes = sb.toString().getBytes();
         }
 
         @Override
@@ -175,11 +178,6 @@ public class CatTest
         public void onExit(int statusCode)
         {
             exitCode = statusCode;
-            sb.setLength(0);
-            if (size.get() != 600000)
-            {
-                sb.length();
-            }
             semaphore.release();
         }
 
@@ -212,7 +210,6 @@ public class CatTest
         @Override
         public boolean onStdinReady(ByteBuffer buffer)
         {
-            byte[] bytes = sb.toString().getBytes();
             writeAdler32.update(bytes);
 
             buffer.put(bytes);

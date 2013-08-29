@@ -65,18 +65,11 @@ public abstract class BaseEventProcessor<T extends BasePosixProcess> implements 
             startBarrier.await();
 
             int idleCount = 0;
-            do
+            while (!isRunning.compareAndSet(idleCount > LINGER_ITERATIONS && pidToProcessMap.isEmpty(), false))
             {
-                if (process())
-                {
-                    idleCount = 0;
-                }
-                else
-                {
-                    idleCount++;
-                }
+                idleCount = process() ? 0 : (idleCount + 1);
             }
-            while (!isRunning.compareAndSet(pidToProcessMap.isEmpty() && idleCount > LINGER_ITERATIONS, false));
+
             isRunning.set(false);
         }
         catch (Exception e)

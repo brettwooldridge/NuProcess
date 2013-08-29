@@ -50,12 +50,12 @@ public final class Kevent
 
     long getIdent()
     {
-        return pointer.getNativeLong(0).longValue();
+        return pointer.getLong(0);
     }
 
     void setIdent(long ident)
     {
-        pointer.setNativeLong(0, new NativeLong(ident));
+        pointer.setLong(0, ident);
     }
 
     short getFilter()
@@ -90,12 +90,12 @@ public final class Kevent
 
     long getData()
     {
-        return pointer.getNativeLong(NativeLong.SIZE + 2 + 2 + 4).longValue();
+        return pointer.getLong(NativeLong.SIZE + 2 + 2 + 4);
     }
 
     void setData(long data)
     {
-        pointer.setNativeLong(NativeLong.SIZE + 2 + 2 + 4, new NativeLong(data));
+        pointer.setLong(NativeLong.SIZE + 2 + 2 + 4, data);
     }
 
     Pointer getUserData()
