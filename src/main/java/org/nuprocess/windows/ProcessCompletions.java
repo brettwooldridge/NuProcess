@@ -93,7 +93,7 @@ public final class ProcessCompletions implements Runnable
             startBarrier.await();
 
             int idleCount = 0;
-            while (!isRunning.compareAndSet(completionKeyToProcessMap.isEmpty() && deadPool.isEmpty() && idleCount > LINGER_ITERATIONS, false))
+            while (!isRunning.compareAndSet(idleCount > LINGER_ITERATIONS && deadPool.isEmpty() && completionKeyToProcessMap.isEmpty(), false))
             {
                 idleCount = process() ? 0 : (idleCount + 1);
             }
@@ -255,27 +255,29 @@ public final class ProcessCompletions implements Runnable
 
     private void queueRead(WindowsProcess process, WindowsProcess.PipeBundle pipe, int stdX)
     {
-        NuKernel32.ReadFile(pipe.pipeHandle, pipe.bufferPointer, NuProcess.BUFFER_CAPACITY, null, pipe.overlapped);
-        int lastError = Native.getLastError();
-        switch (lastError)
+        if (!NuKernel32.ReadFile(pipe.pipeHandle, pipe.bufferPointer, NuProcess.BUFFER_CAPACITY, null, pipe.overlapped))
         {
-        case WinNT.ERROR_SUCCESS:
-        case WinNT.ERROR_IO_PENDING:
-            break;
-        case WinNT.ERROR_BROKEN_PIPE:
-        case WinNT.ERROR_PIPE_NOT_CONNECTED:
-            if (stdX == STDOUT)
+            int lastError = Native.getLastError();
+            switch (lastError)
             {
-                process.readStdout(-1 /*closed*/);
+            case WinNT.ERROR_SUCCESS:
+            case WinNT.ERROR_IO_PENDING:
+                break;
+            case WinNT.ERROR_BROKEN_PIPE:
+            case WinNT.ERROR_PIPE_NOT_CONNECTED:
+                if (stdX == STDOUT)
+                {
+                    process.readStdout(-1 /*closed*/);
+                }
+                else
+                {
+                    process.readStderr(-1 /*closed*/);
+                }
+                break;
+            default:
+                System.err.println("Some other error occurred reading the pipe: " + lastError);
+                break;
             }
-            else
-            {
-                process.readStderr(-1 /*closed*/);
-            }
-            break;
-        default:
-            System.err.println("Some other error occurred reading the pipe: " + lastError);
-            break;
         }
     }
 
