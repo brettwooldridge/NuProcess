@@ -16,12 +16,12 @@
 
 package org.nuprocess.windows;
 
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -69,10 +69,10 @@ public final class ProcessCompletions implements Runnable
 
     public ProcessCompletions()
     {
-        completionKeyToProcessMap = new ConcurrentHashMap<Integer, WindowsProcess>();
+        completionKeyToProcessMap = new HashMap<Integer, WindowsProcess>();
         pendingPool = new LinkedBlockingQueue<WindowsProcess>();
-        deadPool = new LinkedList<WindowsProcess>();
         wantsWrite = new LinkedBlockingQueue<WindowsProcess>();
+        deadPool = new LinkedList<WindowsProcess>();
         isRunning = new AtomicBoolean();
 
         numberOfBytes = new IntByReference();
@@ -119,7 +119,7 @@ public final class ProcessCompletions implements Runnable
             }
     
             int key = (int) completionKey.getValue().longValue();
-            // explicit wake up by us to process process pending want writes and registrations
+            // explicit wake up by us to process pending want writes and registrations
             if (key == 0)
             {
                 checkWaitWrites();
@@ -246,7 +246,11 @@ public final class ProcessCompletions implements Runnable
             stdinPipe.registered = true;
         }
 
-        NuKernel32.WriteFile(stdinPipe.pipeHandle, stdinPipe.bufferPointer, 0, null, stdinPipe.overlapped);
+        if (!NuKernel32.WriteFile(stdinPipe.pipeHandle, stdinPipe.bufferPointer, 0, null, stdinPipe.overlapped)
+            && Native.getLastError() != WinNT.ERROR_IO_PENDING)
+        {
+            process.stdinClose();
+        }
     }
 
     private void queueRead(WindowsProcess process, WindowsProcess.PipeBundle pipe, int stdX)
@@ -259,6 +263,7 @@ public final class ProcessCompletions implements Runnable
         case WinNT.ERROR_IO_PENDING:
             break;
         case WinNT.ERROR_BROKEN_PIPE:
+        case WinNT.ERROR_PIPE_NOT_CONNECTED:
             if (stdX == STDOUT)
             {
                 process.readStdout(-1 /*closed*/);

@@ -126,6 +126,7 @@ public final class WindowsProcess implements NuProcess
         this.exitPending = new CountDownLatch(1);
         this.outClosed = true;
         this.errClosed = true;
+        this.inClosed = true;
     }
 
     @Override
@@ -167,8 +168,8 @@ public final class WindowsProcess implements NuProcess
         }
         catch (Throwable e)
         {
-            onExit(Integer.MIN_VALUE);
             e.printStackTrace();
+            onExit(Integer.MIN_VALUE);
         }
         finally
         {
@@ -417,7 +418,7 @@ public final class WindowsProcess implements NuProcess
                                                        0 /*nDefaultTimeOut*/, sattr);
         if (WinBase.INVALID_HANDLE_VALUE.getPointer().equals(hStdoutWidow.getPointer()))
         {
-            throw new RuntimeException("Unable to create pipe");
+            throw new RuntimeException("Unable to create pipe, error " + Native.getLastError());
         }
 
         HANDLE stdoutHandle = NuKernel32.CreateFile(pipeName, WinNT.GENERIC_READ, WinNT.FILE_SHARE_READ /*dwShareMode*/, null,
@@ -425,7 +426,7 @@ public final class WindowsProcess implements NuProcess
                                           null /*hTemplateFile*/);
         if (stdoutHandle == null || WinBase.INVALID_HANDLE_VALUE.getPointer().equals(stdoutHandle.getPointer()))
         {
-            throw new RuntimeException("Unable to create pipe");
+            throw new RuntimeException("Unable to open pipe, error " + Native.getLastError());
         }
         stdoutPipe = new PipeBundle(stdoutHandle, ioCompletionKey);
 
@@ -522,6 +523,7 @@ public final class WindowsProcess implements NuProcess
 
         outClosed = false;
         errClosed = false;
+        inClosed = false;
 
         long peer = Native.malloc(BUFFER_CAPACITY);
         stdoutPipe.buffer = UnsafeHelper.wrapNativeMemory(peer, BUFFER_CAPACITY);

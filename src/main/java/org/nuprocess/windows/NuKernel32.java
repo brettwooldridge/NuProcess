@@ -77,8 +77,10 @@ public class NuKernel32
 
     public static native boolean ConnectNamedPipe(HANDLE hNamedPipe, OVERLAPPED lpo);
 
+    public static native boolean DisconnectNamedPipe(HANDLE hNamedPipe);
+
     public static native DWORD ResumeThread(HANDLE hThread);
-    
+
     public static native boolean GetExitCodeProcess(HANDLE hProcess, IntByReference exitCode);
 
     public static native boolean ReadFile(HANDLE hFile, Pointer lpBuffer, int nNumberOfBytesToRead,
