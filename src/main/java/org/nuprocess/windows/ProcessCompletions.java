@@ -50,7 +50,7 @@ public final class ProcessCompletions implements Runnable
     private BlockingQueue<WindowsProcess> pendingPool;
     private BlockingQueue<WindowsProcess> wantsWrite;
 
-    private Map<Integer, WindowsProcess> completionKeyToProcessMap;
+    private Map<Long, WindowsProcess> completionKeyToProcessMap;
 
     private volatile CyclicBarrier startBarrier;
     private AtomicBoolean isRunning;
@@ -69,7 +69,7 @@ public final class ProcessCompletions implements Runnable
 
     public ProcessCompletions()
     {
-        completionKeyToProcessMap = new HashMap<Integer, WindowsProcess>();
+        completionKeyToProcessMap = new HashMap<Long, WindowsProcess>();
         pendingPool = new LinkedBlockingQueue<WindowsProcess>();
         wantsWrite = new LinkedBlockingQueue<WindowsProcess>();
         deadPool = new LinkedList<WindowsProcess>();
@@ -110,15 +110,15 @@ public final class ProcessCompletions implements Runnable
     {
         try
         {
-            boolean status = NuKernel32.GetQueuedCompletionStatus(ioCompletionPort, numberOfBytes, completionKey, lpOverlapped, DEADPOOL_POLL_INTERVAL);
-            if (!status && lpOverlapped.getValue() == null) // timeout
+            int status = NuKernel32.GetQueuedCompletionStatus(ioCompletionPort, numberOfBytes, completionKey, lpOverlapped, DEADPOOL_POLL_INTERVAL);
+            if (status == 0 && lpOverlapped.getValue() == null) // timeout
             {
                 checkWaitWrites();
                 checkPendingPool();
                 return false;
             }
     
-            int key = (int) completionKey.getValue().longValue();
+            long key = completionKey.getValue().longValue();
             // explicit wake up by us to process pending want writes and registrations
             if (key == 0)
             {
@@ -246,7 +246,7 @@ public final class ProcessCompletions implements Runnable
             stdinPipe.registered = true;
         }
 
-        if (!NuKernel32.WriteFile(stdinPipe.pipeHandle, stdinPipe.bufferPointer, 0, null, stdinPipe.overlapped)
+        if (NuKernel32.WriteFile(stdinPipe.pipeHandle, stdinPipe.bufferPointer, 0, null, stdinPipe.overlapped) == 0
             && Native.getLastError() != WinNT.ERROR_IO_PENDING)
         {
             process.stdinClose();
@@ -255,7 +255,7 @@ public final class ProcessCompletions implements Runnable
 
     private void queueRead(WindowsProcess process, WindowsProcess.PipeBundle pipe, int stdX)
     {
-        if (!NuKernel32.ReadFile(pipe.pipeHandle, pipe.bufferPointer, NuProcess.BUFFER_CAPACITY, null, pipe.overlapped))
+        if (NuKernel32.ReadFile(pipe.pipeHandle, pipe.bufferPointer, NuProcess.BUFFER_CAPACITY, null, pipe.overlapped) == 0)
         {
             int lastError = Native.getLastError();
             switch (lastError)

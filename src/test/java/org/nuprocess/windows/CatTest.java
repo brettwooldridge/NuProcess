@@ -46,7 +46,7 @@ public class CatTest
             AtomicInteger[] sizes = new AtomicInteger[50];
             LottaProcessListener[] listeners = new LottaProcessListener[50];
     
-            for (int i = 0; i < 50; i++)
+            for (int i = 0; i < listeners.length; i++)
             {
                 semaphores[i] = new Semaphore(0);
                 sizes[i] = new AtomicInteger();
@@ -138,13 +138,17 @@ public class CatTest
     private static class LottaProcessListener extends NuAbstractProcessHandler
     {
         private NuProcess nuProcess;
-        private StringBuffer sb;
-        private int counter;
+        private int writes;
+        private int reads;
+        private int[] track;
+        private int exitCode;
         private Semaphore semaphore;
         private AtomicInteger size;
 
         private Adler32 readAdler32;
         private Adler32 writeAdler32;
+        private byte[] bytes;
+        
 
         LottaProcessListener(Semaphore semaphore, AtomicInteger size)
         {
@@ -154,11 +158,15 @@ public class CatTest
             this.readAdler32 = new Adler32();
             this.writeAdler32 = new Adler32();
 
-            sb = new StringBuffer();
+            this.track = new int[1000];
+
+            StringBuffer sb = new StringBuffer();
             for (int i = 0; i < 6000; i++)
             {
                 sb.append("1234567890");
             }
+
+            bytes = sb.toString().getBytes();
         }
 
         @Override
@@ -171,6 +179,7 @@ public class CatTest
         @Override
         public void onExit(int statusCode)
         {
+            exitCode = statusCode;
             semaphore.release();
         }
 
@@ -179,30 +188,41 @@ public class CatTest
         {
             if (buffer == null)
             {
+                if (size.get() != 600000)
+                {
+                    System.err.println("Premature close of stdout");
+                }
+                nuProcess.stdinClose();
                 return;
             }
+
+            track[reads] = buffer.remaining();
+            reads++;
 
             byte[] bytes = new byte[buffer.remaining()];
             buffer.get(bytes);
             readAdler32.update(bytes);
             size.addAndGet(bytes.length);
+
+            if (size.get() == 600000 || reads == 1000)
+            {
+                nuProcess.stdinClose();
+            }
         }
 
         @Override
         public boolean onStdinReady(ByteBuffer buffer)
         {
-            if (counter++ >= 10)
-            {
-                nuProcess.stdinClose();
-                return false;
-            }
-
-            byte[] bytes = sb.toString().getBytes();
             writeAdler32.update(bytes);
 
             buffer.put(bytes);
             buffer.flip();
-            return true;
+            return ++writes < 10;
+        }
+
+        int getExitCode()
+        {
+            return exitCode;
         }
 
         boolean checkAdlers()

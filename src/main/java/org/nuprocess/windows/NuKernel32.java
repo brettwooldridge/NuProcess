@@ -64,7 +64,7 @@ public class NuKernel32
 
     public static native int WaitForSingleObject(HANDLE hHandle, int dwMilliseconds);
 
-    public static native boolean GetQueuedCompletionStatus(HANDLE completionPort, IntByReference numberOfBytes, 
+    public static native int GetQueuedCompletionStatus(HANDLE completionPort, IntByReference numberOfBytes, 
                                                            ULONG_PTRByReference completionKey, PointerByReference lpOverlapped,
                                                            int dwMilliseconds);
 
@@ -75,7 +75,7 @@ public class NuKernel32
                                                  int nOutBufferSize, int nInBufferSize, int nDefaultTimeOut,
                                                  SECURITY_ATTRIBUTES securityAttributes);
 
-    public static native boolean ConnectNamedPipe(HANDLE hNamedPipe, OVERLAPPED lpo);
+    public static native int ConnectNamedPipe(HANDLE hNamedPipe, OVERLAPPED lpo);
 
     public static native boolean DisconnectNamedPipe(HANDLE hNamedPipe);
 
@@ -83,10 +83,10 @@ public class NuKernel32
 
     public static native boolean GetExitCodeProcess(HANDLE hProcess, IntByReference exitCode);
 
-    public static native boolean ReadFile(HANDLE hFile, Pointer lpBuffer, int nNumberOfBytesToRead,
+    public static native int ReadFile(HANDLE hFile, Pointer lpBuffer, int nNumberOfBytesToRead,
                                           IntByReference lpNumberOfBytesRead, NuKernel32.OVERLAPPED lpOverlapped);
 
-    public static native boolean WriteFile(HANDLE hFile, Pointer lpBuffer, int nNumberOfBytesToWrite,
+    public static native int WriteFile(HANDLE hFile, Pointer lpBuffer, int nNumberOfBytesToWrite,
                                            IntByReference lpNumberOfBytesWritten, NuKernel32.OVERLAPPED lpOverlapped);
 
     /**

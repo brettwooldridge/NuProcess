@@ -54,7 +54,7 @@ public final class WindowsProcess implements NuProcess
 
     private static final boolean IS_SOFTEXIT_DETECTION;
 
-    private static final int BUFFER_SIZE = 4096;
+    private static final int BUFFER_SIZE = 65536;
 
     private static final ProcessCompletions[] processors;
     private static int processorRoundRobin;
@@ -316,19 +316,11 @@ public final class WindowsProcess implements NuProcess
 
             try
             {
-//                ByteBuffer byteBuffer = ByteBuffer.allocate(BUFFER_CAPACITY);
                 stdinPipe.buffer.clear();
-                boolean wantMore = processListener.onStdinReady(stdinPipe.buffer);
-                userWantsWrite.set(wantMore);
+                userWantsWrite.set(processListener.onStdinReady(stdinPipe.buffer));
+                remainingWrite = stdinPipe.buffer.remaining();
 
-//                if (byteBuffer.hasRemaining())
-//                {
-//                    byte[] array = byteBuffer.array();
-                    remainingWrite = stdinPipe.buffer.remaining();
-//                    stdinPipe.buffer.write(0, array, 0, remainingWrite);
-//                }
-
-                return wantMore;
+                return true;
             }
             catch (Exception e)
             {
@@ -402,118 +394,61 @@ public final class WindowsProcess implements NuProcess
 
     private void createPipes()
     {
-        int lastError = 0;
-
         SECURITY_ATTRIBUTES sattr = new SECURITY_ATTRIBUTES();
         sattr.dwLength = new DWORD(sattr.size());
         sattr.bInheritHandle = true;
         sattr.lpSecurityDescriptor = null;
 
-        int dwOpenMode = NuKernel32.PIPE_ACCESS_INBOUND | NuKernel32.FILE_FLAG_OVERLAPPED;
-
-        /* stdout pipe */
-        int ioCompletionKey = namedPipeCounter.getAndIncrement();
+        // ################ STDOUT PIPE ################
+        long ioCompletionKey = namedPipeCounter.getAndIncrement();
         WString pipeName = new WString("\\\\.\\pipe\\NuProcess" + ioCompletionKey);
-        hStdoutWidow = NuKernel32.CreateNamedPipeW(pipeName, dwOpenMode, 0 /*dwPipeMode*/, 1 /*nMaxInstances*/, BUFFER_SIZE, BUFFER_SIZE,
-                                                       0 /*nDefaultTimeOut*/, sattr);
-        if (WinBase.INVALID_HANDLE_VALUE.getPointer().equals(hStdoutWidow.getPointer()))
-        {
-            throw new RuntimeException("Unable to create pipe, error " + Native.getLastError());
-        }
+        hStdoutWidow = NuKernel32.CreateNamedPipeW(pipeName, NuKernel32.PIPE_ACCESS_INBOUND,
+                                                   0 /*dwPipeMode*/, 1 /*nMaxInstances*/,
+                                                   BUFFER_SIZE, BUFFER_SIZE,
+                                                   0 /*nDefaultTimeOut*/, sattr);
+        checkHandleValidity(hStdoutWidow);
 
-        HANDLE stdoutHandle = NuKernel32.CreateFile(pipeName, WinNT.GENERIC_READ, WinNT.FILE_SHARE_READ /*dwShareMode*/, null,
-                                                      WinNT.OPEN_EXISTING /*dwCreationDisposition*/, WinNT.FILE_ATTRIBUTE_NORMAL | WinNT.FILE_FLAG_OVERLAPPED /*dwFlagsAndAttributes*/,
-                                          null /*hTemplateFile*/);
-        if (stdoutHandle == null || WinBase.INVALID_HANDLE_VALUE.getPointer().equals(stdoutHandle.getPointer()))
-        {
-            throw new RuntimeException("Unable to open pipe, error " + Native.getLastError());
-        }
+        HANDLE stdoutHandle = NuKernel32.CreateFile(pipeName, WinNT.GENERIC_READ, WinNT.FILE_SHARE_READ, null,
+                                                    WinNT.OPEN_EXISTING,
+                                                    WinNT.FILE_ATTRIBUTE_NORMAL | WinNT.FILE_FLAG_OVERLAPPED,
+                                                    null /*hTemplateFile*/);
+        checkHandleValidity(stdoutHandle);
         stdoutPipe = new PipeBundle(stdoutHandle, ioCompletionKey);
+        checkPipeConnected(NuKernel32.ConnectNamedPipe(hStdoutWidow, null));
 
-        OVERLAPPED overlapped = new OVERLAPPED();
-        overlapped.clear();
-        overlapped.hEvent = NuKernel32.CreateEvent(null, true, false, null);
-        boolean status = NuKernel32.ConnectNamedPipe(hStdoutWidow, overlapped);
-        lastError = Native.getLastError();
-        if (!status && lastError == WinNT.ERROR_IO_PENDING)
-        {
-            NuKernel32.WaitForSingleObject(overlapped.hEvent, WinNT.INFINITE);
-//            status = KERNEL32.HasOverlappedIoCompleted(overlapped);
-        }
-        NuKernel32.CloseHandle(overlapped.hEvent);
-        if (!status && (lastError != WinNT.ERROR_PIPE_CONNECTED))
-        {
-            throw new RuntimeException("Unable to connect pipe, error: " + lastError);
-        }
-
-        /* stderr pipe */
+        // ################ STDERR PIPE ################
         ioCompletionKey = namedPipeCounter.getAndIncrement();
         pipeName = new WString("\\\\.\\pipe\\NuProcess" + ioCompletionKey);
-        hStderrWidow = NuKernel32.CreateNamedPipeW(pipeName, dwOpenMode, 0 /*dwPipeMode*/, 1 /*nMaxInstances*/, BUFFER_SIZE, BUFFER_SIZE,
-                                                       0 /*nDefaultTimeOut*/, sattr);
-        if (WinBase.INVALID_HANDLE_VALUE.getPointer().equals(hStderrWidow.getPointer()))
-        {
-            throw new RuntimeException("Unable to create pipe");
-        }
+        hStderrWidow = NuKernel32.CreateNamedPipeW(pipeName, NuKernel32.PIPE_ACCESS_INBOUND,
+                                                   0 /*dwPipeMode*/, 1 /*nMaxInstances*/,
+                                                   BUFFER_SIZE, BUFFER_SIZE,
+                                                   0 /*nDefaultTimeOut*/, sattr);
+        checkHandleValidity(hStderrWidow);
 
-        HANDLE stderrHandle = NuKernel32.CreateFile(pipeName, WinNT.GENERIC_READ, WinNT.FILE_SHARE_READ /*dwShareMode*/, null,
-                                                      WinNT.OPEN_EXISTING /*dwCreationDisposition*/, WinNT.FILE_ATTRIBUTE_NORMAL | WinNT.FILE_FLAG_OVERLAPPED /*dwFlagsAndAttributes*/,
-                                          null /*hTemplateFile*/);
-        if (stderrHandle == null || WinBase.INVALID_HANDLE_VALUE.getPointer().equals(stderrHandle.getPointer()))
-        {
-            throw new RuntimeException("Unable to create pipe");
-        }
+        HANDLE stderrHandle = NuKernel32.CreateFile(pipeName, WinNT.GENERIC_READ, WinNT.FILE_SHARE_READ, null,
+                                                    WinNT.OPEN_EXISTING,
+                                                    WinNT.FILE_ATTRIBUTE_NORMAL | WinNT.FILE_FLAG_OVERLAPPED,
+                                                    null /*hTemplateFile*/);
+        checkHandleValidity(stderrHandle);
         stderrPipe = new PipeBundle(stderrHandle, ioCompletionKey);
+        checkPipeConnected(NuKernel32.ConnectNamedPipe(hStderrWidow, null));
 
-        overlapped.clear();
-        overlapped.hEvent = NuKernel32.CreateEvent(null, true, false, null);
-        status = NuKernel32.ConnectNamedPipe(hStderrWidow, overlapped);
-        lastError = Native.getLastError();
-        if (!status && lastError == WinNT.ERROR_IO_PENDING)
-        {
-            NuKernel32.WaitForSingleObject(overlapped.hEvent, WinNT.INFINITE);
-//            status = KERNEL32.HasOverlappedIoCompleted(overlapped);
-        }
-        NuKernel32.CloseHandle(overlapped.hEvent);
-        if (!status && (lastError != WinNT.ERROR_PIPE_CONNECTED))
-        {
-            throw new RuntimeException("Unable to connect pipe, error: " + lastError);
-        }
-
-        /* stdin pipe */
+        // ################ STDIN PIPE ################
         ioCompletionKey = namedPipeCounter.getAndIncrement();
-        dwOpenMode = NuKernel32.PIPE_ACCESS_OUTBOUND | NuKernel32.FILE_FLAG_OVERLAPPED;
         pipeName = new WString("\\\\.\\pipe\\NuProcess" + ioCompletionKey);
-        hStdinWidow = NuKernel32.CreateNamedPipeW(pipeName, dwOpenMode, 0 /*dwPipeMode*/, 1 /*nMaxInstances*/, BUFFER_SIZE, BUFFER_SIZE,
-                                                       0 /*nDefaultTimeOut*/, sattr);
-        if (WinBase.INVALID_HANDLE_VALUE.getPointer().equals(hStdinWidow.getPointer()))
-        {
-            throw new RuntimeException("Unable to create pipe");
-        }
+        hStdinWidow = NuKernel32.CreateNamedPipeW(pipeName, NuKernel32.PIPE_ACCESS_OUTBOUND,
+                                                  0 /*dwPipeMode*/, 1 /*nMaxInstances*/, 
+                                                  BUFFER_SIZE, BUFFER_SIZE,
+                                                  0 /*nDefaultTimeOut*/, sattr);
+        checkHandleValidity(hStdinWidow);
 
-        HANDLE stdinHandle = NuKernel32.CreateFile(pipeName, WinNT.GENERIC_WRITE, WinNT.FILE_SHARE_WRITE /*dwShareMode*/, null,
-                                                     WinNT.OPEN_EXISTING /*dwCreationDisposition*/, WinNT.FILE_ATTRIBUTE_NORMAL | WinNT.FILE_FLAG_OVERLAPPED /*dwFlagsAndAttributes*/,
-                                          null /*hTemplateFile*/);
-        if (WinBase.INVALID_HANDLE_VALUE.getPointer().equals(stdinHandle.getPointer()))
-        {
-            throw new RuntimeException("Unable to create pipe");
-        }
+        HANDLE stdinHandle = NuKernel32.CreateFile(pipeName, WinNT.GENERIC_WRITE, WinNT.FILE_SHARE_WRITE, null,
+                                                   WinNT.OPEN_EXISTING,
+                                                   WinNT.FILE_ATTRIBUTE_NORMAL | WinNT.FILE_FLAG_OVERLAPPED,
+                                                   null /*hTemplateFile*/);
+        checkHandleValidity(stdinHandle);
         stdinPipe = new PipeBundle(stdinHandle, ioCompletionKey);
-
-        overlapped.clear();
-        overlapped.hEvent = NuKernel32.CreateEvent(null, true, false, null);
-        status = NuKernel32.ConnectNamedPipe(hStdinWidow, overlapped);
-        lastError = Native.getLastError();
-        if (!status && lastError == WinNT.ERROR_IO_PENDING)
-        {
-            NuKernel32.WaitForSingleObject(overlapped.hEvent, WinNT.INFINITE);
-//            status = KERNEL32.HasOverlappedIoCompleted(overlapped);
-        }
-        NuKernel32.CloseHandle(overlapped.hEvent);
-        if (!status && (lastError != WinNT.ERROR_PIPE_CONNECTED))
-        {
-            throw new RuntimeException("Unable to connect pipe, error: " + lastError);
-        }
+        checkPipeConnected(NuKernel32.ConnectNamedPipe(hStdinWidow, null));
     }
 
     private void afterStart()
@@ -624,6 +559,23 @@ public final class WindowsProcess implements NuProcess
         return sb.toString();
     }
 
+    private void checkHandleValidity(HANDLE handle)
+    {
+        if (WinBase.INVALID_HANDLE_VALUE.getPointer().equals(handle))
+        {
+            throw new RuntimeException("Unable to create pipe, error " + Native.getLastError());
+        }
+    }
+
+    private void checkPipeConnected(int status)
+    {
+        int lastError;
+        if (status == 0 && ((lastError = Native.getLastError()) != WinNT.ERROR_PIPE_CONNECTED))
+        {
+            throw new RuntimeException("Unable to connect pipe, error: " + lastError);
+        }
+    }
+
     private static final class NameComparator implements Comparator<String>
     {
         public int compare(String s1, String s2)
@@ -662,13 +614,13 @@ public final class WindowsProcess implements NuProcess
     static final class PipeBundle
     {
         final OVERLAPPED overlapped;
-        final int ioCompletionKey;
+        final long ioCompletionKey;
         final HANDLE pipeHandle;
         ByteBuffer buffer;
         Pointer bufferPointer;
         boolean registered;
 
-        PipeBundle(HANDLE pipeHandle, int ioCompletionKey)
+        PipeBundle(HANDLE pipeHandle, long ioCompletionKey)
         {
             this.pipeHandle = pipeHandle;
             this.ioCompletionKey = ioCompletionKey;
