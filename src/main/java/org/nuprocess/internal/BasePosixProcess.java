@@ -39,6 +39,7 @@ public abstract class BasePosixProcess implements NuProcess
     protected static final boolean IS_MAC = System.getProperty("os.name").toLowerCase().contains("mac");
     protected static final boolean IS_LINUX = System.getProperty("os.name").toLowerCase().contains("linux");
     private static final boolean LINUX_USE_VFORK = Boolean.parseBoolean(System.getProperty("org.nuprocess.linuxUseVfork", "true"));
+    private static final boolean IS_SOFTEXIT_DETECTION;
 
     protected static IEventProcessor<? extends BasePosixProcess>[] processors;
     protected static int processorRoundRobin;
@@ -76,6 +77,8 @@ public abstract class BasePosixProcess implements NuProcess
 
     static
     {
+        IS_SOFTEXIT_DETECTION = Boolean.valueOf(System.getProperty("org.nuprocess.softExitDetection", "true"));
+
         int numThreads = 1;
         String threads = System.getProperty("org.nuprocess.threads", "auto");
         if ("auto".equals(threads))
@@ -255,6 +258,11 @@ public abstract class BasePosixProcess implements NuProcess
     public AtomicInteger getStderr()
     {
         return stderr;
+    }
+
+    public boolean isSoftExit()
+    {
+        return (IS_SOFTEXIT_DETECTION && outClosed && errClosed);
     }
 
     @Override

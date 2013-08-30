@@ -19,6 +19,8 @@ package org.nuprocess.linux;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
 
 import org.nuprocess.NuProcess;
 import org.nuprocess.internal.BaseEventProcessor;
@@ -32,9 +34,13 @@ import com.sun.jna.ptr.IntByReference;
  */
 class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
 {
+    private static final int EVENT_POOL_SIZE = 32;
+
     private int epoll;
     private EpollEvent triggeredEvent;
     private List<LinuxProcess> deadPool;
+
+    private static BlockingQueue<EpollEvent> eventPool;
 
     ProcessEpoll()
     {
@@ -46,6 +52,11 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
 
         triggeredEvent = new EpollEvent();
         deadPool = new LinkedList<LinuxProcess>();
+        eventPool = new ArrayBlockingQueue<EpollEvent>(EVENT_POOL_SIZE);
+        for (int i = 0; i < EVENT_POOL_SIZE; i++)
+        {
+        	eventPool.add(new EpollEvent());
+        }
     }
 
     // ************************************************************************
@@ -60,50 +71,63 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
         fildesToProcessMap.put(process.getStdout().get(), process);
         fildesToProcessMap.put(process.getStderr().get(), process);
 
-        EpollEvent event = new EpollEvent();
-
-        event.setEvents(EpollEvent.EPOLLIN);
-        event.setFd(process.getStdout().get());
-        int rc = LibEpoll.epoll_ctl(epoll, EpollEvent.EPOLL_CTL_ADD, process.getStdout().get(), event.getPointer());
-        if (rc == -1)
+        try
         {
-            rc = Native.getLastError();
-            event.free();
-            throw new RuntimeException("Unable to register new events to epoll, errorcode: " + rc);
+	        EpollEvent event = eventPool.take();
+	        event.setEvents(EpollEvent.EPOLLIN);
+	        event.setFd(process.getStdout().get());
+	        int rc = LibEpoll.epoll_ctl(epoll, EpollEvent.EPOLL_CTL_ADD, process.getStdout().get(), event.getPointer());
+	        if (rc == -1)
+	        {
+	            rc = Native.getLastError();
+	            eventPool.put(event);
+	            throw new RuntimeException("Unable to register new events to epoll, errorcode: " + rc);
+	        }
+            eventPool.put(event);
+	
+	        event = eventPool.take();
+	        event.setEvents(EpollEvent.EPOLLIN);
+	        event.setFd(process.getStderr().get());
+	        rc = LibEpoll.epoll_ctl(epoll, EpollEvent.EPOLL_CTL_ADD, process.getStderr().get(), event.getPointer());
+	        if (rc == -1)
+	        {
+	            rc = Native.getLastError();
+	            eventPool.put(event);
+	            throw new RuntimeException("Unable to register new events to epoll, errorcode: " + rc);
+	        }
+            eventPool.put(event);
         }
-        event.free();
-
-        event = new EpollEvent();
-
-        event.setEvents(EpollEvent.EPOLLIN);
-        event.setFd(process.getStderr().get());
-        rc = LibEpoll.epoll_ctl(epoll, EpollEvent.EPOLL_CTL_ADD, process.getStderr().get(), event.getPointer());
-        if (rc == -1)
+        catch (InterruptedException ie)
         {
-            rc = Native.getLastError();
-            event.free();
-            throw new RuntimeException("Unable to register new events to epoll, errorcode: " + rc);
+        	throw new RuntimeException(ie);
         }
-        event.free();
     }
 
     @Override
     public void queueWrite(int stdin)
     {
-        EpollEvent event = new EpollEvent();
-        event.setEvents(EpollEvent.EPOLLOUT | EpollEvent.EPOLLONESHOT | EpollEvent.EPOLLRDHUP | EpollEvent.EPOLLHUP);
-        event.setFd(stdin);
-        int rc = LibEpoll.epoll_ctl(epoll, EpollEvent.EPOLL_CTL_MOD, stdin, event.getPointer());
-        if (rc == -1)
-        {
-           rc = LibEpoll.epoll_ctl(epoll, EpollEvent.EPOLL_CTL_DEL, stdin, event.getPointer());
-           rc = LibEpoll.epoll_ctl(epoll, EpollEvent.EPOLL_CTL_ADD, stdin, event.getPointer());
-        }
-        event.free();
-        if (rc == -1)
-        {
-            throw new RuntimeException("Unable to register new event to epoll queue");
-        }
+    	try
+    	{
+	        EpollEvent event = eventPool.take();
+	        event.setEvents(EpollEvent.EPOLLOUT | EpollEvent.EPOLLONESHOT | EpollEvent.EPOLLRDHUP | EpollEvent.EPOLLHUP);
+	        event.setFd(stdin);
+	        int rc = LibEpoll.epoll_ctl(epoll, EpollEvent.EPOLL_CTL_MOD, stdin, event.getPointer());
+	        if (rc == -1)
+	        {
+	           rc = LibEpoll.epoll_ctl(epoll, EpollEvent.EPOLL_CTL_DEL, stdin, event.getPointer());
+	           rc = LibEpoll.epoll_ctl(epoll, EpollEvent.EPOLL_CTL_ADD, stdin, event.getPointer());
+	        }
+
+	        eventPool.put(event);
+	        if (rc == -1)
+	        {
+	            throw new RuntimeException("Unable to register new event to epoll queue");
+	        }
+    	}
+    	catch (InterruptedException ie)
+    	{
+    		throw new RuntimeException(ie);
+    	}
     }
 
     @Override
@@ -249,7 +273,6 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
             int rc = LibC.waitpid(process.getPid(), exitCode, LibC.WNOHANG);
             if (rc == 0)
             {
-                System.err.println("Still waiting for " + process.getPid());
                 continue;
             }
 

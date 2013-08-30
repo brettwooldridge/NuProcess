@@ -69,8 +69,6 @@ public abstract class BaseEventProcessor<T extends BasePosixProcess> implements 
             {
                 idleCount = process() ? 0 : (idleCount + 1);
             }
-
-            isRunning.set(false);
         }
         catch (Exception e)
         {

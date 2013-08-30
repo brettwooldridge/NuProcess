@@ -92,7 +92,7 @@ public final class WindowsProcess implements NuProcess
     {
         namedPipeCounter = new AtomicInteger(100);
 
-        IS_SOFTEXIT_DETECTION = Boolean.valueOf(System.getProperty("org.nuprocess.windows.softExitDetection", "true"));
+        IS_SOFTEXIT_DETECTION = Boolean.valueOf(System.getProperty("org.nuprocess.softExitDetection", "true"));
 
         String threads = System.getProperty("org.nuprocess.threads", "auto");
         if ("auto".equals(threads))
