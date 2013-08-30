@@ -61,17 +61,18 @@ public class OldSchool
     public static class InPumper implements Runnable
     {
         private OutputStream outputStream;
-        private StringBuffer sb;
+        private byte[] bytes;
 
         public InPumper(OutputStream outputStream)
         {
             this.outputStream = outputStream;
-            this.sb = new StringBuffer();
+            StringBuffer sb = new StringBuffer();
 
             for (int i = 0; i < 6000; i++)
             {
                 sb.append("1234567890");
             }
+            bytes = sb.toString().getBytes();
         }
 
         @Override
@@ -81,7 +82,6 @@ public class OldSchool
             {
                 for (int i = 0; i < 10; i++)
                 {
-                    byte[] bytes = sb.toString().getBytes();
                     outputStream.write(bytes);
                 }
 
