@@ -1,6 +1,7 @@
 package org.nuprocess.unix;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
@@ -75,7 +76,8 @@ public class InterruptTest
         }
 
         semaphore.acquireUninterruptibly();
-        Assert.assertEquals("Output did not matched expected result", 0, exitCode.get());
+		int exit = process.waitFor();
+		Assert.assertTrue("Process exit code did not match", (exit == 0 || exit == Integer.MAX_VALUE));
     }
 
     @Test
@@ -117,15 +119,22 @@ public class InterruptTest
                 processes.add(pb.start());
             }
     
+            List<NuProcess> deadProcs = new ArrayList<>();
             while (true)
             {
                 Thread.sleep(20);
                 int dead = (int) (Math.random() * processes.size());
                 BasePosixProcess bpp = (BasePosixProcess) processes.remove(dead);
+                deadProcs.add(bpp);
                 LibC.kill(bpp.getPid(), LibC.SIGTERM);
     
                 if (processes.isEmpty())
                 {
+                	for (int i = 0; i < 50; i++)
+                	{
+                		int exit = deadProcs.get(i).waitFor();
+                		Assert.assertTrue("Process exit code did not match", (exit == 0 || exit == Integer.MAX_VALUE));
+                	}
                     break;
                 }
             }
