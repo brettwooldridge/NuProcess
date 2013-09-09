@@ -22,11 +22,9 @@ what a modern CPU can do.  Many of our attempts at parallelization of processing
 impact on performance.
 
 #### What kinda speed are we talking? ####
-Well, if course it depends on your workload, but let's take an example.  Artifical though it may be, it likely stresses
-the system more than what you might throw at it.
-
-Take the ``/bin/cat`` process in Unix (Linux, OS X, etc.).  If you launch it without any parameters, it reads whatever
-you feed into ``stdin`` and spits it back out of ``stdout``.  Perfect for testing.
+Well, if course it depends on your workload, but let's take an example.  Take the ``/bin/cat`` process in Unix (Linux, OS X, etc.).
+If you launch it without any parameters, it reads whatever you feed into ``stdin`` and spits it back out of ``stdout``.  Perfect for
+testing.
 
 Let's say for fun we want to spawn 500 instances of ``/bin/cat`` at one time, pump 600K of data into *each* one (stdin) 
 while simultaneously reading the data out (stdout).  Actually, we don't have a choice about the reading otherwise the
