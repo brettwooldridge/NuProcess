@@ -6,6 +6,7 @@ import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.Assert;
@@ -74,7 +75,7 @@ public class InterruptTest
         }
 
         semaphore.acquireUninterruptibly();
-		int exit = process.waitFor();
+		int exit = process.waitFor(2, TimeUnit.SECONDS);
 		Assert.assertTrue("Process exit code did not match", (exit == 0 || exit == Integer.MAX_VALUE));
     }
 
@@ -109,7 +110,7 @@ public class InterruptTest
         };
 
         NuProcessBuilder pb = new NuProcessBuilder(Arrays.asList("src\\test\\java\\org\\nuprocess\\windows\\cat.exe"), processListener);
-        List<NuProcess> processes = new LinkedList<>();
+        List<NuProcess> processes = new LinkedList<NuProcess>();
         for (int times = 0; times < 25; times++)
         {
             for (int i = 0; i < 50; i++)
@@ -130,7 +131,7 @@ public class InterruptTest
                 {
                 	for (int i = 0; i < 50; i++)
                 	{
-                		int exit = deadProcs.get(i).waitFor();
+                		int exit = deadProcs.get(i).waitFor(2, TimeUnit.SECONDS);
                 		Assert.assertTrue("Process exit code did not match", (exit == 0 || exit == Integer.MAX_VALUE));
                 	}
                     break;

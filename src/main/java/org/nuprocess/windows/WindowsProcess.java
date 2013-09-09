@@ -25,6 +25,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -182,7 +183,7 @@ public final class WindowsProcess implements NuProcess
     }
 
     @Override
-    public int waitFor() throws InterruptedException
+    public int waitFor(long timeout, TimeUnit unit) throws InterruptedException
     {
         // TODO: implement blocking wait
         return exitCode.get();

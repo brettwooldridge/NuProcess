@@ -16,6 +16,8 @@
 
 package org.nuprocess;
 
+import java.util.concurrent.TimeUnit;
+
 
 /**
  * @author Brett Wooldridge
@@ -26,7 +28,7 @@ public interface NuProcess
 
     NuProcess start();
 
-    int waitFor() throws InterruptedException;
+    int waitFor(long timeout, TimeUnit timeUnit) throws InterruptedException;
 
     void wantWrite();
 

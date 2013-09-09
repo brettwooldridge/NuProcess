@@ -22,6 +22,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -190,9 +191,13 @@ public abstract class BasePosixProcess implements NuProcess
     }
 
     @Override
-    public int waitFor() throws InterruptedException
+    public int waitFor(long timeout, TimeUnit unit) throws InterruptedException
     {
-        exitPending.await();
+        if (!exitPending.await(timeout, unit))
+        {
+            return Integer.MIN_VALUE;
+        }
+
         return exitCode.get();
     }
 
