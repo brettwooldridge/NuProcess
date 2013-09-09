@@ -17,8 +17,8 @@ public class OldSchool
     @Test
     public void lotOfProcesses() throws Exception
     {
-        ThreadPoolExecutor outExecutor = new ThreadPoolExecutor(50, 50, 10, TimeUnit.SECONDS, new LinkedBlockingQueue<Runnable>());
-        ThreadPoolExecutor inExecutor = new ThreadPoolExecutor(50, 50, 10, TimeUnit.SECONDS, new LinkedBlockingQueue<Runnable>());
+        ThreadPoolExecutor outExecutor = new ThreadPoolExecutor(500, 500, 10, TimeUnit.SECONDS, new LinkedBlockingQueue<Runnable>());
+        ThreadPoolExecutor inExecutor = new ThreadPoolExecutor(500, 500, 10, TimeUnit.SECONDS, new LinkedBlockingQueue<Runnable>());
         
         String command = "/bin/cat";
         if (System.getProperty("os.name").toLowerCase().contains("win"))
@@ -28,11 +28,11 @@ public class OldSchool
         ProcessBuilder pb = new ProcessBuilder(command);
         pb.redirectErrorStream(true);
 
-        for (int times = 0; times < 100; times++)
+        for (int times = 0; times < 40; times++)
         {
-            Process[] processes = new Process[50];
-            InPumper[] inPumpers = new InPumper[50];
-            OutPumper[] outPumpers = new OutPumper[50];
+            Process[] processes = new Process[500];
+            InPumper[] inPumpers = new InPumper[500];
+            OutPumper[] outPumpers = new OutPumper[500];
     
             for (int i = 0; i < processes.length; i++)
             {
@@ -89,6 +89,7 @@ public class OldSchool
             }
             catch (Exception e)
             {
+                System.err.println(e);
                 return;
             }
         }
@@ -127,6 +128,7 @@ public class OldSchool
             }
             catch (Exception e)
             {
+                System.err.println(e);
                 return;
             }
         }
