@@ -54,6 +54,8 @@ public class NuKernel32
                                                 WinBase.STARTUPINFO lpStartupInfo,
                                                 WinBase.PROCESS_INFORMATION lpProcessInformation);
 
+    public static native boolean TerminateProcess(HANDLE hProcess, int exitCode);
+
     public static native HANDLE CreateFile(WString lpFileName, int dwDesiredAccess, int dwShareMode,
                                            WinBase.SECURITY_ATTRIBUTES lpSecurityAttributes,
                                            int dwCreationDisposition, int dwFlagsAndAttributes,
