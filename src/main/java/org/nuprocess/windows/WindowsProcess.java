@@ -211,7 +211,7 @@ public final class WindowsProcess implements NuProcess
     @Override
     public void destroy()
     {
-        // TODO: implement destroy
+        NuKernel32.TerminateProcess(processInfo.hProcess, Integer.MAX_VALUE);
     }
 
     HANDLE getPid()
