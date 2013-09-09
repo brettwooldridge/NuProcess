@@ -76,6 +76,8 @@ public abstract class BasePosixProcess implements NuProcess
     private int remainingWrite;
     private int writeOffset;
 
+    private Pointer posix_spawn_file_actions;
+
     static
     {
         IS_SOFTEXIT_DETECTION = Boolean.valueOf(System.getProperty("org.nuprocess.softExitDetection", "true"));
@@ -168,6 +170,7 @@ public abstract class BasePosixProcess implements NuProcess
         catch (RuntimeException re)
         {
             // TODO remove from event processor pid map?
+            re.printStackTrace(System.err);
             onExit(Integer.MIN_VALUE);
         }
         finally
@@ -382,6 +385,7 @@ public abstract class BasePosixProcess implements NuProcess
         catch (Exception e)
         {
             // Don't let an exception thrown from the user's handler interrupt us
+            e.printStackTrace(System.err);
         }
     }
 
@@ -399,7 +403,6 @@ public abstract class BasePosixProcess implements NuProcess
             {
                 // EOF?
                 stdinClose();
-                // int rc = Native.getLastError();
                 return false;
             }
 
@@ -472,7 +475,7 @@ public abstract class BasePosixProcess implements NuProcess
         {
             CyclicBarrier spawnBarrier = myProcessor.getSpawnBarrier();
 
-            Thread t = new Thread(myProcessor, "ProcessKqueue" + mySlot);
+            Thread t = new Thread(myProcessor, (IS_LINUX ? "ProcessEpoll" : "ProcessKqueue") + mySlot);
             t.setDaemon(true);
             t.start();
 
@@ -507,7 +510,7 @@ public abstract class BasePosixProcess implements NuProcess
         int[] out = new int[2];
         int[] err = new int[2];
 
-        Pointer posix_spawn_file_actions = null;
+        posix_spawn_file_actions = null;
         if (IS_LINUX)
         {
             long peer = Native.malloc(80);
@@ -521,12 +524,12 @@ public abstract class BasePosixProcess implements NuProcess
         try
         {
             rc = LibC.pipe(in);
-            checkReturnCode(rc, "Create pipe() failed");
+            checkReturnCode(rc, "Create stdin pipe() failed");
             rc = LibC.pipe(out);
-            checkReturnCode(rc, "Create pipe() failed");
+            checkReturnCode(rc, "Create stdout pipe() failed");
 
             rc = LibC.pipe(err);
-            checkReturnCode(rc, "Create pipe() failed");
+            checkReturnCode(rc, "Create stderr pipe() failed");
 
             // Create spawn file actions
             rc = LibC.posix_spawn_file_actions_init(posix_spawn_file_actions);
@@ -569,12 +572,14 @@ public abstract class BasePosixProcess implements NuProcess
                 rc = LibC.fcntl(err[0], LibC.F_SETFL, LibC.fcntl(err[0], LibC.F_GETFL) | LibC.O_NONBLOCK);
             }
 
+            
             return posix_spawn_file_actions;
         }
         catch (RuntimeException e)
         {
+            e.printStackTrace(System.err);
+            
             LibC.posix_spawn_file_actions_destroy(posix_spawn_file_actions);
-
             initFailureCleanup(in, out, err);
             throw e;
         }
@@ -614,7 +619,7 @@ public abstract class BasePosixProcess implements NuProcess
     {
         if (rc != 0)
         {
-            throw new RuntimeException(failureMessage + ", return code: " + rc);
+            throw new RuntimeException(failureMessage + ", return code: " + rc + ", last error: " + Native.getLastError());
         }
     }
 }

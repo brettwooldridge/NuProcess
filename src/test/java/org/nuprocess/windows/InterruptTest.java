@@ -11,11 +11,14 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.Assert;
 import org.junit.Test;
+import org.junit.runner.RunWith;
 import org.nuprocess.NuAbstractProcessHandler;
 import org.nuprocess.NuProcess;
 import org.nuprocess.NuProcessBuilder;
 import org.nuprocess.NuProcessHandler;
+import org.nuprocess.RunOnlyOnWindows;
 
+@RunWith(value=RunOnlyOnWindows.class)
 public class InterruptTest
 {
 
@@ -118,7 +121,7 @@ public class InterruptTest
                 processes.add(pb.start());
             }
     
-            List<NuProcess> deadProcs = new ArrayList<>();
+            List<NuProcess> deadProcs = new ArrayList<NuProcess>();
             while (true)
             {
                 Thread.sleep(20);

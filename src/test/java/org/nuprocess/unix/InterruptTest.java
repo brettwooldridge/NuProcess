@@ -11,16 +11,18 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.Assert;
 import org.junit.Test;
+import org.junit.runner.RunWith;
 import org.nuprocess.NuAbstractProcessHandler;
 import org.nuprocess.NuProcess;
 import org.nuprocess.NuProcessBuilder;
 import org.nuprocess.NuProcessHandler;
+import org.nuprocess.RunOnlyOnUnix;
 import org.nuprocess.internal.BasePosixProcess;
 import org.nuprocess.internal.LibC;
 
+@RunWith(value=RunOnlyOnUnix.class)
 public class InterruptTest
 {
-
     @Test
     public void testInterrupt1() throws InterruptedException
     {
@@ -113,21 +115,25 @@ public class InterruptTest
 
         NuProcessBuilder pb = new NuProcessBuilder(Arrays.asList("/bin/cat"), processListener);
         List<NuProcess> processes = new LinkedList<NuProcess>();
-        for (int times = 0; times < 25; times++)
+        for (int times = 0; times < 1; times++)
         {
             for (int i = 0; i < 50; i++)
             {
                 processes.add(pb.start());
             }
-    
-            List<NuProcess> deadProcs = new ArrayList<>();
+    System.err.println("Starting the killing");
+            List<NuProcess> deadProcs = new ArrayList<NuProcess>();
             while (true)
             {
                 Thread.sleep(20);
                 int dead = (int) (Math.random() * processes.size());
                 BasePosixProcess bpp = (BasePosixProcess) processes.remove(dead);
+                if (bpp == null)
+                {
+                    continue;
+                }
                 deadProcs.add(bpp);
-                LibC.kill(bpp.getPid(), LibC.SIGTERM);
+                LibC.kill(bpp.getPid(), LibC.SIGKILL);
     
                 if (processes.isEmpty())
                 {
