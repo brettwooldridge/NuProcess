@@ -28,18 +28,18 @@ the system more than what you might throw at it.
 Take the ``/bin/cat`` process in Unix (Linux, OS X, etc.).  If you launch it without any parameters, it reads whatever
 you feed into ``stdin`` and spits it back out of ``stdout``.  Perfect for testing.
 
-Let's say for fun we want to spawn 50 instances of ``/bin/cat`` at one time, pump 600K of data into *each* one (stdin) 
+Let's say for fun we want to spawn 500 instances of ``/bin/cat`` at one time, pump 600K of data into *each* one (stdin) 
 while simultaneously reading the data out (stdout).  Actually, we don't have a choice about the reading otherwise the
-output pipe would fill up and the processes would stall.  When they're done, we'll do it another 99 times.  So to recap,
-in total we're going to start 5000 ``/bin/cat`` processes (in batches of 50), pump 600K of data into each and every one 
+output pipe would fill up and the processes would stall.  When they're done, we'll do it another 40 times.  So to recap,
+in total we're going to run 20000 ``/bin/cat`` processes (in batches of 500), pump 600K of data into each and every one 
 while pulling all the data out the other side.  Oh and running an Adler32 checksum to verify that everything went through
 okay.
 
 ##### Old school #####
 The conventional approach is to create a thread for pumping data in (stdin) and a thread for pumping data out (stdout).
-We actually need 50 of these (each) if we really want to run 50 processes in parallel.  Using a ``ThreadPoolExecutor``
+We actually need 500 of these (each) if we really want to run 500 processes in parallel.  Using a ``ThreadPoolExecutor``
 for each set of threads (one executor for stdin-threads and one for stdout-threads), we can at least cut the thread launch
-overhead on the last 99 iterations of our 100.  Still we're looking at 100 threads and no real way to get around it.
+overhead on the last 39 iterations of our 40.  Still we're looking at 1000 threads and no simple way to get around it.
 Other than that, it's basically trivial, and you can see the code in ``src/example/java/OldSchool.java``.
 
 ##### Nu school #####
