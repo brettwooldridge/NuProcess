@@ -228,9 +228,9 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
         fildesToProcessMap.remove(linuxProcess.getStdout().get());
         fildesToProcessMap.remove(linuxProcess.getStderr().get());
 
-        linuxProcess.close(linuxProcess.getStdin());
-        linuxProcess.close(linuxProcess.getStdout());
-        linuxProcess.close(linuxProcess.getStderr());
+//        linuxProcess.close(linuxProcess.getStdin());
+//        linuxProcess.close(linuxProcess.getStdout());
+//        linuxProcess.close(linuxProcess.getStderr());
 
         IntByReference exitCode = new IntByReference();
         int rc = LibC.waitpid(linuxProcess.getPid(), exitCode, LibC.WNOHANG);

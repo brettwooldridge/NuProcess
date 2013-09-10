@@ -116,7 +116,6 @@ public class NuProcessBuilder
             env[i++] = entrySet.getKey() + "=" + entrySet.getValue();
         }
 
-        NuProcess p = factory.createProcess(command, env, processListener);
-        return p.start();
+        return factory.createProcess(command, env, processListener);
     }
 }

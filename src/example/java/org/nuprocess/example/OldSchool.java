@@ -12,6 +12,14 @@ import java.util.zip.Adler32;
 import org.junit.Assert;
 import org.junit.Test;
 
+/**
+ * This class demonstrates how one might use the conventional java.lang.Process
+ * class to run 20,000 processes (in batches of 500, for 40 iterations).  It is
+ * used as kind of a benchmark to compare to the NuProcess method of accomplishing
+ * the same (see the NuSchool example).
+ *
+ * @author Brett Wooldridge
+ */
 public class OldSchool
 {
     @Test
@@ -25,6 +33,7 @@ public class OldSchool
         {
             command = "src\\test\\java\\org\\nuprocess\\windows\\cat.exe";
         }
+
         ProcessBuilder pb = new ProcessBuilder(command);
         pb.redirectErrorStream(true);
 
@@ -60,19 +69,23 @@ public class OldSchool
 
     public static class InPumper implements Runnable
     {
+        private static final byte[] bytes;
         private OutputStream outputStream;
-        private byte[] bytes;
 
-        public InPumper(OutputStream outputStream)
+        static
         {
-            this.outputStream = outputStream;
+            // Create 600K of data.
             StringBuffer sb = new StringBuffer();
-
             for (int i = 0; i < 6000; i++)
             {
                 sb.append("1234567890");
             }
             bytes = sb.toString().getBytes();
+        }
+
+        public InPumper(OutputStream outputStream)
+        {
+            this.outputStream = outputStream;
         }
 
         @Override

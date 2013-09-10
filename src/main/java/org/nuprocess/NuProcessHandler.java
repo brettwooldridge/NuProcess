@@ -98,16 +98,8 @@ public interface NuProcessHandler
     void onStderr(ByteBuffer buffer);
 
     /**
-     * @param available the amount of available space in the pipe, do not attempt
-     *                  to write more than this amount into stdin on your next
-     *                  {@code NuProcess#write()} attempt
+     * @param buffer 
      * @return true if you have more data to write, false otherwise
      */
     boolean onStdinReady(ByteBuffer buffer);
-
-    /**
-     * This method is invoked when the process closes it's side of the stdin
-     * pipe.
-     */
-    void onStdinClose();
 }

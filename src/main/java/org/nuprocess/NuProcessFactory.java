@@ -19,6 +19,9 @@ package org.nuprocess;
 import java.util.List;
 
 /**
+ * The NuProcess factory interface.  Instance of this interface create
+ * and start processes in a platform-specific fashion.
+ *
  * @author Brett Wooldridge
  */
 public interface NuProcessFactory

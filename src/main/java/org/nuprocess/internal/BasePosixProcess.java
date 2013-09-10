@@ -54,6 +54,7 @@ public abstract class BasePosixProcess implements NuProcess
     protected CountDownLatch exitPending;
 
     protected AtomicBoolean userWantsWrite;
+    protected AtomicBoolean userWantsStdinClose;
 
     protected ByteBuffer outBuffer;
     protected ByteBuffer inBuffer;
@@ -107,6 +108,7 @@ public abstract class BasePosixProcess implements NuProcess
         this.environment = env;
         this.processListener = processListener;
         this.userWantsWrite = new AtomicBoolean();
+        this.userWantsStdinClose = new AtomicBoolean();
         this.exitCode = new AtomicInteger();
         this.exitPending = new CountDownLatch(1);
         this.stdin = new AtomicInteger(-1);
@@ -116,7 +118,76 @@ public abstract class BasePosixProcess implements NuProcess
         this.errClosed = true;
     }
 
+    // ************************************************************************
+    //                        NuProcess interface methods
+    // ************************************************************************
+    
+    /** {@inheritDoc} */
     @Override
+    public int waitFor(long timeout, TimeUnit unit) throws InterruptedException
+    {
+        if (!exitPending.await(timeout, unit))
+        {
+            return Integer.MIN_VALUE;
+        }
+
+        return exitCode.get();
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void destroy()
+    {
+        if (exitPending.getCount() != 0)
+        {
+            LibC.kill(pid, LibC.SIGTERM);
+            IntByReference exit = new IntByReference();
+            LibC.waitpid(pid, exit, 0);
+            exitCode.set(exit.getValue());
+        }
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void wantWrite()
+    {
+        if (userWantsStdinClose.get())
+        {
+            throw new IllegalStateException("stdinClose() method has already been called.");
+        }
+
+        int fd = stdin.get();
+        if (fd != -1)
+        {
+            userWantsWrite.set(true);
+            myProcessor.queueWrite(fd);
+        }
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void closeStdin(boolean force)
+    {
+        int fd = stdin.get();
+        if (fd == -1)
+        {
+            return;
+        }
+
+        if (force)
+        {
+            stdinClose();
+            return;
+        }
+
+        userWantsStdinClose.compareAndSet(false, true);
+//        myProcessor.queueWrite(fd);
+    }
+
+    // ************************************************************************
+    //                             Public methods
+    // ************************************************************************
+
     public NuProcess start()
     {
         Pointer posix_spawn_file_actions = createPipes();
@@ -137,7 +208,6 @@ public abstract class BasePosixProcess implements NuProcess
             int rc = LibC.posix_spawnattr_init(posix_spawnattr);
             checkReturnCode(rc, "Internal call to posix_spawnattr_init() failed");
 
-            // Start the spawned process in suspended mode
             short flags = 0;
             if (IS_LINUX && LINUX_USE_VFORK)
             {
@@ -145,6 +215,7 @@ public abstract class BasePosixProcess implements NuProcess
             }
             else if (IS_MAC)
             {
+                // Start the spawned process in suspended mode
                 flags = LibC.POSIX_SPAWN_START_SUSPENDED | LibC.POSIX_SPAWN_CLOEXEC_DEFAULT;
             }
             LibC.posix_spawnattr_setflags(posix_spawnattr, flags);
@@ -161,9 +232,9 @@ public abstract class BasePosixProcess implements NuProcess
 
             callStart();
 
-            // Signal the spawned process to continue (unsuspend)
             if (IS_MAC)
             {
+                // Signal the spawned process to continue (unsuspend)
                 LibC.kill(pid, LibC.SIGCONT);
             }
         }
@@ -193,76 +264,21 @@ public abstract class BasePosixProcess implements NuProcess
         return this;
     }
 
-    @Override
-    public int waitFor(long timeout, TimeUnit unit) throws InterruptedException
-    {
-        if (!exitPending.await(timeout, unit))
-        {
-            return Integer.MIN_VALUE;
-        }
-
-        return exitCode.get();
-    }
-
-    @Override
-    public void destroy()
-    {
-        if (exitPending.getCount() != 0)
-        {
-            LibC.kill(pid, LibC.SIGTERM);
-            IntByReference exit = new IntByReference();
-            LibC.waitpid(pid, exit, 0);
-            exitCode.set(exit.getValue());
-        }
-    }
-
-    @Override
-    public void stdinClose()
-    {
-        int fd = stdin.get();
-        if (fd != -1)
-        {
-            myProcessor.closeStdin(fd);
-            close(stdin);
-        }
-    }
-
-    public void close(AtomicInteger stdX)
-    {
-        int fd = stdX.getAndSet(-1);
-        if (fd != -1)
-        {
-            LibC.close(fd);
-        }
-    }
-
-    /**
-     * @return the pid
-     */
     public int getPid()
     {
         return pid;
     }
 
-    /**
-     * @return the stdin
-     */
     public AtomicInteger getStdin()
     {
         return stdin;
     }
 
-    /**
-     * @return the stdout
-     */
     public AtomicInteger getStdout()
     {
         return stdout;
     }
 
-    /**
-     * @return the stderr
-     */
     public AtomicInteger getStderr()
     {
         return stderr;
@@ -273,14 +289,18 @@ public abstract class BasePosixProcess implements NuProcess
         return (IS_SOFTEXIT_DETECTION && outClosed && errClosed);
     }
 
-    @Override
-    public void wantWrite()
+    public boolean isStdinClosePending()
+    {
+        return userWantsStdinClose.get();
+    }
+
+    public void stdinClose()
     {
         int fd = stdin.get();
         if (fd != -1)
         {
-            userWantsWrite.set(true);
-            myProcessor.queueWrite(fd);
+            myProcessor.closeStdin(fd);
+            close(stdin);
         }
     }
 
@@ -391,18 +411,25 @@ public abstract class BasePosixProcess implements NuProcess
 
     public boolean writeStdin(int availability)
     {
+        if (remainingWrite <= 0 && userWantsStdinClose.get())
+        {
+            stdinClose();
+            return false;
+        }
+
         if (availability == 0)
         {
             return false;
         }
 
-        if (remainingWrite > 0)
+        int fd = stdin.get();
+        if (remainingWrite > 0 && fd != -1)
         {
-            int wrote = LibC.write(stdin.get(), inBufferPointer.share(writeOffset), Math.min(remainingWrite, availability));
+            int wrote = LibC.write(fd, inBufferPointer.share(writeOffset), Math.min(remainingWrite, availability));
             if (wrote == -1)
             {
                 // EOF?
-                stdinClose();
+                close(stdin);
                 return false;
             }
 
@@ -419,7 +446,7 @@ public abstract class BasePosixProcess implements NuProcess
 
         if (!userWantsWrite.get())
         {
-            return false;
+            return userWantsStdinClose.get();
         }
 
         try
@@ -499,6 +526,15 @@ public abstract class BasePosixProcess implements NuProcess
         catch (Exception e)
         {
             // Don't let an exception thrown from the user's handler interrupt us
+        }
+    }
+
+    private void close(AtomicInteger stdX)
+    {
+        int fd = stdX.getAndSet(-1);
+        if (fd != -1)
+        {
+            LibC.close(fd);
         }
     }
 

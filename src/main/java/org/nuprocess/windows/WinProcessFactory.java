@@ -26,13 +26,18 @@ import org.nuprocess.NuProcessFactory;
 import org.nuprocess.NuProcessHandler;
 
 /**
+ * Windows process factory.  Creates and starts a process.
+ *
  * @author Brett Wooldridge
  */
 public class WinProcessFactory implements NuProcessFactory
 {
+    /** {@inheritDoc} */
     @Override
     public NuProcess createProcess(List<String> commands, String[] env, NuProcessHandler processListener)
     {
-        return new WindowsProcess(commands, env, processListener);
+        WindowsProcess process =  new WindowsProcess(commands, env, processListener);
+        process.start();
+        return process;
     }
 }

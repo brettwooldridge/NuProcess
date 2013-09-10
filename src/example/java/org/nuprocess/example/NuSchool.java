@@ -114,7 +114,7 @@ public class NuSchool
             boolean more = (++writes < 10);
             if (!more)
             {
-                //nuProcess.closeStdin(false);
+                nuProcess.closeStdin(false);
             }
             return more;
         }

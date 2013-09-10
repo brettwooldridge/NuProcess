@@ -19,41 +19,41 @@ package org.nuprocess;
 import java.nio.ByteBuffer;
 
 /**
- * Convenience base class for a NuProcessListener with default
- * methods that can be overridden.
+ * Convenience base class for a {@link NuProcessHandler} with default methods that can be
+ * overridden.
  * 
  * @author Brett Wooldridge
  */
 public abstract class NuAbstractProcessHandler implements NuProcessHandler
 {
+    /** {@inheritDoc} */
     @Override
     public void onStart(NuProcess nuProcess)
     {
     }
 
+    /** {@inheritDoc} */
     @Override
     public void onExit(int statusCode)
     {
     }
 
+    /** {@inheritDoc} */
     @Override
     public void onStdout(ByteBuffer buffer)
     {
     }
 
+    /** {@inheritDoc} */
     @Override
     public void onStderr(ByteBuffer buffer)
     {
     }
 
+    /** {@inheritDoc} */
     @Override
     public boolean onStdinReady(ByteBuffer buffer)
     {
     	return false;
-    }
-
-    @Override
-    public void onStdinClose()
-    {
     }
 }

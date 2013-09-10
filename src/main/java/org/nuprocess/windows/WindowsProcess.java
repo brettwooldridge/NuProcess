@@ -130,8 +130,49 @@ public final class WindowsProcess implements NuProcess
         this.inClosed = true;
     }
 
+    // ************************************************************************
+    //                        NuProcess interface methods
+    // ************************************************************************
+    
+    /** {@inheritDoc} */
     @Override
-    public NuProcess start()
+    public int waitFor(long timeout, TimeUnit unit) throws InterruptedException
+    {
+        // TODO: implement blocking wait
+        return exitCode.get();
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void wantWrite()
+    {
+        if (hStdinWidow != null && !WinBase.INVALID_HANDLE_VALUE.getPointer().equals(hStdinWidow.getPointer()))
+        {
+            userWantsWrite.set(true);
+            myProcessor.wantWrite(this);
+        }
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void closeStdin(boolean force)
+    {
+        // TODO handle non-forceful close
+        stdinClose();
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void destroy()
+    {
+        NuKernel32.TerminateProcess(processInfo.hProcess, Integer.MAX_VALUE);
+    }
+
+    // ************************************************************************
+    //                          Package-scoped methods
+    // ************************************************************************
+
+    NuProcess start()
     {
         try
         {
@@ -180,39 +221,6 @@ public final class WindowsProcess implements NuProcess
         }
 
         return this;
-    }
-
-    @Override
-    public int waitFor(long timeout, TimeUnit unit) throws InterruptedException
-    {
-        // TODO: implement blocking wait
-        return exitCode.get();
-    }
-
-    @Override
-    public void wantWrite()
-    {
-        if (hStdinWidow != null && !WinBase.INVALID_HANDLE_VALUE.getPointer().equals(hStdinWidow.getPointer()))
-        {
-            userWantsWrite.set(true);
-            myProcessor.wantWrite(this);
-        }
-    }
-
-    @Override
-    public void stdinClose()
-    {
-        if (!inClosed)
-        {
-            NuKernel32.CloseHandle(stdinPipe.pipeHandle);
-            inClosed = true;
-        }
-    }
-
-    @Override
-    public void destroy()
-    {
-        NuKernel32.TerminateProcess(processInfo.hProcess, Integer.MAX_VALUE);
     }
 
     HANDLE getPid()
@@ -334,7 +342,7 @@ public final class WindowsProcess implements NuProcess
         return false;
     }
 
-    public void onExit(int statusCode)
+    void onExit(int statusCode)
     {
         if (exitPending.getCount() == 0)
         {
@@ -378,6 +386,15 @@ public final class WindowsProcess implements NuProcess
     boolean isSoftExit()
     {
         return (IS_SOFTEXIT_DETECTION && outClosed && errClosed);
+    }
+
+    void stdinClose()
+    {
+        if (!inClosed)
+        {
+            NuKernel32.CloseHandle(stdinPipe.pipeHandle);
+            inClosed = true;
+        }
     }
 
     private void callStart()

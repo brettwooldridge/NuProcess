@@ -22,11 +22,19 @@ import org.nuprocess.NuProcess;
 import org.nuprocess.NuProcessFactory;
 import org.nuprocess.NuProcessHandler;
 
+/**
+ * Linux process factory.  Creates and starts a process.
+ *
+ * @author Brett Wooldridge
+ */
 public class LinProcessFactory implements NuProcessFactory
 {
+    /** {@inheritDoc} */
     @Override
     public NuProcess createProcess(List<String> commands, String[] env, NuProcessHandler processListener)
     {
-        return new LinuxProcess(commands, env, processListener);
+        LinuxProcess process = new LinuxProcess(commands, env, processListener);
+        process.start();
+        return process;
     }
 }

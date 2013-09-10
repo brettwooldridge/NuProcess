@@ -24,9 +24,12 @@ import org.nuprocess.NuProcessHandler;
 
 public class OsxProcessFactory implements NuProcessFactory
 {
+    /** {@inheritDoc} */
     @Override
     public NuProcess createProcess(List<String> commands, String[] env, NuProcessHandler processListener)
     {
-        return new OsxProcess(commands, env, processListener);
+        OsxProcess process = new OsxProcess(commands, env, processListener);
+        process.start();
+        return process;
     }
 }

@@ -96,7 +96,7 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
     @Override
     public boolean process()
     {
-        int nev = LibKevent.kevent(kqueue, null, 0, triggeredEvent.getPointer(), 1, timeSpec); //Pointer.NULL);
+        int nev = LibKevent.kevent(kqueue, null, 0, triggeredEvent.getPointer(), 1, timeSpec);
         if (nev == -1)
         {
             throw new RuntimeException("Error waiting for kevent");
