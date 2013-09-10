@@ -42,7 +42,8 @@ Other than that, it's basically trivial, and you can see the code in ``src/examp
 
 ##### Nu school #####
 
-
 ##### Test Results #####
 
 ![](https://github.com/brettwooldridge/NuProcess/wiki/Benchmark.png)
+
+Settings for the NuSchool benchmark included ``-Dorg.nuprocess.threads=4``.
