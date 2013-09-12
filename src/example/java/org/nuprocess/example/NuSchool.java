@@ -12,10 +12,10 @@ import org.nuprocess.NuProcess;
 import org.nuprocess.NuProcessBuilder;
 
 /**
- * This class demonstrates how one might use the NuProcess classes to run 20,000
- * processes (in batches of 500, for 40 iterations).  It is used as kind of a 
- * benchmark to compare to the conventional method of accomplishing the same (see
- * the OldSchool example).
+ * This class demonstrates how one might use the NuProcess classes to run 5000
+ * processes (in batches of 500, for 10 iterations).  It is used as kind of a 
+ * benchmark to compare to the conventional method of accomplishing the same
+ * (see the OldSchool example).
  *
  * @author Brett Wooldridge
  */

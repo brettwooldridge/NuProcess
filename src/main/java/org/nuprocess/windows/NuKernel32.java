@@ -113,7 +113,8 @@ public class NuKernel32
             super(p);
         }
 
-        @SuppressWarnings("rawtypes")
+        @Override
+		@SuppressWarnings("rawtypes")
         protected List getFieldOrder() {
             return Arrays.asList(new String[] { "Internal", "InternalHigh", "Offset", "OffsetHigh", "hEvent" });
         }

@@ -15,9 +15,29 @@ import org.junit.Test;
 
 /**
  * This class demonstrates how one might use the conventional java.lang.Process
- * class to run 20,000 processes (in batches of 500, for 40 iterations).  It is
+ * class to run 5000 processes (in batches of 500, for 10 iterations).  It is
  * used as kind of a benchmark to compare to the NuProcess method of accomplishing
  * the same (see the NuSchool example).
+ *
+ * Execution notes:
+ * 
+ * Linux (CentOS)
+ *    In order to run this test, java was run with the following parameters:
+ *       -Xmx2048m -Xss256k
+ * 
+ *    The following had to be added to /etc/security/limits.conf:
+ *       #domain         type    item           value
+ *
+ *        [user]         soft    nofile         4096
+ *        [user]         hard    nofile         8192
+ *        [user]         soft    nproc          4096
+ *        [user]         soft    nproc          4096
+ *    where [user] is the username of the executing user (you).
+ *
+ *    The following change was made to /etc/security/limits.d/90-nproc.conf:
+ *      *          soft    nproc     1024
+ *    was changed to:
+ *      *          soft    nproc     8024
  *
  * @author Brett Wooldridge
  */

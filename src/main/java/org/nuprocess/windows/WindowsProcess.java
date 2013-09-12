@@ -603,7 +603,8 @@ public final class WindowsProcess implements NuProcess
 
     private static final class NameComparator implements Comparator<String>
     {
-        public int compare(String s1, String s2)
+        @Override
+		public int compare(String s1, String s2)
         {
             int len1 = s1.length();
             int len2 = s2.length();
@@ -630,7 +631,8 @@ public final class WindowsProcess implements NuProcess
     {
         static NameComparator nameComparator = new NameComparator();
 
-        public int compare(Map.Entry<String, String> e1, Map.Entry<String, String> e2)
+        @Override
+		public int compare(Map.Entry<String, String> e1, Map.Entry<String, String> e2)
         {
             return nameComparator.compare(e1.getKey(), e2.getKey());
         }
