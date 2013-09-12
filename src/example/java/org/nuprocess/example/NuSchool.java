@@ -27,7 +27,7 @@ public class NuSchool
         String command = "/bin/cat";
         if (System.getProperty("os.name").toLowerCase().contains("win"))
         {
-            command = "src\\test\\java\\org\\nuprocess\\windows\\cat.exe";
+            command = "src\\test\\java\\org\\nuprocess\\cat.exe";
         }
 
         NuProcessBuilder pb = new NuProcessBuilder(Arrays.asList(command));
