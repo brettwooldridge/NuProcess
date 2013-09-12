@@ -1,4 +1,4 @@
-package org.nuprocess.unix;
+package org.nuprocess;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -16,7 +16,6 @@ import org.nuprocess.NuAbstractProcessHandler;
 import org.nuprocess.NuProcess;
 import org.nuprocess.NuProcessBuilder;
 import org.nuprocess.NuProcessHandler;
-import org.nuprocess.RunOnlyOnUnix;
 import org.nuprocess.internal.BasePosixProcess;
 import org.nuprocess.internal.LibC;
 

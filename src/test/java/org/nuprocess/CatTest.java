@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package org.nuprocess.unix;
+package org.nuprocess;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
