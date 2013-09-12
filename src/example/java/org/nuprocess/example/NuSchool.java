@@ -44,7 +44,7 @@ public class NuSchool
                 pb.setProcessListener(handlers[i]);
                 processes[i] = pb.start();
             }
-    
+
             // Kick all of the processes to start going
             for (NuProcess process : processes)
             {
@@ -55,7 +55,7 @@ public class NuSchool
             {
                 sem.acquireUninterruptibly();
             }
-            
+
             for (LottaProcessHandler handler : handlers)
             {
                 Assert.assertEquals("Adler32 mismatch between written and read", 593609473, handler.getAdler());
@@ -77,7 +77,7 @@ public class NuSchool
         private Semaphore semaphore;
 
         private Adler32 readAdler32;
-        
+
         static
         {
             // Create 600K of data.
