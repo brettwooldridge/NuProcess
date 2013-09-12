@@ -23,32 +23,33 @@ import org.junit.Test;
  */
 public class OldSchool
 {
+    private static final int PROCESSES = 500;
     private static volatile CyclicBarrier startBarrier;
 
     @Test
     public void lotOfProcesses() throws Exception
     {
-        ThreadPoolExecutor outExecutor = new ThreadPoolExecutor(500, 500, 10, TimeUnit.SECONDS, new LinkedBlockingQueue<Runnable>());
-        ThreadPoolExecutor inExecutor = new ThreadPoolExecutor(500, 500, 10, TimeUnit.SECONDS, new LinkedBlockingQueue<Runnable>());
+        ThreadPoolExecutor outExecutor = new ThreadPoolExecutor(PROCESSES, PROCESSES, 10, TimeUnit.SECONDS, new LinkedBlockingQueue<Runnable>());
+        ThreadPoolExecutor inExecutor = new ThreadPoolExecutor(PROCESSES, PROCESSES, 10, TimeUnit.SECONDS, new LinkedBlockingQueue<Runnable>());
         
         String command = "/bin/cat";
         if (System.getProperty("os.name").toLowerCase().contains("win"))
         {
-            command = "src\\test\\java\\org\\nuprocess\\windows\\cat.exe";
+            command = "src\\test\\java\\org\\nuprocess\\cat.exe";
         }
 
         ProcessBuilder pb = new ProcessBuilder(command);
         pb.redirectErrorStream(true);
 
-        for (int times = 0; times < 50; times++)
+        for (int times = 0; times < 10; times++)
         {
             
-            Process[] processes = new Process[200];
-            InPumper[] inPumpers = new InPumper[processes.length];
-            OutPumper[] outPumpers = new OutPumper[processes.length];
+            Process[] processes = new Process[PROCESSES];
+            InPumper[] inPumpers = new InPumper[PROCESSES];
+            OutPumper[] outPumpers = new OutPumper[PROCESSES];
     
-            startBarrier = new CyclicBarrier(processes.length);
-            for (int i = 0; i < processes.length; i++)
+            startBarrier = new CyclicBarrier(PROCESSES);
+            for (int i = 0; i < PROCESSES; i++)
             {
                 Process process = pb.start();
                 processes[i] = process;
@@ -67,7 +68,7 @@ public class OldSchool
 
             for (OutPumper pumper : outPumpers)
             {
-                Assert.assertEquals("Adler32 mismatch between written and read", 593609473, pumper.getAdler());
+                Assert.assertEquals("Adler32 mismatch between written and read", 4237270634l, pumper.getAdler());
             }
         }
     }
@@ -99,7 +100,7 @@ public class OldSchool
             try
             {
                 startBarrier.await();
-                for (int i = 0; i < 10; i++)
+                for (int i = 0; i < 100; i++)
                 {
                     outputStream.write(bytes);
                 }

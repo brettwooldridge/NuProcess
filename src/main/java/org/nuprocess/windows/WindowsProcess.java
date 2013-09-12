@@ -138,7 +138,15 @@ public final class WindowsProcess implements NuProcess
     @Override
     public int waitFor(long timeout, TimeUnit unit) throws InterruptedException
     {
-        // TODO: implement blocking wait
+        if (timeout == 0)
+        {
+            exitPending.await();
+        }
+        else if (!exitPending.await(timeout, unit))
+        {
+            return Integer.MIN_VALUE;
+        }
+
         return exitCode.get();
     }
 

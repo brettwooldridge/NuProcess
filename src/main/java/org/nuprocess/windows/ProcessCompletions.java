@@ -62,7 +62,7 @@ public final class ProcessCompletions implements Runnable
     {
         int lingerTimeMs = Math.max(1000, Integer.getInteger("org.nuprocess.lingerTimeMs", 2500));
 
-        DEADPOOL_POLL_INTERVAL = Math.min(lingerTimeMs, Math.max(100, Integer.getInteger("org.nuprocess.deadPoolPollMs", 250)));
+        DEADPOOL_POLL_INTERVAL = Math.min(lingerTimeMs, Math.max(50, Integer.getInteger("org.nuprocess.deadPoolPollMs", 50)));
         
         LINGER_ITERATIONS = lingerTimeMs / DEADPOOL_POLL_INTERVAL;
     }
@@ -169,7 +169,6 @@ public final class ProcessCompletions implements Runnable
             if (process.isSoftExit())
             {
                 cleanupProcess(process);
-                deadPool.add(process);
             }
     
             return true;
@@ -344,6 +343,16 @@ public final class ProcessCompletions implements Runnable
         completionKeyToProcessMap.remove(process.getStdinPipe().ioCompletionKey);
         completionKeyToProcessMap.remove(process.getStdoutPipe().ioCompletionKey);
         completionKeyToProcessMap.remove(process.getStderrPipe().ioCompletionKey);
+
+        IntByReference exitCode = new IntByReference();
+        if (NuKernel32.GetExitCodeProcess(process.getPid(), exitCode) && exitCode.getValue() != WinNT.STILL_ACTIVE)
+        {
+            process.onExit(exitCode.getValue());
+        }
+        else
+        {
+            deadPool.add(process);            
+        }
     }
 
     private void initCompletionPort()

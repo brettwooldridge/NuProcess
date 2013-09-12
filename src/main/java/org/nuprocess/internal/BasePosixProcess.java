@@ -123,7 +123,11 @@ public abstract class BasePosixProcess implements NuProcess
     @Override
     public int waitFor(long timeout, TimeUnit unit) throws InterruptedException
     {
-        if (!exitPending.await(timeout, unit))
+        if (timeout == 0)
+        {
+            exitPending.await();
+        }
+        else if (!exitPending.await(timeout, unit))
         {
             return Integer.MIN_VALUE;
         }

@@ -42,7 +42,7 @@ public interface NuProcess
      * for the non-blocking method process exit notification and exit code retrieval.  If the
      * process is terminated by the {@link #destroy()} method, the exit code is non-deterministic.
      *  
-     * @param timeout a timeout value, 0 indications an indefinite wait
+     * @param timeout a timeout value, 0 indicates an infinite wait
      * @param timeUnit the unit of time indicator for the timeout value
      * @return the exit code of the process
      * @throws InterruptedException thrown if the thread is interrupted while waiting

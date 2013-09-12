@@ -2,7 +2,7 @@ package org.nuprocess.example;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
-import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 import java.util.zip.Adler32;
 
 import org.junit.Assert;
@@ -21,8 +21,10 @@ import org.nuprocess.NuProcessBuilder;
  */
 public class NuSchool
 {
+    private static final int PROCESSES = 500;
+
     @Test
-    public void lotOfProcesses()
+    public void lotOfProcesses() throws InterruptedException
     {
         String command = "/bin/cat";
         if (System.getProperty("os.name").toLowerCase().contains("win"))
@@ -31,16 +33,14 @@ public class NuSchool
         }
 
         NuProcessBuilder pb = new NuProcessBuilder(Arrays.asList(command));
-        for (int times = 0; times < 50; times++)
+        for (int times = 0; times < 10; times++)
         {
-            NuProcess[] processes = new NuProcess[200];
-            Semaphore[] semaphores = new Semaphore[processes.length];
-            LottaProcessHandler[] handlers = new LottaProcessHandler[processes.length];
+            NuProcess[] processes = new NuProcess[PROCESSES];
+            LottaProcessHandler[] handlers = new LottaProcessHandler[PROCESSES];
     
-            for (int i = 0; i < semaphores.length; i++)
+            for (int i = 0; i < PROCESSES; i++)
             {
-                semaphores[i] = new Semaphore(0);
-                handlers[i] = new LottaProcessHandler(semaphores[i]);
+                handlers[i] = new LottaProcessHandler();
                 pb.setProcessListener(handlers[i]);
                 processes[i] = pb.start();
             }
@@ -51,14 +51,14 @@ public class NuSchool
                 process.wantWrite();
             }
 
-            for (Semaphore sem : semaphores)
+            for (NuProcess process : processes)
             {
-                sem.acquireUninterruptibly();
+                process.waitFor(0, TimeUnit.SECONDS);
             }
 
             for (LottaProcessHandler handler : handlers)
             {
-                Assert.assertEquals("Adler32 mismatch between written and read", 593609473, handler.getAdler());
+                Assert.assertEquals("Adler32 mismatch between written and read", 4237270634l, handler.getAdler());
                 Assert.assertEquals("Exit code mismatch", 0, handler.getExitCode());
             }
         }
@@ -66,7 +66,7 @@ public class NuSchool
 
     private static class LottaProcessHandler extends NuAbstractProcessHandler
     {
-        private static final int WRITES = 10;
+        private static final int WRITES = 100;
         private static final int LIMIT;
         private static final byte[] bytes;
 
@@ -74,9 +74,8 @@ public class NuSchool
         private int writes;
         private int size;
         private int exitCode;
-        private Semaphore semaphore;
 
-        private Adler32 readAdler32;
+        private Adler32 readAdler32 = new Adler32();
 
         static
         {
@@ -90,13 +89,6 @@ public class NuSchool
             LIMIT = WRITES * bytes.length;
         }
 
-        LottaProcessHandler(Semaphore semaphore)
-        {
-            this.semaphore = semaphore;
-
-            this.readAdler32 = new Adler32();
-        }
-
         @Override
         public void onStart(final NuProcess nuProcess)
         {
@@ -107,7 +99,6 @@ public class NuSchool
         public void onExit(int statusCode)
         {
             exitCode = statusCode;
-            semaphore.release();
         }
 
         @Override
@@ -119,14 +110,15 @@ public class NuSchool
             }
 
             size += buffer.remaining();
-            if (size == LIMIT)
-            {
-                nuProcess.closeStdin();
-            }
 
             byte[] bytes = new byte[buffer.remaining()];
             buffer.get(bytes);
             readAdler32.update(bytes);
+            
+            if (size == LIMIT)
+            {
+                nuProcess.closeStdin();
+            }
         }
 
         @Override
