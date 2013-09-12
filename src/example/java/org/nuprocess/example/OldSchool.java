@@ -4,6 +4,7 @@ import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
@@ -22,6 +23,8 @@ import org.junit.Test;
  */
 public class OldSchool
 {
+    private static volatile CyclicBarrier startBarrier;
+
     @Test
     public void lotOfProcesses() throws Exception
     {
@@ -37,12 +40,14 @@ public class OldSchool
         ProcessBuilder pb = new ProcessBuilder(command);
         pb.redirectErrorStream(true);
 
-        for (int times = 0; times < 40; times++)
+        for (int times = 0; times < 50; times++)
         {
-            Process[] processes = new Process[500];
-            InPumper[] inPumpers = new InPumper[500];
-            OutPumper[] outPumpers = new OutPumper[500];
+            
+            Process[] processes = new Process[200];
+            InPumper[] inPumpers = new InPumper[processes.length];
+            OutPumper[] outPumpers = new OutPumper[processes.length];
     
+            startBarrier = new CyclicBarrier(processes.length);
             for (int i = 0; i < processes.length; i++)
             {
                 Process process = pb.start();
@@ -93,6 +98,7 @@ public class OldSchool
         {
             try
             {
+                startBarrier.await();
                 for (int i = 0; i < 10; i++)
                 {
                     outputStream.write(bytes);

@@ -70,20 +70,26 @@ public class NuProcessBuilder
         }
     }
 
-    public NuProcessBuilder(List<String> command, NuProcessHandler listener)
+    public NuProcessBuilder(List<String> commands)
     {
-        if (command == null || command.isEmpty())
+        if (commands == null || commands.isEmpty())
         {
             throw new IllegalArgumentException("List of commands may not be null or empty");
         }
+
+        this.environment = new TreeMap<String, String>(System.getenv());
+        this.command = new ArrayList<String>(commands);
+    }
+
+    public NuProcessBuilder(List<String> commands, NuProcessHandler listener)
+    {
+        this(commands);
 
         if (listener == null)
         {
             throw new IllegalArgumentException("A NuProcessListener must be specified");
         }
 
-        this.environment = new TreeMap<String, String>(System.getenv());
-        this.command = new ArrayList<String>(command);
         this.processListener = listener;
     }
 
@@ -109,6 +115,11 @@ public class NuProcessBuilder
 
     public NuProcess start()
     {
+        if (processListener == null)
+        {
+            throw new IllegalArgumentException("NuProcessHandler not specified");
+        }
+
         String[] env = new String[environment.size()];
         int i = 0;
         for (Entry<String, String> entrySet : environment.entrySet())

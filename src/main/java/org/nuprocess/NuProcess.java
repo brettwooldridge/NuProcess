@@ -61,13 +61,10 @@ public interface NuProcess
 
     /**
      * This method is used to close the STDIN pipe between the Java process and the spawned
-     * process.  If the <i>force</i> parameter is false the STDIN pipe will be closed when
-     * there is no more pending data to be written to the pipe.  If the <i>force</i> parameter
-     * is true the STDIN pipe is immediately closed regardless of pending unwritten data.
-     *
-     * @param force true if the STDIN pipe should immediately and forcefully be closed
+     * process.  The STDIN pipe is immediately closed regardless of pending unwritten data,
+     * and even data that has been written into the pipe will be immediately discarded.
      */
-    void closeStdin(boolean force);
+    void closeStdin();
    
     /**
      * Forcefully destroy the process.  When this method is called, the exit code returned by

@@ -155,9 +155,8 @@ public final class WindowsProcess implements NuProcess
 
     /** {@inheritDoc} */
     @Override
-    public void closeStdin(boolean force)
+    public void closeStdin()
     {
-        // TODO handle non-forceful close
         stdinClose();
     }
 

@@ -104,10 +104,12 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
     }
 
     @Override
-    public void queueWrite(int stdin)
+    public void queueWrite(LinuxProcess process)
     {
     	try
     	{
+    	    int stdin = process.getStdin().get();
+
 	        EpollEvent event = eventPool.take();
 	        event.setEvents(EpollEvent.EPOLLOUT | EpollEvent.EPOLLONESHOT | EpollEvent.EPOLLRDHUP | EpollEvent.EPOLLHUP);
 	        event.setFd(stdin);
@@ -131,8 +133,9 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
     }
 
     @Override
-    public void closeStdin(int stdin)
+    public void closeStdin(LinuxProcess process)
     {
+        int stdin = process.getStdin().get();
         fildesToProcessMap.remove(stdin);
         LibEpoll.epoll_ctl(epoll, EpollEvent.EPOLL_CTL_DEL, stdin, null);
     }
@@ -199,7 +202,7 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
                 }
                 else if (ident == linuxProcess.getStdin().get())
                 {
-                    linuxProcess.stdinClose();
+                    linuxProcess.closeStdin();
                 }
             }
     

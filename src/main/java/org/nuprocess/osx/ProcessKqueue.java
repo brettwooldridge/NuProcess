@@ -70,27 +70,28 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
     @Override
     public void registerProcess(OsxProcess process)
     {
-        pidToProcessMap.put(process.getPid(), process);
-        fildesToProcessMap.put(process.getStdin().get(), process);
-        fildesToProcessMap.put(process.getStdout().get(), process);
-        fildesToProcessMap.put(process.getStderr().get(), process);
+        int pid = process.getPid();
+        Pointer pidPointer = new Pointer(pid);
 
-        queueEvent(process.getPid(), Kevent.EVFILT_PROC, Kevent.EV_ADD | Kevent.EV_ONESHOT, Kevent.NOTE_EXIT | Kevent.NOTE_EXITSTATUS | Kevent.NOTE_REAP);
+        pidToProcessMap.put(pid, process);
 
-        queueEvent(process.getStdout().get(), Kevent.EVFILT_READ, Kevent.EV_ADD | Kevent.EV_ONESHOT, 0);
-        queueEvent(process.getStderr().get(), Kevent.EVFILT_READ, Kevent.EV_ADD | Kevent.EV_ONESHOT, 0);
+        queueEvent(process.getPid(), Kevent.EVFILT_PROC, Kevent.EV_ADD | Kevent.EV_ONESHOT, Kevent.NOTE_EXIT | Kevent.NOTE_EXITSTATUS | Kevent.NOTE_REAP, pidPointer);
+
+        queueEvent(process.getStdout().get(), Kevent.EVFILT_READ, Kevent.EV_ADD | Kevent.EV_ONESHOT, 0, pidPointer);
+        queueEvent(process.getStderr().get(), Kevent.EVFILT_READ, Kevent.EV_ADD | Kevent.EV_ONESHOT, 0, pidPointer);
     }
 
     @Override
-    public void queueWrite(int stdin)
+    public void queueWrite(OsxProcess process)
     {
-        queueEvent(stdin, Kevent.EVFILT_WRITE, Kevent.EV_ADD | Kevent.EV_ONESHOT, 0);
+        queueEvent(process.getStdin().get(), Kevent.EVFILT_WRITE, Kevent.EV_ADD | Kevent.EV_ONESHOT, 0, new Pointer(process.getPid()));
     }
 
     @Override
-    public void closeStdin(int stdin)
+    public void closeStdin(OsxProcess process)
     {
-        fildesToProcessMap.remove(stdin);
+        // We have no additional cleanup in OS X
+        return;
     }
 
     @Override
@@ -110,9 +111,9 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
         final Kevent kevent = triggeredEvent;
         int ident = (int) kevent.getIdent();
         int filter = kevent.getFilter();
-        int data = (int) kevent.getData();
+        int udata = (int) Pointer.nativeValue(kevent.getUserData());
 
-        OsxProcess osxProcess = fildesToProcessMap.get(ident);
+        OsxProcess osxProcess = pidToProcessMap.get(udata);
         if (osxProcess == null)
         {
             osxProcess = pidToProcessMap.get(ident);
@@ -124,7 +125,7 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
 
         if (filter == Kevent.EVFILT_READ) // stdout/stderr data available to read
         {
-            int available = data;
+            int available = (int) kevent.getData();
             if (ident == osxProcess.getStdout().get())
             {
                 osxProcess.readStdout(available);
@@ -134,10 +135,10 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
                 }
                 else
                 {
-                    queueEvent(ident, Kevent.EVFILT_READ, Kevent.EV_ADD | Kevent.EV_ONESHOT, 0);
+                    queueEvent(ident, Kevent.EVFILT_READ, Kevent.EV_ADD | Kevent.EV_ONESHOT, 0, kevent.getUserData());
                 }
             }
-            else
+            else if (ident == osxProcess.getStderr().get())
             {
                 osxProcess.readStderr(available);
                 if ((kevent.getFlags() & Kevent.EV_EOF) != 0)
@@ -146,22 +147,22 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
                 }
                 else
                 {
-                    queueEvent(osxProcess.getStderr().get(), Kevent.EVFILT_READ, Kevent.EV_ADD | Kevent.EV_ONESHOT, 0);
+                    queueEvent(osxProcess.getStderr().get(), Kevent.EVFILT_READ, Kevent.EV_ADD | Kevent.EV_ONESHOT, 0, kevent.getUserData());
                 }
             }
         }
-        else if (filter == Kevent.EVFILT_WRITE) // Room in stdin pipe available to write
+        else if (filter == Kevent.EVFILT_WRITE && ident == osxProcess.getStdin().get()) // Room in stdin pipe available to write
         {
-            int available = data;
+            int available = (int) kevent.getData();
             if (available == 0 || osxProcess.writeStdin(available))
             {
-                queueWrite(osxProcess.getStdin().get());
+                queueWrite(osxProcess);
             }
         }
         else if ((kevent.getFilterFlags() & Kevent.NOTE_EXIT) != 0) // process has exited System.gc()
         {
             cleanupProcess(osxProcess);
-            int rc = (data & 0xff00) >> 8;
+            int rc = ((int) kevent.getData() & 0xff00) >> 8;
             osxProcess.onExit(rc);
         }
 
@@ -174,13 +175,13 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
     //                             Private methods
     // ************************************************************************
 
-    private void queueEvent(int handle, int filter, int fflags, int data)
+    private void queueEvent(int handle, int filter, int fflags, int data, Pointer udata)
     {
         try
         {
             Kevent kevent = keventPool.take();
 
-            Kevent.EV_SET(kevent, (long) handle, filter, fflags, data, 0l, Pointer.NULL);
+            Kevent.EV_SET(kevent, (long) handle, filter, fflags, data, 0l, udata);
             LibKevent.kevent(kqueue, kevent.getPointer(), 1, null, 0, null);
 
             keventPool.put(kevent);
@@ -196,8 +197,5 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
         LibC.waitpid(osxProcess.getPid(), new IntByReference(), LibC.WNOHANG);
 
         pidToProcessMap.remove(osxProcess.getPid());
-        fildesToProcessMap.remove(osxProcess.getStdin());
-        fildesToProcessMap.remove(osxProcess.getStdout());
-        fildesToProcessMap.remove(osxProcess.getStderr());
     }
 }

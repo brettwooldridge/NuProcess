@@ -24,19 +24,33 @@ public class NuSchool
     @Test
     public void lotOfProcesses()
     {
-        for (int times = 0; times < 40; times++)
+        String command = "/bin/cat";
+        if (System.getProperty("os.name").toLowerCase().contains("win"))
         {
-            Semaphore[] semaphores = new Semaphore[500];
-            LottaProcessHandler[] handlers = new LottaProcessHandler[500];
+            command = "src\\test\\java\\org\\nuprocess\\windows\\cat.exe";
+        }
+
+        NuProcessBuilder pb = new NuProcessBuilder(Arrays.asList(command));
+        for (int times = 0; times < 50; times++)
+        {
+            NuProcess[] processes = new NuProcess[200];
+            Semaphore[] semaphores = new Semaphore[processes.length];
+            LottaProcessHandler[] handlers = new LottaProcessHandler[processes.length];
     
             for (int i = 0; i < semaphores.length; i++)
             {
                 semaphores[i] = new Semaphore(0);
                 handlers[i] = new LottaProcessHandler(semaphores[i]);
-                NuProcessBuilder pb = new NuProcessBuilder(Arrays.asList("/bin/cat"), handlers[i]);
-                pb.start();
+                pb.setProcessListener(handlers[i]);
+                processes[i] = pb.start();
             }
     
+            // Kick all of the processes to start going
+            for (NuProcess process : processes)
+            {
+                process.wantWrite();
+            }
+
             for (Semaphore sem : semaphores)
             {
                 sem.acquireUninterruptibly();
@@ -52,10 +66,13 @@ public class NuSchool
 
     private static class LottaProcessHandler extends NuAbstractProcessHandler
     {
+        private static final int WRITES = 10;
+        private static final int LIMIT;
         private static final byte[] bytes;
 
         private NuProcess nuProcess;
         private int writes;
+        private int size;
         private int exitCode;
         private Semaphore semaphore;
 
@@ -70,6 +87,7 @@ public class NuSchool
                 sb.append("1234567890");
             }
             bytes = sb.toString().getBytes();
+            LIMIT = WRITES * bytes.length;
         }
 
         LottaProcessHandler(Semaphore semaphore)
@@ -80,10 +98,9 @@ public class NuSchool
         }
 
         @Override
-        public void onStart(NuProcess nuProcess)
+        public void onStart(final NuProcess nuProcess)
         {
             this.nuProcess = nuProcess;
-            nuProcess.wantWrite();
         }
 
         @Override
@@ -101,6 +118,12 @@ public class NuSchool
                 return;
             }
 
+            size += buffer.remaining();
+            if (size == LIMIT)
+            {
+                nuProcess.closeStdin();
+            }
+
             byte[] bytes = new byte[buffer.remaining()];
             buffer.get(bytes);
             readAdler32.update(bytes);
@@ -111,12 +134,7 @@ public class NuSchool
         {
             buffer.put(bytes);
             buffer.flip();
-            boolean more = (++writes < 10);
-            if (!more)
-            {
-                nuProcess.closeStdin(false);
-            }
-            return more;
+            return (++writes < WRITES);
         }
 
         int getExitCode()
