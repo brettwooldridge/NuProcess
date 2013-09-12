@@ -5,8 +5,6 @@ import java.util.Arrays;
 import java.util.concurrent.TimeUnit;
 import java.util.zip.Adler32;
 
-import org.junit.Assert;
-import org.junit.Test;
 import org.nuprocess.NuAbstractProcessHandler;
 import org.nuprocess.NuProcess;
 import org.nuprocess.NuProcessBuilder;
@@ -21,16 +19,23 @@ import org.nuprocess.NuProcessBuilder;
  */
 public class NuSchool
 {
-    private static final int PROCESSES = 500;
-
-    @Test
-    public void lotOfProcesses() throws InterruptedException
+    public static void main(String... args)
     {
+    	if (args.length < 1)
+    	{
+    		System.err.println("Usage: java org.nuprocess.example.NuSchool <num of processes>");
+    		System.exit(0);
+    	}
+
+    	int PROCESSES = Integer.valueOf(args[0]);
+
         String command = "/bin/cat";
         if (System.getProperty("os.name").toLowerCase().contains("win"))
         {
             command = "src\\test\\java\\org\\nuprocess\\cat.exe";
         }
+
+        long start = System.currentTimeMillis();
 
         NuProcessBuilder pb = new NuProcessBuilder(Arrays.asList(command));
         for (int times = 0; times < 10; times++)
@@ -53,15 +58,33 @@ public class NuSchool
 
             for (NuProcess process : processes)
             {
-                process.waitFor(0, TimeUnit.SECONDS);
+                try
+                {
+					process.waitFor(0, TimeUnit.SECONDS);
+				}
+                catch (InterruptedException e)
+                {
+                	System.exit(-1);
+				}
             }
 
             for (LottaProcessHandler handler : handlers)
             {
-                Assert.assertEquals("Adler32 mismatch between written and read", 4237270634l, handler.getAdler());
-                Assert.assertEquals("Exit code mismatch", 0, handler.getExitCode());
+            	if (handler.getAdler() != 4237270634l)
+            	{
+                    System.err.println("Adler32 mismatch between written and read");
+                    System.exit(-1);
+            	}
+            	else if (handler.getExitCode() != 0)
+            	{
+                   System.err.println("Exit code not zero (0)");
+                   System.exit(-1);
+            	}
             }
         }
+
+        System.out.println("Total execution time (ms): " + (System.currentTimeMillis() - start));
+        System.exit(0);
     }
 
     private static class LottaProcessHandler extends NuAbstractProcessHandler

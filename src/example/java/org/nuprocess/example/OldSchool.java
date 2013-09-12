@@ -10,9 +10,6 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.zip.Adler32;
 
-import org.junit.Assert;
-import org.junit.Test;
-
 /**
  * This class demonstrates how one might use the conventional java.lang.Process
  * class to run 5000 processes (in batches of 500, for 10 iterations).  It is
@@ -43,13 +40,19 @@ import org.junit.Test;
  */
 public class OldSchool
 {
-    private static final int PROCESSES = 500;
     private static volatile CyclicBarrier startBarrier;
 
-    @Test
-    public void lotOfProcesses() throws Exception
+    public static void main(String... args)
     {
-        ThreadPoolExecutor outExecutor = new ThreadPoolExecutor(PROCESSES, PROCESSES, 10, TimeUnit.SECONDS, new LinkedBlockingQueue<Runnable>());
+    	if (args.length < 1)
+    	{
+    		System.err.println("Usage: java org.nuprocess.example.OldSchool <num of processes>");
+    		System.exit(0);
+    	}
+
+    	int PROCESSES = Integer.valueOf(args[0]);
+
+    	ThreadPoolExecutor outExecutor = new ThreadPoolExecutor(PROCESSES, PROCESSES, 10, TimeUnit.SECONDS, new LinkedBlockingQueue<Runnable>());
         ThreadPoolExecutor inExecutor = new ThreadPoolExecutor(PROCESSES, PROCESSES, 10, TimeUnit.SECONDS, new LinkedBlockingQueue<Runnable>());
         
         String command = "/bin/cat";
@@ -61,6 +64,8 @@ public class OldSchool
         ProcessBuilder pb = new ProcessBuilder(command);
         pb.redirectErrorStream(true);
 
+        long start = System.currentTimeMillis();
+
         for (int times = 0; times < 10; times++)
         {
             
@@ -69,28 +74,47 @@ public class OldSchool
             OutPumper[] outPumpers = new OutPumper[PROCESSES];
     
             startBarrier = new CyclicBarrier(PROCESSES);
-            for (int i = 0; i < PROCESSES; i++)
+            try
             {
-                Process process = pb.start();
-                processes[i] = process;
-                
-                outPumpers[i] = new OutPumper(new BufferedInputStream(process.getInputStream(), 65536));
-                inPumpers[i] = new InPumper(new BufferedOutputStream(process.getOutputStream(), 65536));
-
-                outExecutor.execute(outPumpers[i]);
-                inExecutor.execute(inPumpers[i]);
+	            for (int i = 0; i < PROCESSES; i++)
+	            {
+	                Process process = pb.start();
+	                processes[i] = process;
+	                
+	                outPumpers[i] = new OutPumper(new BufferedInputStream(process.getInputStream(), 65536));
+	                inPumpers[i] = new InPumper(new BufferedOutputStream(process.getOutputStream(), 65536));
+	
+	                outExecutor.execute(outPumpers[i]);
+	                inExecutor.execute(inPumpers[i]);
+	            }
+	    
+	            for (Process process : processes)
+	            {
+	                if (process.waitFor() != 0)
+	            	{
+	                   System.err.println("Exit code not zero (0)");
+	                   System.exit(-1);
+	            	}
+	            }
+	
+	            for (OutPumper pumper : outPumpers)
+	            {
+	            	if (pumper.getAdler() != 4237270634l)
+	            	{
+	                    System.err.println("Adler32 mismatch between written and read");
+	                    System.exit(-1);
+	            	}
+	            }
             }
-    
-            for (Process process : processes)
+            catch (Exception e)
             {
-                Assert.assertEquals("Exit code mismatch", 0, process.waitFor());
-            }
-
-            for (OutPumper pumper : outPumpers)
-            {
-                Assert.assertEquals("Adler32 mismatch between written and read", 4237270634l, pumper.getAdler());
+            	e.printStackTrace(System.err);
+            	System.exit(-1);
             }
         }
+
+        System.out.println("Total execution time (ms): " + (System.currentTimeMillis() - start));
+        System.exit(0);
     }
 
     public static class InPumper implements Runnable
