@@ -137,8 +137,10 @@ public class CatTest
 
     private static class LottaProcessListener extends NuAbstractProcessHandler
     {
+        private static final int WRITES = 10;
         private NuProcess nuProcess;
         private int writes;
+        private int size;
         private int exitCode;
         private Semaphore semaphore;
 
@@ -185,6 +187,12 @@ public class CatTest
                 return;
             }
 
+            size += buffer.remaining();
+            if (size == (WRITES * bytes.length))
+            {
+                nuProcess.closeStdin();
+            }
+
             byte[] bytes = new byte[buffer.remaining()];
             buffer.get(bytes);
             readAdler32.update(bytes);
@@ -198,12 +206,7 @@ public class CatTest
             buffer.put(bytes);
             buffer.flip();
 
-            boolean more = (++writes < 10);
-            if (!more)
-            {
-                nuProcess.closeStdin(false);
-            }
-            return more;
+            return (++writes < WRITES);
         }
 
         int getExitCode()
