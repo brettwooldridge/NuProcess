@@ -54,7 +54,6 @@ public abstract class BasePosixProcess implements NuProcess
     protected CountDownLatch exitPending;
 
     protected AtomicBoolean userWantsWrite;
-    protected AtomicBoolean userWantsStdinClose;
 
     protected ByteBuffer outBuffer;
     protected ByteBuffer inBuffer;
@@ -99,7 +98,6 @@ public abstract class BasePosixProcess implements NuProcess
         }
 
         processors = new IEventProcessor<?>[numThreads];
-
     }
 
     protected BasePosixProcess(List<String> command, String[] env, NuProcessHandler processListener)
@@ -108,7 +106,6 @@ public abstract class BasePosixProcess implements NuProcess
         this.environment = env;
         this.processListener = processListener;
         this.userWantsWrite = new AtomicBoolean();
-        this.userWantsStdinClose = new AtomicBoolean();
         this.exitCode = new AtomicInteger();
         this.exitPending = new CountDownLatch(1);
         this.stdin = new AtomicInteger(-1);
@@ -151,37 +148,28 @@ public abstract class BasePosixProcess implements NuProcess
     @Override
     public void wantWrite()
     {
-        if (userWantsStdinClose.get())
-        {
-            throw new IllegalStateException("stdinClose() method has already been called.");
-        }
-
         int fd = stdin.get();
         if (fd != -1)
         {
             userWantsWrite.set(true);
-            myProcessor.queueWrite(fd);
+            myProcessor.queueWrite(this);
+        }
+        else
+        {
+            throw new IllegalStateException("closeStdin() method has already been called.");
         }
     }
 
     /** {@inheritDoc} */
     @Override
-    public void closeStdin(boolean force)
+    public void closeStdin()
     {
         int fd = stdin.get();
-        if (fd == -1)
+        if (fd != -1)
         {
-            return;
+            myProcessor.closeStdin(this);
+            close(stdin);
         }
-
-        if (force)
-        {
-            stdinClose();
-            return;
-        }
-
-        userWantsStdinClose.compareAndSet(false, true);
-//        myProcessor.queueWrite(fd);
     }
 
     // ************************************************************************
@@ -289,21 +277,6 @@ public abstract class BasePosixProcess implements NuProcess
         return (IS_SOFTEXIT_DETECTION && outClosed && errClosed);
     }
 
-    public boolean isStdinClosePending()
-    {
-        return userWantsStdinClose.get();
-    }
-
-    public void stdinClose()
-    {
-        int fd = stdin.get();
-        if (fd != -1)
-        {
-            myProcessor.closeStdin(fd);
-            close(stdin);
-        }
-    }
-
     public void onExit(int statusCode)
     {
         if (exitPending.getCount() == 0)
@@ -314,7 +287,7 @@ public abstract class BasePosixProcess implements NuProcess
 
         try
         {
-            close(stdin);
+            closeStdin();
             close(stdout);
             close(stderr);
 
@@ -411,12 +384,7 @@ public abstract class BasePosixProcess implements NuProcess
 
     public boolean writeStdin(int availability)
     {
-        if (remainingWrite <= 0 && userWantsStdinClose.get())
-        {
-            stdinClose();
-            return false;
-        }
-
+        
         if (availability == 0)
         {
             return false;
@@ -425,9 +393,16 @@ public abstract class BasePosixProcess implements NuProcess
         int fd = stdin.get();
         if (remainingWrite > 0 && fd != -1)
         {
-            int wrote = LibC.write(fd, inBufferPointer.share(writeOffset), Math.min(remainingWrite, availability));
-            if (wrote == -1)
+            // NOTE: we write at most (availability - 1) due to a pipe-expansion bug in MacOS X Mountain Lion
+            int wrote = LibC.write(fd, inBufferPointer.share(writeOffset), Math.min(remainingWrite, availability - 1));
+            if (wrote < 0)
             {
+                int errno = Native.getLastError();
+                if (errno == 11 /*EAGAIN on MacOS*/ || errno == 35 /*EAGAIN on Linux*/)
+                {
+                    return true;
+                }
+
                 // EOF?
                 close(stdin);
                 return false;
@@ -446,7 +421,7 @@ public abstract class BasePosixProcess implements NuProcess
 
         if (!userWantsWrite.get())
         {
-            return userWantsStdinClose.get();
+            return false;
         }
 
         try
@@ -601,14 +576,16 @@ public abstract class BasePosixProcess implements NuProcess
             stderr.set(err[0]);
             stderrWidow = err[1];
 
-            if (IS_LINUX || IS_MAC)
+            if (IS_LINUX) // || IS_MAC)
             {
                 rc = LibC.fcntl(in[1], LibC.F_SETFL, LibC.fcntl(in[1], LibC.F_GETFL) | LibC.O_NONBLOCK);
+                checkReturnCode(rc, "fnctl on stdin handle failed");
                 rc = LibC.fcntl(out[0], LibC.F_SETFL, LibC.fcntl(out[0], LibC.F_GETFL) | LibC.O_NONBLOCK);
+                checkReturnCode(rc, "fnctl on stdout handle failed");
                 rc = LibC.fcntl(err[0], LibC.F_SETFL, LibC.fcntl(err[0], LibC.F_GETFL) | LibC.O_NONBLOCK);
+                checkReturnCode(rc, "fnctl on stderr handle failed");
             }
 
-            
             return posix_spawn_file_actions;
         }
         catch (RuntimeException e)
