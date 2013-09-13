@@ -1,3 +1,5 @@
+[![Build Status](https://www.travis-ci.org/brettwooldridge/NuProcess.png?branch=master)](https://www.travis-ci.org/brettwooldridge/NuProcess)
+
 NuProcess
 =========
 
