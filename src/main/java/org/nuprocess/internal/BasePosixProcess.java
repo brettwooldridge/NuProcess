@@ -388,8 +388,7 @@ public abstract class BasePosixProcess implements NuProcess
 
     public boolean writeStdin(int availability)
     {
-        
-        if (availability == 0)
+        if (availability <= 0)
         {
             return false;
         }
@@ -397,20 +396,23 @@ public abstract class BasePosixProcess implements NuProcess
         int fd = stdin.get();
         if (remainingWrite > 0 && fd != -1)
         {
-            // NOTE: we write at most (availability - 1) due to a pipe-expansion bug in MacOS X Mountain Lion
-            int wrote = LibC.write(fd, inBufferPointer.share(writeOffset), Math.min(remainingWrite, availability - 1));
-            if (wrote < 0)
-            {
-                int errno = Native.getLastError();
-                if (errno == 11 /*EAGAIN on MacOS*/ || errno == 35 /*EAGAIN on Linux*/)
+            int wrote = 0;
+            do {
+                wrote = LibC.write(fd, inBufferPointer.share(writeOffset), Math.min(remainingWrite, availability));
+                if (wrote < 0)
                 {
-                    return true;
+                    int errno = Native.getLastError();
+                    if (errno == 11 /*EAGAIN on MacOS*/ || errno == 35 /*EAGAIN on Linux*/)
+                    {
+                        availability /= 4;
+                        continue;
+                    }
+    
+                    // EOF?
+                    close(stdin);
+                    return false;
                 }
-
-                // EOF?
-                close(stdin);
-                return false;
-            }
+            } while (wrote < 0);
 
             remainingWrite -= wrote;
             writeOffset += wrote;
@@ -580,7 +582,7 @@ public abstract class BasePosixProcess implements NuProcess
             stderr.set(err[0]);
             stderrWidow = err[1];
 
-            if (IS_LINUX) // || IS_MAC)
+            if (IS_LINUX || IS_MAC)
             {
                 rc = LibC.fcntl(in[1], LibC.F_SETFL, LibC.fcntl(in[1], LibC.F_GETFL) | LibC.O_NONBLOCK);
                 checkReturnCode(rc, "fnctl on stdin handle failed");

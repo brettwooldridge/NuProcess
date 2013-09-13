@@ -154,7 +154,7 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
         else if (filter == Kevent.EVFILT_WRITE && ident == osxProcess.getStdin().get()) // Room in stdin pipe available to write
         {
             int available = (int) kevent.getData();
-            if (available == 0 || osxProcess.writeStdin(available))
+            if (available == 0 || osxProcess.writeStdin(4096))
             {
                 queueWrite(osxProcess);
             }

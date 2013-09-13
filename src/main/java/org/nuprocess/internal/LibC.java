@@ -26,6 +26,15 @@ public class LibC
     static
     {
         Native.register("c");
+
+        if (System.getProperty("os.name").toLowerCase().contains("mac"))
+        {
+            O_NONBLOCK = 0x0004;  // MacOS X
+        }
+        else
+        {
+            O_NONBLOCK = 2048; // Linux
+        }
     }
 
     public static native int pipe(int[] fildes);
@@ -67,7 +76,7 @@ public class LibC
     public static final int F_GETFL = 3;
     public static final int F_SETFL = 4;
 
-    public static final int O_NONBLOCK = 2048;
+    public static final int O_NONBLOCK;
 
     // from /usr/include/sys/wait.h
     public static final int WNOHANG =0x00000001;
