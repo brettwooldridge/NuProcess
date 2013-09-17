@@ -29,7 +29,7 @@ Additionally, on unix-based platforms such as Linux, when creating a new process
 operation.  This requires a temporary copy of the Java process (the fork), before the exec is performed.  When running
 tests on Linux, in order to spawn 500 processes required setting the JVM max. memory to 3Gb (-Xmx3g).  NuProcess uses a
 variant of fork() called vfork(), which does not impose this overhead.  NuProcess can comfortably spawn 500 processes
-even when running the JVM with only 120Mb (-Xmx128m).
+even when running the JVM with only 128Mb (-Xmx128m).
 
 #### Settings ####
 
@@ -54,11 +54,12 @@ determine when they have truly exited and what their exit status was.  See ``org
 
 The default value for this property is ``true``.  Setting this value to ``false`` will completely disable process exit 
 detection, and the ``NuProcess.waitFor()" API __MUST__ be used.  Failure to invoke this API on Linux will result in an 
-ever-growing accumulation of "zombie" processes and eventually an inability to create new processes.
+ever-growing accumulation of "zombie" processes and eventually an inability to create new processes.  There is very little
+reason to disable soft exit detection unless you have child process that itself closes the STDOUT and STDERR streams.
 
 ##### ``org.nuprocess.deadPoolPollMs`` #####
-On Linux and Windows, when Soft Exit Detection is enabled, this property controls how often the processes in the dead
-pool are polled for their exit status.  The default value is 250ms, and the minimum value is 100ms.
+On Linux and Windows, when Soft Exit Detection is enabled (the default), this property controls how often the processes in
+the dead pool are polled for their exit status.  The default value is 250ms, and the minimum value is 100ms.
 
 ##### ``org.nuprocess.lingerTimeMs`` #####
 This property controls how long the processing thread(s) remains after the last executing child process has exited.  In
