@@ -171,7 +171,10 @@ public abstract class BasePosixProcess implements NuProcess
         int fd = stdin.get();
         if (fd != -1)
         {
-            myProcessor.closeStdin(this);
+            if (myProcessor != null)
+            {
+                myProcessor.closeStdin(this);
+            }
             close(stdin);
         }
     }
