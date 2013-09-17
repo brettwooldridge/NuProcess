@@ -50,12 +50,24 @@ exited.  Rather than polling all child processes constantly NuProcess uses what 
 child process exits, the OS automatically closes all of it's open file handles; which *is* something about we can be
 notified.  So, on Linux and Windows when NuProcess determines that both the STDOUT and STDERR streams have been closed
 in the child process, that child process is put into a "dead pool".  The processes in the dead pool are polled to 
-determine when they have truly exited and what their exit status was.  See ``org.nuprocess.deadPoolPollMs``.  The default
-value for this property is ``true``.  Setting this value to ``false`` will completely disable process exit detection,
-and the ``NuProcess.waitFor()" API __MUST__ be used.  Failure to invoke this API on Linux will result in an ever-growing
-accumulation of "zombie" processes and eventually an inability to create new processes.
+determine when they have truly exited and what their exit status was.  See ``org.nuprocess.deadPoolPollMs``
+
+The default value for this property is ``true``.  Setting this value to ``false`` will completely disable process exit 
+detection, and the ``NuProcess.waitFor()" API __MUST__ be used.  Failure to invoke this API on Linux will result in an 
+ever-growing accumulation of "zombie" processes and eventually an inability to create new processes.
 
 ##### ``org.nuprocess.deadPoolPollMs`` #####
 On Linux and Windows, when Soft Exit Detection is enabled, this property controls how often the processes in the dead
 pool are polled for their exit status.  The default value is 250ms, and the minimum value is 100ms.
+
+##### ``org.nuprocess.lingerTimeMs`` #####
+This property controls how long the processing thread(s) remains after the last executing child process has exited.  In
+order to avoid the overhead of starting up another processing thread, if processes are frequently run it may be desirable
+for the processing thread to remain (linger) for some amount of time (default 2500ms).
+
+#### Limitations ####
+The following limitations exist in NuProcess:
+ * The provided library has only been tested on Java 7.
+ * Linux support requires at least kernel version 2.6.17 or higher.
+ * Unlike ``java.lang.Process``, NuProcess does not currently permit setting an alternate current working directory (cwd) for the child process.
 
