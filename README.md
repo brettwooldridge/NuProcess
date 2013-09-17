@@ -10,42 +10,52 @@ Have you ever been annoyed by the fact that whenever you spawn a process in Java
 threads (for every process) to pull data out of the ``stdout`` and ``stderr`` pipes and pump data into ``stdin``?  If your
 code starts a lot of processes you can have dozens or hundreds of threads doing nothing but pumping data!
 
-On top of that, because the ``java.lang.Process`` class exposes classic ``java.io`` blocking streams, there is no possibility
-of using direct memory buffers, meaning your data must be copied at least once in the transition from Java to native code.
+NuProcess used the JNA library to use platform-specific native APIs to achive non-blocking I/O on the pipes between your
+Java process and the spawned processes:
 
-#### But threads are cheap, right? ####
-Sorry to break the bad news but threads aren't cheap.  There is significant time spent firing up threads, and under 
-heavy load context-switching overhead, CPU instruction pipeline flushing, and L1/L2/L3 cache-line invalidation start
-taking their toll.
+ * Linux: uses epoll
+ * MacOS X: uses kqueue/kevent
+ * Windows: uses IO Completion Ports
 
-But if a single thread is allowed to get up-to-speed with little to no context-switching and little to no cache-line 
-invalidation, and allowed to take advantage of CPU instruction pipelining and data prefetching, you'll be amazed at what
-what a modern CPU can do.  Many of our attempts at parallelization of processing can have a paradoxically negative
-impact on performance.
+#### It's mostly about the memory ####
+Speed-wise, there is not a significant difference between NuProcess and the standard Java Process class, even when running
+500 concurrent processes.  On some platforms such as MacOS X or Linux, NuProcess is 20% faster than ``java.lang.Process``
+for large numbers of processes, while on Windows NuProcess is about 20% slower.
 
-#### What kinda speed are we talking? ####
-Well, if course it depends on your workload, but let's take an example.  Take the ``/bin/cat`` process in Unix (Linux, OS X, etc.).
-If you launch it without any parameters, it reads whatever you feed into ``stdin`` and spits it back out of ``stdout``.  Perfect for
-testing.
+However, when it comes to memory there is a significant difference.  The overhead of 500 threads, for example, is quite
+large compared to the one or few threads employed by NuProcess.
 
-Let's say for fun we want to spawn 500 instances of ``/bin/cat`` at one time, pump 600K of data into *each* one (stdin) 
-while simultaneously reading the data out (stdout).  Actually, we don't have a choice about the reading otherwise the
-output pipe would fill up and the processes would stall.  When they're done, we'll do it another 40 times.  So to recap,
-in total we're going to run 20000 ``/bin/cat`` processes (in batches of 500), pump 600K of data into each and every one 
-while pulling all the data out the other side.  Oh and running an Adler32 checksum to verify that everything went through
-okay.
+Additionally, on unix-based platforms such as Linux, when creating a new process ``java.lang.Process`` uses a fork()/exec()
+operation.  This requires a temporary copy of the Java process (the fork), before the exec is performed.  When running
+tests on Linux, in order to spawn 500 processes required setting the JVM max. memory to 3Gb (-Xmx3g).  NuProcess uses a
+variant of fork() called vfork(), which does not impose this overhead.  NuProcess can comfortably spawn 500 processes
+even when running the JVM with only 120Mb (-Xmx128m).
 
-##### Old school #####
-The conventional approach is to create a thread for pumping data in (stdin) and a thread for pumping data out (stdout).
-We actually need 500 of these (each) if we really want to run 500 processes in parallel.  Using a ``ThreadPoolExecutor``
-for each set of threads (one executor for stdin-threads and one for stdout-threads), we can at least cut the thread launch
-overhead on the last 39 iterations of our 40.  Still we're looking at 1000 threads and no simple way to get around it.
-Other than that, it's basically trivial, and you can see the code in ``src/example/java/OldSchool.java``.
+#### Settings ####
 
-##### Nu school #####
+##### ``org.nuprocess.threads`` #####
+This setting controls how many threads are used to handle the STDIN, STDOUT, STDERR streams of spawned processes.  No
+matter how many processes are spawned, this setting will be the maximum number of threads used.  Possible values are:
 
-##### Test Results #####
+ * ``auto`` (default) - this sets the number of threads to the number of CPU cores divided by 2.
+ * ``cores`` - this sets the number of threads to the number of CPU cores.
+ * ``<number>`` - the sets the number of threads to a specific number.  Often ``1`` will provide good performance even for dozens of processes.
 
-![](https://github.com/brettwooldridge/NuProcess/wiki/Benchmark.png)
+The default is ``auto``, but in reality if your child processes are "bursty" in their output, rather than producing a
+constant stream of data, a single thread may provide equivalent performance even with hundreds of processes.
 
-Settings for the NuSchool benchmark included ``-Dorg.nuprocess.threads=4``.
+##### ``org.nuprocess.softExitDetection`` #####
+On Linux and Windows there is no method by which you can be notified in an asynchronous manner that a child process has
+exited.  Rather than polling all child processes constantly NuProcess uses what we call "Soft Exit Detection".  When a
+child process exits, the OS automatically closes all of it's open file handles; which __is__ something about we can be
+notified.  So, on Linux and Windows when NuProcess determines that both the STDOUT and STDERR streams have been closed
+in the child process, that child process is put into a "dead pool".  The processes in the dead pool are polled to 
+determine when they have truly exited and what their exit status was.  See ``org.nuprocess.deadPoolPollMs``.  The default
+value for this property is ``true``.  Setting this value to ``false`` will completely disable process exit detection,
+and the ``NuProcess.waitFor()" API *MUST* be used.  Failure to invoke this API on Linux will result in an ever-growing
+accumulation of "zombie" processes and eventually an inability to create new processes.
+
+##### ``org.nuprocess.deadPoolPollMs`` #####
+On Linux and Windows, when Soft Exit Detection is enabled, this property controls how often the processes in the dead
+pool are polled for their exit status.  The default value is 250ms, and the minimum value is 100ms.
+
