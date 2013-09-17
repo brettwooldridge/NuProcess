@@ -35,11 +35,11 @@ even when running the JVM with only 120Mb (-Xmx128m).
 
 ##### ``org.nuprocess.threads`` #####
 This setting controls how many threads are used to handle the STDIN, STDOUT, STDERR streams of spawned processes.  No
-matter how many processes are spawned, this setting will be the maximum number of threads used.  Possible values are:
+matter how many processes are spawned, this setting will be the __maximum__ number of threads used.  Possible values are:
 
- * ``auto`` (default) - this sets the number of threads to the number of CPU cores divided by 2.
- * ``cores`` - this sets the number of threads to the number of CPU cores.
- * ``<number>`` - the sets the number of threads to a specific number.  Often ``1`` will provide good performance even for dozens of processes.
+ * ``auto`` (default) - this sets the __maximum__ number of threads to the number of CPU cores divided by 2.
+ * ``cores`` - this sets the __maximum__ number of threads to the number of CPU cores.
+ * ``<number>`` - the sets the __maximum__ number of threads to a specific number.  Often ``1`` will provide good performance even for dozens of processes.
 
 The default is ``auto``, but in reality if your child processes are "bursty" in their output, rather than producing a
 constant stream of data, a single thread may provide equivalent performance even with hundreds of processes.
