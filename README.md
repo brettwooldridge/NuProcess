@@ -35,11 +35,11 @@ even when running the JVM with only 120Mb (-Xmx128m).
 
 ##### ``org.nuprocess.threads`` #####
 This setting controls how many threads are used to handle the STDIN, STDOUT, STDERR streams of spawned processes.  No
-matter how many processes are spawned, this setting will be the __maximum__ number of threads used.  Possible values are:
+matter how many processes are spawned, this setting will be the *maximum* number of threads used.  Possible values are:
 
- * ``auto`` (default) - this sets the __maximum__ number of threads to the number of CPU cores divided by 2.
- * ``cores`` - this sets the __maximum__ number of threads to the number of CPU cores.
- * ``<number>`` - the sets the __maximum__ number of threads to a specific number.  Often ``1`` will provide good performance even for dozens of processes.
+ * ``auto`` (default) - this sets the *maximum* number of threads to the number of CPU cores divided by 2.
+ * ``cores`` - this sets the *maximum* number of threads to the number of CPU cores.
+ * ``<number>`` - the sets the *maximum* number of threads to a specific number.  Often ``1`` will provide good performance even for dozens of processes.
 
 The default is ``auto``, but in reality if your child processes are "bursty" in their output, rather than producing a
 constant stream of data, a single thread may provide equivalent performance even with hundreds of processes.
@@ -47,12 +47,12 @@ constant stream of data, a single thread may provide equivalent performance even
 ##### ``org.nuprocess.softExitDetection`` #####
 On Linux and Windows there is no method by which you can be notified in an asynchronous manner that a child process has
 exited.  Rather than polling all child processes constantly NuProcess uses what we call "Soft Exit Detection".  When a
-child process exits, the OS automatically closes all of it's open file handles; which __is__ something about we can be
+child process exits, the OS automatically closes all of it's open file handles; which *is* something about we can be
 notified.  So, on Linux and Windows when NuProcess determines that both the STDOUT and STDERR streams have been closed
 in the child process, that child process is put into a "dead pool".  The processes in the dead pool are polled to 
 determine when they have truly exited and what their exit status was.  See ``org.nuprocess.deadPoolPollMs``.  The default
 value for this property is ``true``.  Setting this value to ``false`` will completely disable process exit detection,
-and the ``NuProcess.waitFor()" API *MUST* be used.  Failure to invoke this API on Linux will result in an ever-growing
+and the ``NuProcess.waitFor()" API __MUST__ be used.  Failure to invoke this API on Linux will result in an ever-growing
 accumulation of "zombie" processes and eventually an inability to create new processes.
 
 ##### ``org.nuprocess.deadPoolPollMs`` #####
