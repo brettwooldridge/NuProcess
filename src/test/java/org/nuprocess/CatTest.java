@@ -51,10 +51,10 @@ public class CatTest
     @Test
     public void lotOfProcesses()
     {
-        for (int times = 0; times < 40; times++)
+        for (int times = 0; times < 20; times++)
         {
-            Semaphore[] semaphores = new Semaphore[500];
-            LottaProcessListener[] listeners = new LottaProcessListener[500];
+            Semaphore[] semaphores = new Semaphore[100];
+            LottaProcessListener[] listeners = new LottaProcessListener[100];
     
             for (int i = 0; i < semaphores.length; i++)
             {
@@ -93,7 +93,7 @@ public class CatTest
         }
     }
 
-    //@Test
+    @Test
     public void badExit()
     {
         final Semaphore semaphore = new Semaphore(0);
