@@ -3,14 +3,14 @@
 NuProcess
 =========
 
-A low-overhead, non-blocking I/O, external Process execution implementation for Java.  Think of it as ``java.lang.ProcessBuilder``
-and ``java.lang.Process`` on steroids.
+A low-overhead, non-blocking I/O, external Process execution implementation for Java.  It is a replacement for
+``java.lang.ProcessBuilder`` and ``java.lang.Process``.
 
 Have you ever been annoyed by the fact that whenever you spawn a process in Java you have to create two or three "pumper"
 threads (for every process) to pull data out of the ``stdout`` and ``stderr`` pipes and pump data into ``stdin``?  If your
-code starts a lot of processes you can have dozens or hundreds of threads doing nothing but pumping data!
+code starts a lot of processes you can have dozens or hundreds of threads doing nothing but pumping data.
 
-NuProcess used the JNA library to use platform-specific native APIs to achive non-blocking I/O on the pipes between your
+NuProcess uses the JNA library to use platform-specific native APIs to achive non-blocking I/O on the pipes between your
 Java process and the spawned processes:
 
  * Linux: uses epoll
@@ -68,6 +68,7 @@ for the processing thread to remain (linger) for some amount of time (default 25
 
 #### Limitations ####
 The following limitations exist in NuProcess:
+ * Currently only supports Linux, Windows, and MacOS X.
  * The provided library has only been tested on Java 7.
  * Linux support requires at least kernel version 2.6.17 or higher.
  * Unlike ``java.lang.Process``, NuProcess does not currently permit setting an alternate current working directory (cwd) for the child process.
