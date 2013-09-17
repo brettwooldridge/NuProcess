@@ -1,66 +1,75 @@
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
-	<modelVersion>4.0.0</modelVersion>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
 
-	<groupId>org.nuproces</groupId>
-	<artifactId>nuprocess</artifactId>
-	<version>0.9.0-SNAPSHOT</version>
-	<packaging>jar</packaging>
+    <groupId>org.nuprocess</groupId>
+    <artifactId>nuprocess</artifactId>
+    <version>0.9.0</version>
+    <packaging>bundle</packaging>
 
-	<name>nuprocess</name>
-	<url>http://maven.apache.org</url>
+    <name>NuProcess</name>
+    <url>https://github.com/brettwooldridge/NuProcess</url>
 
-	<properties>
-		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-	</properties>
+    <licenses>
+        <license>
+            <name>The Apache Software License, Version 2.0</name>
+            <url>http://www.apache.org/licenses/LICENSE-2.0.txt</url>
+            <distribution>repo</distribution>
+        </license>
+    </licenses>
 
-	<dependencies>
-		<dependency>
-			<groupId>net.java.dev.jna</groupId>
-			<artifactId>jna-platform</artifactId>
-			<version>4.0.0</version>
-		</dependency>
-		<dependency>
-			<groupId>net.java.dev.jna</groupId>
-			<artifactId>jna</artifactId>
-			<version>4.0.0</version>
-		</dependency>
-		<dependency>
-			<groupId>junit</groupId>
-			<artifactId>junit</artifactId>
-			<version>4.11</version>
-			<scope>test</scope>
-		</dependency>
-	</dependencies>
+    <properties>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    </properties>
 
-	<build>
-		<plugins>
-			<plugin>
-				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-compiler-plugin</artifactId>
-				<version>3.1</version>
-				<configuration>
-					<target>1.6</target>
-				</configuration>
-			</plugin>
-			<plugin>
-				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-surefire-plugin</artifactId>
-				<version>2.16</version>
-				<configuration>
-					<forkCount>1</forkCount>
-					<reuseForks>true</reuseForks>
-					<argLine>-Xmx1024m</argLine>
-				</configuration>
-			</plugin>
-		</plugins>
-	</build>
-	<organization>
-		<name>Brett Wooldridge</name>
-		<url>https://github.com/brettwooldridge</url>
-	</organization>
-	<scm>
-		<url>https://github.com/brettwooldridge/NuProcess</url>
-	</scm>
-	<description>A low-overhead, non-blocking I/O, external Process execution implementation for Java. Think of it as java.lang.ProcessBuilder and java.lang.Process on steroids.</description>
+    <dependencies>
+        <dependency>
+            <groupId>net.java.dev.jna</groupId>
+            <artifactId>jna-platform</artifactId>
+            <version>4.0.0</version>
+        </dependency>
+        <dependency>
+            <groupId>net.java.dev.jna</groupId>
+            <artifactId>jna</artifactId>
+            <version>4.0.0</version>
+        </dependency>
+        <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <version>4.11</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.apache.felix</groupId>
+            <artifactId>maven-bundle-plugin</artifactId>
+            <version>2.3.7</version>
+            <type>maven-plugin</type>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.felix</groupId>
+                <artifactId>maven-bundle-plugin</artifactId>
+                <version>2.3.7</version>
+                <extensions>true</extensions>
+                <configuration>
+                    <instructions>
+                        <Bundle-Name>NuProcess</Bundle-Name>
+                        <Export-Package>org.nuprocess</Export-Package>
+                        <Import-Package>com.sun.*,sun.misc.*</Import-Package>
+                        <Bundle-SymbolicName>${project.groupId}</Bundle-SymbolicName>
+                    </instructions>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+    <organization>
+        <name>Brett Wooldridge</name>
+        <url>https://github.com/brettwooldridge/NuProcess</url>
+    </organization>
+    <scm>
+        <url>https://github.com/brettwooldridge/NuProcess</url>
+    </scm>
+    <description>A low-overhead, non-blocking I/O, external Process execution implementation for Java.</description>
 </project>
