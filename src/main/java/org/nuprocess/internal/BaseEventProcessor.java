@@ -26,7 +26,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public abstract class BaseEventProcessor<T extends BasePosixProcess> implements IEventProcessor<T>
 {
-    protected static final int EVENT_BATCH_SIZE;
     protected static final int DEADPOOL_POLL_INTERVAL;
     protected static final int LINGER_ITERATIONS;
 
@@ -38,8 +37,6 @@ public abstract class BaseEventProcessor<T extends BasePosixProcess> implements 
 
     static
     {
-        EVENT_BATCH_SIZE = Integer.getInteger("org.nuprocess.eventBatchSize", 1); 
-
         int lingerTimeMs = Math.max(1000, Integer.getInteger("org.nuprocess.lingerTimeMs", 2500));
 
         DEADPOOL_POLL_INTERVAL = Math.min(lingerTimeMs, Math.max(100, Integer.getInteger("org.nuprocess.deadPoolPollMs", 250)));
