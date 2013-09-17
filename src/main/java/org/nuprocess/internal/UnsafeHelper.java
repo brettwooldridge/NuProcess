@@ -22,6 +22,7 @@ import java.nio.ByteBuffer;
 
 import sun.misc.Unsafe;
 
+@SuppressWarnings("restriction")
 public final class UnsafeHelper
 {
     private static final Unsafe UNSAFE;
@@ -66,7 +67,7 @@ public final class UnsafeHelper
     {
         try
         {
-            return (ByteBuffer) DIRECT_BYTEBUFFER_CONSTRUCTOR.newInstance(new Object[] { address, 65536 });
+            return (ByteBuffer) DIRECT_BYTEBUFFER_CONSTRUCTOR.newInstance(new Object[] { address, capacity });
         }
         catch (Exception e)
         {
