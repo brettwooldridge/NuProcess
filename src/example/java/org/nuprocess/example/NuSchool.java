@@ -36,6 +36,7 @@ public class NuSchool
         }
 
         long start = System.currentTimeMillis();
+        long maxFreeMem = 0;
 
         NuProcessBuilder pb = new NuProcessBuilder(Arrays.asList(command));
         for (int times = 0; times < 10; times++)
@@ -60,6 +61,7 @@ public class NuSchool
             {
                 try
                 {
+                    maxFreeMem = Math.max(maxFreeMem, Runtime.getRuntime().freeMemory());
 					process.waitFor(0, TimeUnit.SECONDS);
 				}
                 catch (InterruptedException e)
@@ -83,7 +85,8 @@ public class NuSchool
             }
         }
 
-        System.out.println("Total execution time (ms): " + (System.currentTimeMillis() - start));
+        System.out.printf("Maximum memory used: %d\n", Runtime.getRuntime().totalMemory() - maxFreeMem);
+        System.out.printf("Total execution time (ms): %d\n", (System.currentTimeMillis() - start));
         System.exit(0);
     }
 

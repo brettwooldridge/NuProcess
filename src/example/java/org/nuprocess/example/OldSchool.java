@@ -65,6 +65,7 @@ public class OldSchool
         pb.redirectErrorStream(true);
 
         long start = System.currentTimeMillis();
+        long maxFreeMem = 0;
 
         for (int times = 0; times < 10; times++)
         {
@@ -90,6 +91,7 @@ public class OldSchool
 	    
 	            for (Process process : processes)
 	            {
+                    maxFreeMem = Math.max(maxFreeMem, Runtime.getRuntime().freeMemory());
 	                if (process.waitFor() != 0)
 	            	{
 	                   System.err.println("Exit code not zero (0)");
@@ -113,7 +115,8 @@ public class OldSchool
             }
         }
 
-        System.out.println("Total execution time (ms): " + (System.currentTimeMillis() - start));
+        System.out.printf("Maximum memory used: %d\n", Runtime.getRuntime().totalMemory() - maxFreeMem);
+        System.out.printf("Total execution time (ms): %d\n", (System.currentTimeMillis() - start));
         System.exit(0);
     }
 
