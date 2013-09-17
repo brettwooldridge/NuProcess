@@ -270,10 +270,11 @@ public final class WindowsProcess implements NuProcess
                 return;
             }
 
-            stdoutPipe.buffer.position(0);
-            stdoutPipe.buffer.limit(transferred);
+            final ByteBuffer buffer = stdoutPipe.buffer;
+            buffer.position(0);
+            buffer.limit(transferred);
 
-            processListener.onStdout(stdoutPipe.buffer);
+            processListener.onStdout(buffer);
         }
         catch (Exception e)
         {
@@ -302,10 +303,11 @@ public final class WindowsProcess implements NuProcess
                 return;
             }
 
-            stderrPipe.buffer.position(0);
-            stderrPipe.buffer.limit(transferred);
+            final ByteBuffer buffer = stderrPipe.buffer;
+            buffer.position(0);
+            buffer.limit(transferred);
 
-            processListener.onStderr(stderrPipe.buffer);
+            processListener.onStderr(buffer);
         }
         catch (Exception e)
         {
@@ -320,7 +322,7 @@ public final class WindowsProcess implements NuProcess
         remainingWrite -= transferred;
         if (remainingWrite > 0)
         {
-            NuKernel32.WriteFile(stdinPipe.pipeHandle, stdinPipe.bufferPointer.share(writeOffset), remainingWrite, null,stdinPipe.overlapped);
+            NuKernel32.WriteFile(stdinPipe.pipeHandle, stdinPipe.bufferPointer.share(writeOffset), remainingWrite, null, stdinPipe.overlapped);
 
             return false;
         }
@@ -332,9 +334,10 @@ public final class WindowsProcess implements NuProcess
 
             try
             {
-                stdinPipe.buffer.clear();
-                userWantsWrite.set(processListener.onStdinReady(stdinPipe.buffer));
-                remainingWrite = stdinPipe.buffer.remaining();
+                final ByteBuffer buffer = stdinPipe.buffer;
+                buffer.clear();
+                userWantsWrite.set(processListener.onStdinReady(buffer));
+                remainingWrite = buffer.remaining();
 
                 return true;
             }
@@ -392,7 +395,7 @@ public final class WindowsProcess implements NuProcess
 
     boolean isSoftExit()
     {
-        return (IS_SOFTEXIT_DETECTION && outClosed && errClosed);
+        return (outClosed && errClosed && IS_SOFTEXIT_DETECTION);
     }
 
     void stdinClose()

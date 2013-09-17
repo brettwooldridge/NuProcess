@@ -118,7 +118,7 @@ public final class ProcessCompletions implements Runnable
                 return false;
             }
     
-            long key = completionKey.getValue().longValue();
+            final long key = completionKey.getValue().longValue();
             // explicit wake up by us to process pending want writes and registrations
             if (key == 0)
             {
@@ -127,7 +127,7 @@ public final class ProcessCompletions implements Runnable
                 return true;
             }
 
-            WindowsProcess process = completionKeyToProcessMap.get(key);
+            final WindowsProcess process = completionKeyToProcessMap.get(key);
             if (process == null)
             {
                 return true;
@@ -201,7 +201,7 @@ public final class ProcessCompletions implements Runnable
         return isRunning.compareAndSet(false, true);
     }
     
-    void wantWrite(WindowsProcess process)
+    void wantWrite(final WindowsProcess process)
     {
         try
         {
@@ -214,7 +214,7 @@ public final class ProcessCompletions implements Runnable
         }
     }
 
-    public void registerProcess(WindowsProcess process)
+    public void registerProcess(final WindowsProcess process)
     {
         try
         {
@@ -227,7 +227,7 @@ public final class ProcessCompletions implements Runnable
         }
     }
 
-    private void queueWrite(WindowsProcess process)
+    private void queueWrite(final WindowsProcess process)
     {
         final PipeBundle stdinPipe = process.getStdinPipe();
 
@@ -252,7 +252,7 @@ public final class ProcessCompletions implements Runnable
         }
     }
 
-    private void queueRead(WindowsProcess process, WindowsProcess.PipeBundle pipe, int stdX)
+    private void queueRead(final WindowsProcess process, final WindowsProcess.PipeBundle pipe, final int stdX)
     {
         if (NuKernel32.ReadFile(pipe.pipeHandle, pipe.bufferPointer, NuProcess.BUFFER_CAPACITY, null, pipe.overlapped) == 0)
         {
@@ -338,7 +338,7 @@ public final class ProcessCompletions implements Runnable
         }
     }
     
-    private void cleanupProcess(WindowsProcess process)
+    private void cleanupProcess(final WindowsProcess process)
     {
         completionKeyToProcessMap.remove(process.getStdinPipe().ioCompletionKey);
         completionKeyToProcessMap.remove(process.getStdoutPipe().ioCompletionKey);
