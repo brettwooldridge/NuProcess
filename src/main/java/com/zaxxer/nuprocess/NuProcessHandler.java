@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package org.nuprocess;
+package com.zaxxer.nuprocess;
 
 import java.nio.ByteBuffer;
 
@@ -29,7 +29,7 @@ public interface NuProcessHandler
 	 * instance, possibly in your listener, so that it can be used for
 	 * interaction within other callbacks in this interface.
 	 *
-	 * @param nuProcess the @{link org.nuprocess.NuProcess} that is starting
+	 * @param nuProcess the @{link com.zaxxer.nuprocess.NuProcess} that is starting
 	 */
 	void onStart(NuProcess nuProcess);
 

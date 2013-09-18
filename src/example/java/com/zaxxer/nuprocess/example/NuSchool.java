@@ -1,13 +1,13 @@
-package org.nuprocess.example;
+package com.zaxxer.nuprocess.example;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.concurrent.TimeUnit;
 import java.util.zip.Adler32;
 
-import org.nuprocess.NuAbstractProcessHandler;
-import org.nuprocess.NuProcess;
-import org.nuprocess.NuProcessBuilder;
+import com.zaxxer.nuprocess.NuAbstractProcessHandler;
+import com.zaxxer.nuprocess.NuProcess;
+import com.zaxxer.nuprocess.NuProcessBuilder;
 
 /**
  * This class demonstrates how one might use the NuProcess classes to run 5000
@@ -23,7 +23,7 @@ public class NuSchool
     {
     	if (args.length < 1)
     	{
-    		System.err.println("Usage: java org.nuprocess.example.NuSchool <num of processes>");
+    		System.err.println("Usage: java com.zaxxer.nuprocess.example.NuSchool <num of processes>");
     		System.exit(0);
     	}
 

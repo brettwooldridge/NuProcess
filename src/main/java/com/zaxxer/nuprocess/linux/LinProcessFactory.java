@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-package org.nuprocess.linux;
+package com.zaxxer.nuprocess.linux;
 
 import java.util.List;
 
-import org.nuprocess.NuProcess;
-import org.nuprocess.NuProcessFactory;
-import org.nuprocess.NuProcessHandler;
+import com.zaxxer.nuprocess.NuProcess;
+import com.zaxxer.nuprocess.NuProcessFactory;
+import com.zaxxer.nuprocess.NuProcessHandler;
 
 /**
  * Linux process factory.  Creates and starts a process.

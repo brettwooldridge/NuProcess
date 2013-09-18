@@ -1,4 +1,4 @@
-package org.nuprocess.example;
+package com.zaxxer.nuprocess.example;
 
 import java.io.BufferedInputStream;
 import java.io.BufferedOutputStream;
@@ -46,7 +46,7 @@ public class OldSchool
     {
     	if (args.length < 1)
     	{
-    		System.err.println("Usage: java org.nuprocess.example.OldSchool <num of processes>");
+    		System.err.println("Usage: java com.zaxxer.nuprocess.example.OldSchool <num of processes>");
     		System.exit(0);
     	}
 

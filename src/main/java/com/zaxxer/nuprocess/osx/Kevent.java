@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package org.nuprocess.osx;
+package com.zaxxer.nuprocess.osx;
 
 import com.sun.jna.Native;
 import com.sun.jna.NativeLong;

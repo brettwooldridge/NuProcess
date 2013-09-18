@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package org.nuprocess.linux;
+package com.zaxxer.nuprocess.linux;
 
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -22,12 +22,11 @@ import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 
-import org.nuprocess.NuProcess;
-import org.nuprocess.internal.BaseEventProcessor;
-import org.nuprocess.internal.LibC;
-
 import com.sun.jna.Native;
 import com.sun.jna.ptr.IntByReference;
+import com.zaxxer.nuprocess.NuProcess;
+import com.zaxxer.nuprocess.internal.BaseEventProcessor;
+import com.zaxxer.nuprocess.internal.LibC;
 
 /**
  * @author Brett Wooldridge

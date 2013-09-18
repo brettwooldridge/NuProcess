@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package org.nuprocess.osx;
+package com.zaxxer.nuprocess.osx;
 
 import java.util.Arrays;
 import java.util.List;

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package org.nuprocess.windows;
+package com.zaxxer.nuprocess.windows;
 
 import java.util.HashMap;
 import java.util.Iterator;
@@ -26,9 +26,6 @@ import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import org.nuprocess.NuProcess;
-import org.nuprocess.windows.WindowsProcess.PipeBundle;
-
 import com.sun.jna.Native;
 import com.sun.jna.platform.win32.BaseTSD.ULONG_PTR;
 import com.sun.jna.platform.win32.BaseTSD.ULONG_PTRByReference;
@@ -36,6 +33,8 @@ import com.sun.jna.platform.win32.WinNT;
 import com.sun.jna.platform.win32.WinNT.HANDLE;
 import com.sun.jna.ptr.IntByReference;
 import com.sun.jna.ptr.PointerByReference;
+import com.zaxxer.nuprocess.NuProcess;
+import com.zaxxer.nuprocess.windows.WindowsProcess.PipeBundle;
 
 public final class ProcessCompletions implements Runnable
 {
@@ -60,9 +59,9 @@ public final class ProcessCompletions implements Runnable
 
     static
     {
-        int lingerTimeMs = Math.max(1000, Integer.getInteger("org.nuprocess.lingerTimeMs", 2500));
+        int lingerTimeMs = Math.max(1000, Integer.getInteger("com.zaxxer.nuprocess.lingerTimeMs", 2500));
 
-        DEADPOOL_POLL_INTERVAL = Math.min(lingerTimeMs, Math.max(100, Integer.getInteger("org.nuprocess.deadPoolPollMs", 250)));
+        DEADPOOL_POLL_INTERVAL = Math.min(lingerTimeMs, Math.max(100, Integer.getInteger("com.zaxxer.nuprocess.deadPoolPollMs", 250)));
         
         LINGER_ITERATIONS = lingerTimeMs / DEADPOOL_POLL_INTERVAL;
     }

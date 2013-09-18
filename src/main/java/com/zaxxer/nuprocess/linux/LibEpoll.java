@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package org.nuprocess.linux;
+package com.zaxxer.nuprocess.linux;
 
 import com.sun.jna.Native;
 import com.sun.jna.Pointer;

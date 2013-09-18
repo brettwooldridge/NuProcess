@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package org.nuprocess.internal;
+package com.zaxxer.nuprocess.internal;
 
 import java.nio.ByteBuffer;
 import java.util.HashSet;
@@ -26,20 +26,19 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import org.nuprocess.NuProcess;
-import org.nuprocess.NuProcessHandler;
-
 import com.sun.jna.Memory;
 import com.sun.jna.Native;
 import com.sun.jna.Pointer;
 import com.sun.jna.StringArray;
 import com.sun.jna.ptr.IntByReference;
+import com.zaxxer.nuprocess.NuProcess;
+import com.zaxxer.nuprocess.NuProcessHandler;
 
 public abstract class BasePosixProcess implements NuProcess
 {
     protected static final boolean IS_MAC = System.getProperty("os.name").toLowerCase().contains("mac");
     protected static final boolean IS_LINUX = System.getProperty("os.name").toLowerCase().contains("linux");
-    private static final boolean LINUX_USE_VFORK = Boolean.parseBoolean(System.getProperty("org.nuprocess.linuxUseVfork", "true"));
+    private static final boolean LINUX_USE_VFORK = Boolean.parseBoolean(System.getProperty("com.zaxxer.nuprocess.linuxUseVfork", "true"));
     private static final boolean IS_SOFTEXIT_DETECTION;
 
     protected static IEventProcessor<? extends BasePosixProcess>[] processors;
@@ -80,10 +79,10 @@ public abstract class BasePosixProcess implements NuProcess
 
     static
     {
-        IS_SOFTEXIT_DETECTION = Boolean.valueOf(System.getProperty("org.nuprocess.softExitDetection", "true"));
+        IS_SOFTEXIT_DETECTION = Boolean.valueOf(System.getProperty("com.zaxxer.nuprocess.softExitDetection", "true"));
 
         int numThreads = 1;
-        String threads = System.getProperty("org.nuprocess.threads", "auto");
+        String threads = System.getProperty("com.zaxxer.nuprocess.threads", "auto");
         if ("auto".equals(threads))
         {
             numThreads = Math.max(1, Runtime.getRuntime().availableProcessors() / 2);

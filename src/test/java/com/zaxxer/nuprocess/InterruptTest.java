@@ -1,4 +1,4 @@
-package org.nuprocess;
+package com.zaxxer.nuprocess;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -12,12 +12,13 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
-import org.nuprocess.NuAbstractProcessHandler;
-import org.nuprocess.NuProcess;
-import org.nuprocess.NuProcessBuilder;
-import org.nuprocess.NuProcessHandler;
-import org.nuprocess.internal.BasePosixProcess;
-import org.nuprocess.internal.LibC;
+
+import com.zaxxer.nuprocess.NuAbstractProcessHandler;
+import com.zaxxer.nuprocess.NuProcess;
+import com.zaxxer.nuprocess.NuProcessBuilder;
+import com.zaxxer.nuprocess.NuProcessHandler;
+import com.zaxxer.nuprocess.internal.BasePosixProcess;
+import com.zaxxer.nuprocess.internal.LibC;
 
 @RunWith(value=RunOnlyOnUnix.class)
 public class InterruptTest

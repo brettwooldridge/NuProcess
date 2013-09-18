@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package org.nuprocess;
+package com.zaxxer.nuprocess;
 
 import java.util.List;
 

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package org.nuprocess.internal;
+package com.zaxxer.nuprocess.internal;
 
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -37,9 +37,9 @@ public abstract class BaseEventProcessor<T extends BasePosixProcess> implements 
 
     static
     {
-        int lingerTimeMs = Math.max(1000, Integer.getInteger("org.nuprocess.lingerTimeMs", 2500));
+        int lingerTimeMs = Math.max(1000, Integer.getInteger("com.zaxxer.nuprocess.lingerTimeMs", 2500));
 
-        DEADPOOL_POLL_INTERVAL = Math.min(lingerTimeMs, Math.max(100, Integer.getInteger("org.nuprocess.deadPoolPollMs", 250)));
+        DEADPOOL_POLL_INTERVAL = Math.min(lingerTimeMs, Math.max(100, Integer.getInteger("com.zaxxer.nuprocess.deadPoolPollMs", 250)));
         
         LINGER_ITERATIONS = lingerTimeMs / DEADPOOL_POLL_INTERVAL;
     }

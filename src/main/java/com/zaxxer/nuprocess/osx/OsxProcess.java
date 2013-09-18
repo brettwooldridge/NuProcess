@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 
-package org.nuprocess.osx;
+package com.zaxxer.nuprocess.osx;
 
 import java.util.List;
 
-import org.nuprocess.NuProcessHandler;
-import org.nuprocess.internal.BasePosixProcess;
+import com.zaxxer.nuprocess.NuProcessHandler;
+import com.zaxxer.nuprocess.internal.BasePosixProcess;
 
 /**
  * @author Brett Wooldridge

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package org.nuprocess;
+package com.zaxxer.nuprocess;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -39,19 +39,19 @@ public class NuProcessBuilder
         String osname = System.getProperty("os.name").toLowerCase();
         if (osname.contains("mac"))
         {
-            factoryClassName = "org.nuprocess.osx.OsxProcessFactory";
+            factoryClassName = "com.zaxxer.nuprocess.osx.OsxProcessFactory";
         }
         else if (osname.contains("win"))
         {
-            factoryClassName = "org.nuprocess.windows.WinProcessFactory";
+            factoryClassName = "com.zaxxer.nuprocess.windows.WinProcessFactory";
         }
         else if (osname.contains("linux"))
         {
-            factoryClassName = "org.nuprocess.linux.LinProcessFactory";
+            factoryClassName = "com.zaxxer.nuprocess.linux.LinProcessFactory";
         }
         else if (osname.contains("sunos"))
         {
-            factoryClassName = "org.nuprocess.solaris.SolProcessFactory";
+            factoryClassName = "com.zaxxer.nuprocess.solaris.SolProcessFactory";
         }
 
         if (factoryClassName == null)

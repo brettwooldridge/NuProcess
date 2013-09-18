@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package org.nuprocess.internal;
+package com.zaxxer.nuprocess.internal;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;

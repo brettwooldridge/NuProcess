@@ -17,13 +17,13 @@
 /**
  * 
  */
-package org.nuprocess.windows;
+package com.zaxxer.nuprocess.windows;
 
 import java.util.List;
 
-import org.nuprocess.NuProcess;
-import org.nuprocess.NuProcessFactory;
-import org.nuprocess.NuProcessHandler;
+import com.zaxxer.nuprocess.NuProcess;
+import com.zaxxer.nuprocess.NuProcessFactory;
+import com.zaxxer.nuprocess.NuProcessHandler;
 
 /**
  * Windows process factory.  Creates and starts a process.

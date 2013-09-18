@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package org.nuprocess;
+package com.zaxxer.nuprocess;
 
 import org.junit.runner.notification.RunNotifier;
 import org.junit.runners.BlockJUnit4ClassRunner;

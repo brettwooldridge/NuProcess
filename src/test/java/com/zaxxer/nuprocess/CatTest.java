@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package org.nuprocess;
+package com.zaxxer.nuprocess;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
@@ -25,10 +25,11 @@ import java.util.zip.Adler32;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
-import org.nuprocess.NuAbstractProcessHandler;
-import org.nuprocess.NuProcess;
-import org.nuprocess.NuProcessBuilder;
-import org.nuprocess.NuProcessHandler;
+
+import com.zaxxer.nuprocess.NuAbstractProcessHandler;
+import com.zaxxer.nuprocess.NuProcess;
+import com.zaxxer.nuprocess.NuProcessBuilder;
+import com.zaxxer.nuprocess.NuProcessHandler;
 
 /**
  * @author Brett Wooldridge

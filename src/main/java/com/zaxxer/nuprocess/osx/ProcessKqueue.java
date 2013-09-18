@@ -14,18 +14,17 @@
  * limitations under the License.
  */
 
-package org.nuprocess.osx;
+package com.zaxxer.nuprocess.osx;
 
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
 
-import org.nuprocess.internal.BaseEventProcessor;
-import org.nuprocess.internal.LibC;
-import org.nuprocess.osx.LibKevent.TimeSpec;
-
 import com.sun.jna.Pointer;
 import com.sun.jna.ptr.IntByReference;
+import com.zaxxer.nuprocess.internal.BaseEventProcessor;
+import com.zaxxer.nuprocess.internal.LibC;
+import com.zaxxer.nuprocess.osx.LibKevent.TimeSpec;
 
 /**
  * @author Brett Wooldridge

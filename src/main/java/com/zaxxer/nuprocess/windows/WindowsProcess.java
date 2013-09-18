@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-package org.nuprocess.windows;
+package com.zaxxer.nuprocess.windows;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -29,11 +29,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import org.nuprocess.NuProcess;
-import org.nuprocess.NuProcessHandler;
-import org.nuprocess.internal.UnsafeHelper;
-import org.nuprocess.windows.NuKernel32.OVERLAPPED;
-
 import com.sun.jna.Memory;
 import com.sun.jna.Native;
 import com.sun.jna.Pointer;
@@ -45,6 +40,10 @@ import com.sun.jna.platform.win32.WinBase.STARTUPINFO;
 import com.sun.jna.platform.win32.WinDef.DWORD;
 import com.sun.jna.platform.win32.WinNT;
 import com.sun.jna.platform.win32.WinNT.HANDLE;
+import com.zaxxer.nuprocess.NuProcess;
+import com.zaxxer.nuprocess.NuProcessHandler;
+import com.zaxxer.nuprocess.internal.UnsafeHelper;
+import com.zaxxer.nuprocess.windows.NuKernel32.OVERLAPPED;
 
 /**
  * @author Brett Wooldridge
@@ -93,9 +92,9 @@ public final class WindowsProcess implements NuProcess
     {
         namedPipeCounter = new AtomicInteger(100);
 
-        IS_SOFTEXIT_DETECTION = Boolean.valueOf(System.getProperty("org.nuprocess.softExitDetection", "true"));
+        IS_SOFTEXIT_DETECTION = Boolean.valueOf(System.getProperty("com.zaxxer.nuprocess.softExitDetection", "true"));
 
-        String threads = System.getProperty("org.nuprocess.threads", "auto");
+        String threads = System.getProperty("com.zaxxer.nuprocess.threads", "auto");
         if ("auto".equals(threads))
         {
             PROCESSOR_THREADS = Math.max(1, Runtime.getRuntime().availableProcessors() / 2);

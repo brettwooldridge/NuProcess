@@ -1,4 +1,4 @@
-package org.nuprocess.windows;
+package com.zaxxer.nuprocess.windows;
 
 import com.sun.jna.Native;
 import com.sun.jna.NativeLibrary;
