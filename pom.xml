@@ -13,7 +13,7 @@
     <url>https://github.com/brettwooldridge/NuProcess</url>
 
     <organization>
-        <name>Brett Wooldridge</name>
+        <name>Zaxxer.com</name>
         <url>https://github.com/brettwooldridge/NuProcess</url>
     </organization>
 
@@ -28,6 +28,13 @@
             <distribution>repo</distribution>
         </license>
     </licenses>
+
+    <developers>
+        <developer>
+            <name>Brett Wooldridge</name>
+            <email>brett.wooldridge@gmail.com</email>
+        </developer>
+    </developers>
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -59,6 +66,8 @@
     </dependencies>
 
     <build>
+        <sourceDirectory>src/main/java</sourceDirectory>
+        <testSourceDirectory>src/test/java</testSourceDirectory>
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
@@ -81,6 +90,24 @@
                         <Import-Package>com.sun.*,sun.misc.*</Import-Package>
                         <Bundle-SymbolicName>${project.groupId}</Bundle-SymbolicName>
                     </instructions>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-javadoc-plugin</artifactId>
+                <version>2.9.1</version>
+                <executions>
+                    <execution>
+                        <phase>verify</phase>
+                        <goals>
+                            <goal>jar</goal>
+                        </goals>
+                        <inherited>false</inherited>
+                    </execution>
+                </executions>
+                <configuration>
+                    <show>public</show>
+                    <excludePackageNames>com.zaxxer.nuprocess.*</excludePackageNames>
                 </configuration>
             </plugin>
         </plugins>
