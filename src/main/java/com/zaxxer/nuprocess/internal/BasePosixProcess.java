@@ -237,6 +237,7 @@ public abstract class BasePosixProcess implements NuProcess
             // TODO remove from event processor pid map?
             re.printStackTrace(System.err);
             onExit(Integer.MIN_VALUE);
+            return null;
         }
         finally
         {

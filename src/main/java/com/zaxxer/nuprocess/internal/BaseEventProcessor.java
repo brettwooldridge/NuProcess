@@ -52,7 +52,7 @@ public abstract class BaseEventProcessor<T extends BasePosixProcess> implements 
     }
 
     /**
-     * The primary run loop of the kqueue event processor.
+     * The primary run loop of the event processor.
      */
     @Override
     public void run()
@@ -74,15 +74,7 @@ public abstract class BaseEventProcessor<T extends BasePosixProcess> implements 
         }
     }
 
-
-    /**
-     * Get the CyclicBarrier that this thread should join, along with the OsxProcess
-     * thread that is starting this processor.  Used to cause the OsxProcess to wait
-     * until the processor is up and running before returning from start() to the
-     * user.
-     *
-     * @param processorRunning a CyclicBarrier to join
-     */
+    /** {@inheritDoc} */
     @Override
     public CyclicBarrier getSpawnBarrier()
     {
@@ -90,9 +82,7 @@ public abstract class BaseEventProcessor<T extends BasePosixProcess> implements 
         return startBarrier;
     }
 
-    /**
-     * @return
-     */
+    /** {@inheritDoc} */
     @Override
     public boolean checkAndSetRunning()
     {

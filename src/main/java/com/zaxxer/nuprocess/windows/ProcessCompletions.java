@@ -178,23 +178,12 @@ public final class ProcessCompletions implements Runnable
         }
     }
 
-    /**
-     * Get the CyclicBarrier that this thread should join, along with the OsxProcess
-     * thread that is starting this processor.  Used to cause the OsxProcess to wait
-     * until the processor is up and running before returning from start() to the
-     * user.
-     *
-     * @param processorRunning a CyclicBarrier to join
-     */
     CyclicBarrier getSpawnBarrier()
     {
         startBarrier = new CyclicBarrier(2);
         return startBarrier;
     }
 
-    /**
-     * @return
-     */
     boolean checkAndSetRunning()
     {
         return isRunning.compareAndSet(false, true);

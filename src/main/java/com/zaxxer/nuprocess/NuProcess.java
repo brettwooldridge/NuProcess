@@ -54,7 +54,7 @@ public interface NuProcess
      * will result in the {@link NuProcessHandler#onStdinReady} callback method of the process
      * handler being called when space is available in the STDIN pipe.
      * <p>
-     * This method will throw a {@link IllegalStateException} if the {@link #stdinClose} method
+     * This method will throw a {@link IllegalStateException} if the {@link #closeStdin} method
      * has already been called. 
      */
     void wantWrite();
