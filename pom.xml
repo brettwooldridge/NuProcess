@@ -18,7 +18,9 @@
     </organization>
 
     <scm>
-        <url>https://github.com/brettwooldridge/NuProcess</url>
+        <connection>scm:git:git@github.com:brettwooldridge/NuProcess.git</connection>
+        <developerConnection>scm:git:git@github.com:brettwooldridge/NuProcess.git</developerConnection>
+        <url>git@github.com:brettwooldridge/NuProcess.git</url>
     </scm>
 
     <licenses>
@@ -39,6 +41,12 @@
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     </properties>
+
+    <parent>
+        <groupId>org.sonatype.oss</groupId>
+        <artifactId>oss-parent</artifactId>
+        <version>7</version>
+    </parent>
 
     <dependencies>
         <dependency>
