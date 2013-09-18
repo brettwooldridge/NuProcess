@@ -33,7 +33,7 @@ even when running the JVM with only 128Mb (-Xmx128m).
 
 #### Settings ####
 
-##### ``org.nuprocess.threads`` #####
+##### ``com.zaxxer.nuprocess.threads`` #####
 This setting controls how many threads are used to handle the STDIN, STDOUT, STDERR streams of spawned processes.  No
 matter how many processes are spawned, this setting will be the *maximum* number of threads used.  Possible values are:
 
@@ -44,24 +44,24 @@ matter how many processes are spawned, this setting will be the *maximum* number
 The default is ``auto``, but in reality if your child processes are "bursty" in their output, rather than producing a
 constant stream of data, a single thread may provide equivalent performance even with hundreds of processes.
 
-##### ``org.nuprocess.softExitDetection`` #####
+##### ``com.zaxxer.nuprocess.softExitDetection`` #####
 On Linux and Windows there is no method by which you can be notified in an asynchronous manner that a child process has
 exited.  Rather than polling all child processes constantly NuProcess uses what we call "Soft Exit Detection".  When a
 child process exits, the OS automatically closes all of it's open file handles; which *is* something about we can be
 notified.  So, on Linux and Windows when NuProcess determines that both the STDOUT and STDERR streams have been closed
 in the child process, that child process is put into a "dead pool".  The processes in the dead pool are polled to 
-determine when they have truly exited and what their exit status was.  See ``org.nuprocess.deadPoolPollMs``
+determine when they have truly exited and what their exit status was.  See ``com.zaxxer.nuprocess.deadPoolPollMs``
 
 The default value for this property is ``true``.  Setting this value to ``false`` will completely disable process exit 
 detection, and the ``NuProcess.waitFor()" API __MUST__ be used.  Failure to invoke this API on Linux will result in an 
 ever-growing accumulation of "zombie" processes and eventually an inability to create new processes.  There is very little
 reason to disable soft exit detection unless you have child process that itself closes the STDOUT and STDERR streams.
 
-##### ``org.nuprocess.deadPoolPollMs`` #####
+##### ``com.zaxxer.nuprocess.deadPoolPollMs`` #####
 On Linux and Windows, when Soft Exit Detection is enabled (the default), this property controls how often the processes in
 the dead pool are polled for their exit status.  The default value is 250ms, and the minimum value is 100ms.
 
-##### ``org.nuprocess.lingerTimeMs`` #####
+##### ``com.zaxxer.nuprocess.lingerTimeMs`` #####
 This property controls how long the processing thread(s) remains after the last executing child process has exited.  In
 order to avoid the overhead of starting up another processing thread, if processes are frequently run it may be desirable
 for the processing thread to remain (linger) for some amount of time (default 2500ms).
