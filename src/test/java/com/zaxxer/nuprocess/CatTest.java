@@ -17,7 +17,6 @@
 package com.zaxxer.nuprocess;
 
 import java.nio.ByteBuffer;
-import java.util.Arrays;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.zip.Adler32;
@@ -25,11 +24,6 @@ import java.util.zip.Adler32;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
-
-import com.zaxxer.nuprocess.NuAbstractProcessHandler;
-import com.zaxxer.nuprocess.NuProcess;
-import com.zaxxer.nuprocess.NuProcessBuilder;
-import com.zaxxer.nuprocess.NuProcessHandler;
 
 /**
  * @author Brett Wooldridge
@@ -61,7 +55,7 @@ public class CatTest
             {
                 semaphores[i] = new Semaphore(0);
                 listeners[i] = new LottaProcessListener(semaphores[i]);
-                NuProcessBuilder pb = new NuProcessBuilder(Arrays.asList(command), listeners[i]);
+                NuProcessBuilder pb = new NuProcessBuilder(listeners[i], command);
                 pb.start();
             }
     
@@ -86,7 +80,7 @@ public class CatTest
             Semaphore semaphore = new Semaphore(0);
     
             LottaProcessListener processListener = new LottaProcessListener(semaphore);
-            NuProcessBuilder pb = new NuProcessBuilder(Arrays.asList(command), processListener);
+            NuProcessBuilder pb = new NuProcessBuilder(processListener, command);
             pb.start();
             semaphore.acquireUninterruptibly();
     
@@ -109,7 +103,7 @@ public class CatTest
             }
         };
 
-        NuProcessBuilder pb = new NuProcessBuilder(Arrays.asList(command, "/tmp/sdfadsf"), processListener);
+        NuProcessBuilder pb = new NuProcessBuilder(processListener, command, "/tmp/sdfadsf");
         pb.start();
         semaphore.acquireUninterruptibly();
         Assert.assertEquals("Exit code did not match expectation", 1, exitCode.get());
@@ -130,7 +124,7 @@ public class CatTest
             }
         };
 
-        NuProcessBuilder pb = new NuProcessBuilder(Arrays.asList("/bin/zxczxc"), processListener);
+        NuProcessBuilder pb = new NuProcessBuilder(processListener, "/bin/zxczxc");
         pb.start();
         semaphore.acquireUninterruptibly();
         Assert.assertEquals("Output did not matched expected result", Integer.MIN_VALUE, exitCode.get());

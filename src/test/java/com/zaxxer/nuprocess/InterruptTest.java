@@ -2,7 +2,6 @@ package com.zaxxer.nuprocess;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.Semaphore;
@@ -13,10 +12,6 @@ import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 
-import com.zaxxer.nuprocess.NuAbstractProcessHandler;
-import com.zaxxer.nuprocess.NuProcess;
-import com.zaxxer.nuprocess.NuProcessBuilder;
-import com.zaxxer.nuprocess.NuProcessHandler;
 import com.zaxxer.nuprocess.internal.BasePosixProcess;
 import com.zaxxer.nuprocess.internal.LibC;
 
@@ -66,7 +61,7 @@ public class InterruptTest
 
         };
 
-        NuProcessBuilder pb = new NuProcessBuilder(Arrays.asList("/bin/cat"), processListener);
+        NuProcessBuilder pb = new NuProcessBuilder(processListener, "/bin/cat");
         NuProcess process = pb.start();
         while (true)
         {
@@ -113,7 +108,7 @@ public class InterruptTest
 
         };
 
-        NuProcessBuilder pb = new NuProcessBuilder(Arrays.asList("/bin/cat"), processListener);
+        NuProcessBuilder pb = new NuProcessBuilder(processListener, "/bin/cat");
         List<NuProcess> processes = new LinkedList<NuProcess>();
         for (int times = 0; times < 1; times++)
         {
