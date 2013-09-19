@@ -346,6 +346,10 @@ public final class WindowsProcess implements NuProcess
             return false;
         }
 
+        stdinPipe.buffer.clear();
+        remainingWrite = 0;
+        writeOffset = 0;
+
         if (!pendingWrites.isEmpty())
         {
             // copy the next buffer into our direct buffer (inBuffer)
@@ -373,8 +377,6 @@ public final class WindowsProcess implements NuProcess
 
         if (userWantsWrite.compareAndSet(true, false))
         {
-            remainingWrite = 0;
-            writeOffset = 0;
 
             try
             {

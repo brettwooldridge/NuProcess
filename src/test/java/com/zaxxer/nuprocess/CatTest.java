@@ -18,6 +18,7 @@ package com.zaxxer.nuprocess;
 
 import java.nio.ByteBuffer;
 import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.zip.Adler32;
 
@@ -39,7 +40,7 @@ public class CatTest
         command = "/bin/cat";
         if (System.getProperty("os.name").toLowerCase().contains("win"))
         {
-            command = "src\\test\\java\\org\\nuprocess\\windows\\cat.exe";
+            command = "src\\test\\java\\com\\zaxxer\\nuprocess\\cat.exe";
         }
     }
 
@@ -89,9 +90,8 @@ public class CatTest
     }
 
     @Test
-    public void badExit()
+    public void badExit() throws InterruptedException
     {
-        final Semaphore semaphore = new Semaphore(0);
         final AtomicInteger exitCode = new AtomicInteger();
 
         NuProcessHandler processListener = new NuAbstractProcessHandler() {
@@ -99,14 +99,20 @@ public class CatTest
             public void onExit(int statusCode)
             {
                 exitCode.set(statusCode);
-                semaphore.release();
             }
         };
 
         NuProcessBuilder pb = new NuProcessBuilder(processListener, command, "/tmp/sdfadsf");
-        pb.start();
-        semaphore.acquireUninterruptibly();
-        Assert.assertEquals("Exit code did not match expectation", 1, exitCode.get());
+        NuProcess nuProcess = pb.start();
+        nuProcess.waitFor(5, TimeUnit.SECONDS);
+        if (System.getProperty("os.name").toLowerCase().contains("win"))
+        {
+            Assert.assertEquals("Exit code did not match expectation", -1, exitCode.get());
+        }
+        else
+        {
+            Assert.assertEquals("Exit code did not match expectation", 1, exitCode.get());
+        }
     }
 
     @Test

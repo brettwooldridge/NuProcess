@@ -9,15 +9,27 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.Assert;
+import org.junit.Before;
 import org.junit.Test;
-import org.junit.runner.RunWith;
 
 import com.zaxxer.nuprocess.internal.BasePosixProcess;
 import com.zaxxer.nuprocess.internal.LibC;
+import com.zaxxer.nuprocess.windows.WindowsProcess;
 
-@RunWith(value=RunOnlyOnUnix.class)
 public class InterruptTest
 {
+    private String command;
+
+    @Before
+    public void setup()
+    {
+        command = "/bin/cat";
+        if (System.getProperty("os.name").toLowerCase().contains("win"))
+        {
+            command = "src\\test\\java\\com\\zaxxer\\nuprocess\\cat.exe";
+        }
+    }
+
     @Test
     public void testInterrupt1() throws InterruptedException
     {
@@ -61,7 +73,7 @@ public class InterruptTest
 
         };
 
-        NuProcessBuilder pb = new NuProcessBuilder(processListener, "/bin/cat");
+        NuProcessBuilder pb = new NuProcessBuilder(processListener, command);
         NuProcess process = pb.start();
         while (true)
         {
@@ -108,7 +120,7 @@ public class InterruptTest
 
         };
 
-        NuProcessBuilder pb = new NuProcessBuilder(processListener, "/bin/cat");
+        NuProcessBuilder pb = new NuProcessBuilder(processListener, command);
         List<NuProcess> processes = new LinkedList<NuProcess>();
         for (int times = 0; times < 1; times++)
         {
@@ -116,19 +128,32 @@ public class InterruptTest
             {
                 processes.add(pb.start());
             }
-    System.err.println("Starting the killing");
+
             List<NuProcess> deadProcs = new ArrayList<NuProcess>();
             while (true)
             {
                 Thread.sleep(20);
                 int dead = (int) (Math.random() * processes.size());
-                BasePosixProcess bpp = (BasePosixProcess) processes.remove(dead);
-                if (bpp == null)
+                if (!System.getProperty("os.name").toLowerCase().contains("win"))
                 {
-                    continue;
+                    BasePosixProcess bpp = (BasePosixProcess) processes.remove(dead);
+                    if (bpp == null)
+                    {
+                        continue;
+                    }
+                    deadProcs.add(bpp);
+                    LibC.kill(bpp.getPid(), LibC.SIGKILL);
                 }
-                deadProcs.add(bpp);
-                LibC.kill(bpp.getPid(), LibC.SIGKILL);
+                else
+                {
+                    WindowsProcess wp = (WindowsProcess) processes.remove(dead);
+                    if (wp == null)
+                    {
+                        continue;
+                    }
+                    deadProcs.add(wp);
+                    wp.destroy();
+                }
     
                 if (processes.isEmpty())
                 {
