@@ -20,6 +20,7 @@ import java.nio.ByteBuffer;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.TimeUnit;
@@ -70,6 +71,7 @@ public abstract class BasePosixProcess implements NuProcess
     protected boolean outClosed;
     protected boolean errClosed;
 
+    private ConcurrentLinkedQueue<ByteBuffer> pendingWrites;
     private int remainingWrite;
     private int writeOffset;
 
@@ -178,6 +180,22 @@ public abstract class BasePosixProcess implements NuProcess
                 myProcessor.closeStdin(this);
             }
             close(stdin);
+        }
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void writeStdin(ByteBuffer buffer)
+    {
+        int fd = stdin.get();
+        if (fd != -1)
+        {
+            pendingWrites.add(buffer);
+            myProcessor.queueWrite(this);
+        }
+        else
+        {
+            throw new IllegalStateException("closeStdin() method has already been called.");
         }
     }
 
@@ -397,13 +415,13 @@ public abstract class BasePosixProcess implements NuProcess
 
     public boolean writeStdin(int availability)
     {
-        if (availability <= 0)
+        int fd = stdin.get();
+        if (availability <= 0 || fd == -1)
         {
             return false;
         }
 
-        int fd = stdin.get();
-        if (remainingWrite > 0 && fd != -1)
+        if (remainingWrite > 0)
         {
             int wrote = 0;
             do {
@@ -430,8 +448,35 @@ public abstract class BasePosixProcess implements NuProcess
                 return true;
             }
 
+            inBuffer.clear();
             remainingWrite = 0;
             writeOffset = 0;
+        }
+
+        if (!pendingWrites.isEmpty())
+        {
+            // copy the next buffer into our direct buffer (inBuffer)
+            ByteBuffer byteBuffer = pendingWrites.peek();
+            if (byteBuffer.remaining() > BUFFER_CAPACITY)
+            {
+                ByteBuffer slice = byteBuffer.slice();
+                slice.limit(BUFFER_CAPACITY);
+                inBuffer.put(slice);
+                byteBuffer.position(byteBuffer.position() + BUFFER_CAPACITY);
+                remainingWrite = BUFFER_CAPACITY;
+            }
+            else
+            {
+                remainingWrite = byteBuffer.remaining();
+                inBuffer.put(byteBuffer);
+                pendingWrites.poll();
+            }
+
+            // Recurse
+            if (remainingWrite > 0)
+            {
+                return writeStdin(availability);
+            }
         }
 
         if (!userWantsWrite.get())
@@ -454,7 +499,7 @@ public abstract class BasePosixProcess implements NuProcess
             return false;
         }
     }
-
+    
     // ************************************************************************
     //                             Private methods
     // ************************************************************************
@@ -463,6 +508,8 @@ public abstract class BasePosixProcess implements NuProcess
     {
         outClosed = false;
         errClosed = false;
+
+        pendingWrites = new ConcurrentLinkedQueue<ByteBuffer>();
 
         long peer = Native.malloc(BUFFER_CAPACITY);
         outBuffer = UnsafeHelper.wrapNativeMemory(peer, BUFFER_CAPACITY);

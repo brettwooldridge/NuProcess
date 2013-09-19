@@ -36,8 +36,8 @@ public class WinProcessFactory implements NuProcessFactory
     @Override
     public NuProcess createProcess(List<String> commands, String[] env, NuProcessHandler processListener)
     {
-        WindowsProcess process =  new WindowsProcess(commands, env, processListener);
-        process.start();
+        WindowsProcess process =  new WindowsProcess(processListener);
+        process.start(commands, env);
         return process;
     }
 }

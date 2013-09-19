@@ -16,6 +16,7 @@
 
 package com.zaxxer.nuprocess;
 
+import java.nio.ByteBuffer;
 import java.util.concurrent.TimeUnit;
 
 
@@ -60,6 +61,23 @@ public interface NuProcess
     void wantWrite();
 
     /**
+     * Performs a "direct write" rather than expressing a desire to write using {@link #wantWrite()}
+     * and performing the write in a callback.  Be careful mixing this paradigm with the
+     * asynchronous paradigm imposed by {@link #wantWrite()}.  This method returns immediately and
+     * the write of the data occurs on the asynchronous processing thread.  You can perform multiple
+     * {@code writeStdin()} calls without regard to the size of the interprocess pipe; the writes
+     * will be queued and written asynchronously as space is available in the pipe.  Note that if
+     * the client process is not pulling data out of the pipe, calling this method repeatedly will
+     * result is the accumulation of unwritten ByteBuffers in the Java process and possibly an
+     * eventual out of memory condition.  Using a Direct ByteBuffer will provide performance
+     * improvements.  Note that NuProcess will not flip the buffer for you; after writing your
+     * data into the {@code buffer} you must flip the buffer before calling this method.
+     *
+     * @param buffer the {@link ByteBuffer} to write to the STDIN stream of the process
+     */
+    void writeStdin(ByteBuffer buffer);
+
+    /**
      * This method is used to close the STDIN pipe between the Java process and the spawned
      * process.  The STDIN pipe is immediately closed regardless of pending unwritten data,
      * and even data that has been written into the pipe will be immediately discarded.
@@ -74,9 +92,9 @@ public interface NuProcess
     void destroy();
 
     /**
-     * Tests whether or not the process is still alive or has exited.
+     * Tests whether or not the process is still running or has exited.
      *
-     * @return true if the process is still alive, false if it has exited
+     * @return true if the process is still running, false if it has exited
      */
     boolean isRunning();
 }

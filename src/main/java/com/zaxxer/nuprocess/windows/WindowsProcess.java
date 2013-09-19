@@ -23,6 +23,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.TimeUnit;
@@ -64,8 +65,6 @@ public final class WindowsProcess implements NuProcess
     private ProcessCompletions myProcessor;
     private NuProcessHandler processListener;
 
-    private String[] environment;
-    private String[] commands;
     private AtomicInteger exitCode;
     private CountDownLatch exitPending;
 
@@ -79,6 +78,7 @@ public final class WindowsProcess implements NuProcess
     private HANDLE hStdoutWidow;
     private HANDLE hStderrWidow;
 
+    private ConcurrentLinkedQueue<ByteBuffer> pendingWrites;
     private int remainingWrite;
     private int writeOffset;
 
@@ -115,10 +115,8 @@ public final class WindowsProcess implements NuProcess
         }
     }
 
-    public WindowsProcess(List<String> commands, String[] env, NuProcessHandler processListener)
+    public WindowsProcess(NuProcessHandler processListener)
     {
-        this.commands = commands.toArray(new String[0]);
-        this.environment = env;
         this.processListener = processListener;
 
         this.userWantsWrite = new AtomicBoolean();
@@ -162,6 +160,21 @@ public final class WindowsProcess implements NuProcess
 
     /** {@inheritDoc} */
     @Override
+    public void writeStdin(ByteBuffer buffer)
+    {
+        if (hStdinWidow != null && !WinBase.INVALID_HANDLE_VALUE.getPointer().equals(hStdinWidow.getPointer()))
+        {
+            pendingWrites.add(buffer);
+            myProcessor.wantWrite(this);
+        }
+        else
+        {
+            throw new IllegalStateException("closeStdin() method has already been called.");
+        }
+    }
+
+    /** {@inheritDoc} */
+    @Override
     public void closeStdin()
     {
         stdinClose();
@@ -185,13 +198,13 @@ public final class WindowsProcess implements NuProcess
     //                          Package-scoped methods
     // ************************************************************************
 
-    NuProcess start()
+    NuProcess start(List<String> commands, String[] environment)
     {
         try
         {
             createPipes();
 
-            char[] block = getEnvironment();
+            char[] block = getEnvironment(environment);
             Memory env = new Memory(block.length * 3);
             env.write(0, block, 0, block.length);
 
@@ -206,7 +219,7 @@ public final class WindowsProcess implements NuProcess
             processInfo = new PROCESS_INFORMATION();
 
             DWORD dwCreationFlags = new DWORD(WinNT.CREATE_NO_WINDOW | WinNT.CREATE_UNICODE_ENVIRONMENT | WinNT.CREATE_SUSPENDED);
-            if (!NuKernel32.CreateProcessW(null, getCommandLine(), null /*lpProcessAttributes*/, null /*lpThreadAttributes*/, true /*bInheritHandles*/,
+            if (!NuKernel32.CreateProcessW(null, getCommandLine(commands), null /*lpProcessAttributes*/, null /*lpThreadAttributes*/, true /*bInheritHandles*/,
                                          dwCreationFlags, env, null /*lpCurrentDirectory*/, startupInfo, processInfo))
             {
                 int lastError = Native.getLastError();
@@ -332,7 +345,32 @@ public final class WindowsProcess implements NuProcess
 
             return false;
         }
-        
+
+        if (!pendingWrites.isEmpty())
+        {
+            // copy the next buffer into our direct buffer (inBuffer)
+            ByteBuffer byteBuffer = pendingWrites.peek();
+            if (byteBuffer.remaining() > BUFFER_CAPACITY)
+            {
+                ByteBuffer slice = byteBuffer.slice();
+                slice.limit(BUFFER_CAPACITY);
+                stdinPipe.buffer.put(slice);
+                byteBuffer.position(byteBuffer.position() + BUFFER_CAPACITY);
+                remainingWrite = BUFFER_CAPACITY;
+            }
+            else
+            {
+                remainingWrite = byteBuffer.remaining();
+                stdinPipe.buffer.put(byteBuffer);
+                pendingWrites.poll();
+            }
+
+            if (remainingWrite > 0)
+            {
+                return true;
+            }
+        }
+
         if (userWantsWrite.compareAndSet(true, false))
         {
             remainingWrite = 0;
@@ -487,8 +525,7 @@ public final class WindowsProcess implements NuProcess
 
     private void afterStart()
     {
-        commands = null;
-        environment = null;
+        pendingWrites = new ConcurrentLinkedQueue<ByteBuffer>();
 
         outClosed = false;
         errClosed = false;
@@ -538,12 +575,12 @@ public final class WindowsProcess implements NuProcess
         }
     }
 
-    private char[] getCommandLine()
+    private char[] getCommandLine(List<String> commands)
     {
         StringBuilder sb = new StringBuilder();
-        if (commands[0].contains(" ") && !commands[0].startsWith("\"") && !commands[0].endsWith("\""))
+        if (commands.get(0).contains(" ") && !commands.get(0).startsWith("\"") && !commands.get(0).endsWith("\""))
         {
-            commands[0] = "\"" + commands[0].replaceAll("\\\"", "\\\"") + "\"";
+            commands.set(0, "\"" + commands.get(0).replaceAll("\\\"", "\\\"") + "\"");
         }
 
         for (String s : commands)
@@ -561,7 +598,7 @@ public final class WindowsProcess implements NuProcess
         return sb.toString().toCharArray();
     }
 
-    private char[] getEnvironment()
+    private char[] getEnvironment(String[] environment)
     {
         Map<String, String> env = new HashMap<String, String>(System.getenv());
         for (String entry : environment)
