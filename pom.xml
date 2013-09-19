@@ -96,7 +96,7 @@
                         <Bundle-Name>NuProcess</Bundle-Name>
                         <Export-Package>com.zaxxer.nuprocess</Export-Package>
                         <Import-Package>com.sun.*,sun.misc.*</Import-Package>
-                        <Bundle-SymbolicName>${project.groupId}</Bundle-SymbolicName>
+                        <Bundle-SymbolicName>${project.groupId}.${project.artifactId}</Bundle-SymbolicName>
                     </instructions>
                 </configuration>
             </plugin>
