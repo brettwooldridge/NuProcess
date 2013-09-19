@@ -47,24 +47,22 @@ public abstract class BasePosixProcess implements NuProcess
     protected IEventProcessor<? super BasePosixProcess> myProcessor;
     protected NuProcessHandler processListener;
 
-    protected String[] environment;
-    protected String[] commands;
+    protected volatile int pid;
     protected AtomicInteger exitCode;
     protected CountDownLatch exitPending;
 
     protected AtomicBoolean userWantsWrite;
 
+    // ******* Input/Output Buffers
     protected ByteBuffer outBuffer;
     protected ByteBuffer inBuffer;
-
     protected Pointer outBufferPointer;
     protected Pointer inBufferPointer;
 
+    // ******* Stdin/Stdout/Stderr pipe handles
     protected AtomicInteger stdin;
     protected AtomicInteger stdout;
     protected AtomicInteger stderr;
-    protected volatile int pid;
-
     protected volatile int stdinWidow;
     protected volatile int stdoutWidow;
     protected volatile int stderrWidow;
@@ -99,10 +97,8 @@ public abstract class BasePosixProcess implements NuProcess
         processors = new IEventProcessor<?>[numThreads];
     }
 
-    protected BasePosixProcess(List<String> command, String[] env, NuProcessHandler processListener)
+    protected BasePosixProcess(NuProcessHandler processListener)
     {
-        this.commands = command.toArray(new String[0]);
-        this.environment = env;
         this.processListener = processListener;
         this.userWantsWrite = new AtomicBoolean();
         this.exitCode = new AtomicInteger();
@@ -117,7 +113,14 @@ public abstract class BasePosixProcess implements NuProcess
     // ************************************************************************
     //                        NuProcess interface methods
     // ************************************************************************
-    
+
+    /** {@inheritDoc} */
+    @Override
+    public boolean isRunning()
+    {
+        return exitPending.getCount() != 0;
+    }
+
     /** {@inheritDoc} */
     @Override
     public int waitFor(long timeout, TimeUnit unit) throws InterruptedException
@@ -182,8 +185,10 @@ public abstract class BasePosixProcess implements NuProcess
     //                             Public methods
     // ************************************************************************
 
-    public NuProcess start()
+    public NuProcess start(List<String> command, String[] environment)
     {
+        String[] commands = command.toArray(new String[0]);
+
         Pointer posix_spawn_file_actions = createPipes();
 
         Pointer posix_spawnattr = null;
@@ -298,7 +303,6 @@ public abstract class BasePosixProcess implements NuProcess
             close(stdout);
             close(stderr);
 
-            exitPending.countDown();
             exitCode.set(statusCode);
             processListener.onExit(statusCode);
         }
@@ -308,6 +312,8 @@ public abstract class BasePosixProcess implements NuProcess
         }
         finally
         {
+            exitPending.countDown();
+
             Native.free(Pointer.nativeValue(outBufferPointer));
             Native.free(Pointer.nativeValue(inBufferPointer));
 
@@ -455,8 +461,6 @@ public abstract class BasePosixProcess implements NuProcess
     
     private void afterStart()
     {
-        commands = null;
-        environment = null;
         outClosed = false;
         errClosed = false;
 

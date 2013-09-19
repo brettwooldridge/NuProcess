@@ -33,8 +33,8 @@ public class LinProcessFactory implements NuProcessFactory
     @Override
     public NuProcess createProcess(List<String> commands, String[] env, NuProcessHandler processListener)
     {
-        LinuxProcess process = new LinuxProcess(commands, env, processListener);
-        process.start();
+        LinuxProcess process = new LinuxProcess(processListener);
+        process.start(commands, env);
         return process;
     }
 }

@@ -28,8 +28,8 @@ public class OsxProcessFactory implements NuProcessFactory
     @Override
     public NuProcess createProcess(List<String> commands, String[] env, NuProcessHandler processListener)
     {
-        OsxProcess process = new OsxProcess(commands, env, processListener);
-        process.start();
+        OsxProcess process = new OsxProcess(processListener);
+        process.start(commands, env);
         return process;
     }
 }

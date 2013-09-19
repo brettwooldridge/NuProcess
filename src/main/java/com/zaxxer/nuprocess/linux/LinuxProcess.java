@@ -16,8 +16,6 @@
 
 package com.zaxxer.nuprocess.linux;
 
-import java.util.List;
-
 import com.zaxxer.nuprocess.NuProcessHandler;
 import com.zaxxer.nuprocess.internal.BasePosixProcess;
 
@@ -38,8 +36,8 @@ public class LinuxProcess extends BasePosixProcess
         }
     }
 
-    public LinuxProcess(List<String> commands, String[] env, NuProcessHandler processListener)
+    public LinuxProcess(NuProcessHandler processListener)
     {
-        super(commands, env, processListener);
+        super(processListener);
     }
 }

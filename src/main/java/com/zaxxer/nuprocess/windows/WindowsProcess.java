@@ -174,6 +174,13 @@ public final class WindowsProcess implements NuProcess
         NuKernel32.TerminateProcess(processInfo.hProcess, Integer.MAX_VALUE);
     }
 
+    /** {@inheritDoc} */
+    @Override
+    public boolean isRunning()
+    {
+        return exitPending.getCount() != 0;
+    }
+
     // ************************************************************************
     //                          Package-scoped methods
     // ************************************************************************

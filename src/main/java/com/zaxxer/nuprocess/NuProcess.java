@@ -73,5 +73,10 @@ public interface NuProcess
      */
     void destroy();
 
-    // boolean isRunning()
+    /**
+     * Tests whether or not the process is still alive or has exited.
+     *
+     * @return true if the process is still alive, false if it has exited
+     */
+    boolean isRunning();
 }

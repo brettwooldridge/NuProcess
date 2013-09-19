@@ -16,8 +16,6 @@
 
 package com.zaxxer.nuprocess.osx;
 
-import java.util.List;
-
 import com.zaxxer.nuprocess.NuProcessHandler;
 import com.zaxxer.nuprocess.internal.BasePosixProcess;
 
@@ -34,8 +32,8 @@ public class OsxProcess extends BasePosixProcess
         }
     }
 
-    public OsxProcess(List<String> commands, String[] env, NuProcessHandler processListener)
+    public OsxProcess(NuProcessHandler processListener)
     {
-        super(commands, env, processListener);
+        super(processListener);
     }
 }
