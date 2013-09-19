@@ -46,7 +46,7 @@ public abstract class BasePosixProcess implements NuProcess
     protected static int processorRoundRobin;
 
     protected IEventProcessor<? super BasePosixProcess> myProcessor;
-    protected NuProcessHandler processListener;
+    protected volatile NuProcessHandler processHandler;
 
     protected volatile int pid;
     protected AtomicInteger exitCode;
@@ -101,7 +101,7 @@ public abstract class BasePosixProcess implements NuProcess
 
     protected BasePosixProcess(NuProcessHandler processListener)
     {
-        this.processListener = processListener;
+        this.processHandler = processListener;
         this.userWantsWrite = new AtomicBoolean();
         this.exitCode = new AtomicInteger();
         this.exitPending = new CountDownLatch(1);
@@ -197,6 +197,13 @@ public abstract class BasePosixProcess implements NuProcess
         {
             throw new IllegalStateException("closeStdin() method has already been called.");
         }
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void setProcessHandler(NuProcessHandler processHandler)
+    {
+        this.processHandler = processHandler;
     }
 
     // ************************************************************************
@@ -322,7 +329,7 @@ public abstract class BasePosixProcess implements NuProcess
             close(stderr);
 
             exitCode.set(statusCode);
-            processListener.onExit(statusCode);
+            processHandler.onExit(statusCode);
         }
         catch (Exception e)
         {
@@ -335,7 +342,7 @@ public abstract class BasePosixProcess implements NuProcess
             Native.free(Pointer.nativeValue(outBufferPointer));
             Native.free(Pointer.nativeValue(inBufferPointer));
 
-            processListener = null;
+            processHandler = null;
         }
     }
 
@@ -351,7 +358,7 @@ public abstract class BasePosixProcess implements NuProcess
             if (availability < 0)
             {
                 outClosed = true;
-                processListener.onStdout(null);
+                processHandler.onStdout(null);
                 return;
             }
             else if (availability == 0)
@@ -369,7 +376,7 @@ public abstract class BasePosixProcess implements NuProcess
 
             outBuffer.position(0);
             outBuffer.limit(read);
-            processListener.onStdout(outBuffer);
+            processHandler.onStdout(outBuffer);
         }
         catch (Exception e)
         {
@@ -390,7 +397,7 @@ public abstract class BasePosixProcess implements NuProcess
             if (availability < 0)
             {
                 errClosed = true;
-                processListener.onStderr(null);
+                processHandler.onStderr(null);
                 return;
             }
 
@@ -404,7 +411,7 @@ public abstract class BasePosixProcess implements NuProcess
 
             outBuffer.position(0);
             outBuffer.limit(read);
-            processListener.onStderr(outBuffer);
+            processHandler.onStderr(outBuffer);
         }
         catch (Exception e)
         {
@@ -487,7 +494,7 @@ public abstract class BasePosixProcess implements NuProcess
         try
         {
             inBuffer.clear();
-            boolean wantMore = processListener.onStdinReady(inBuffer);
+            boolean wantMore = processHandler.onStdinReady(inBuffer);
             userWantsWrite.set(wantMore);
             remainingWrite = inBuffer.remaining();
 
@@ -556,7 +563,7 @@ public abstract class BasePosixProcess implements NuProcess
     {
         try
         {
-            processListener.onStart(this);
+            processHandler.onStart(this);
         }
         catch (Exception e)
         {

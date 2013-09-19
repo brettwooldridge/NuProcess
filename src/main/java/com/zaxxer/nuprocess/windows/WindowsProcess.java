@@ -63,7 +63,7 @@ public final class WindowsProcess implements NuProcess
     private static final AtomicInteger namedPipeCounter;
 
     private ProcessCompletions myProcessor;
-    private NuProcessHandler processListener;
+    private volatile NuProcessHandler processHandler;
 
     private AtomicInteger exitCode;
     private CountDownLatch exitPending;
@@ -117,7 +117,7 @@ public final class WindowsProcess implements NuProcess
 
     public WindowsProcess(NuProcessHandler processListener)
     {
-        this.processListener = processListener;
+        this.processHandler = processListener;
 
         this.userWantsWrite = new AtomicBoolean();
         this.exitCode = new AtomicInteger();
@@ -192,6 +192,13 @@ public final class WindowsProcess implements NuProcess
     public boolean isRunning()
     {
         return exitPending.getCount() != 0;
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void setProcessHandler(NuProcessHandler processHandler)
+    {
+        this.processHandler = processHandler;
     }
 
     // ************************************************************************
@@ -281,7 +288,7 @@ public final class WindowsProcess implements NuProcess
             if (transferred < 0)
             {
                 outClosed = true;
-                processListener.onStdout(null);
+                processHandler.onStdout(null);
                 return;
             }
             else if (transferred == 0)
@@ -293,7 +300,7 @@ public final class WindowsProcess implements NuProcess
             buffer.position(0);
             buffer.limit(transferred);
 
-            processListener.onStdout(buffer);
+            processHandler.onStdout(buffer);
         }
         catch (Exception e)
         {
@@ -314,7 +321,7 @@ public final class WindowsProcess implements NuProcess
             if (transferred < 0)
             {
                 errClosed = true;
-                processListener.onStderr(null);
+                processHandler.onStderr(null);
                 return;
             }
             else if (transferred == 0)
@@ -326,7 +333,7 @@ public final class WindowsProcess implements NuProcess
             buffer.position(0);
             buffer.limit(transferred);
 
-            processListener.onStderr(buffer);
+            processHandler.onStderr(buffer);
         }
         catch (Exception e)
         {
@@ -382,7 +389,7 @@ public final class WindowsProcess implements NuProcess
             {
                 final ByteBuffer buffer = stdinPipe.buffer;
                 buffer.clear();
-                userWantsWrite.set(processListener.onStdinReady(buffer));
+                userWantsWrite.set(processHandler.onStdinReady(buffer));
                 remainingWrite = buffer.remaining();
 
                 return true;
@@ -409,7 +416,7 @@ public final class WindowsProcess implements NuProcess
         {
             exitPending.countDown();
             exitCode.set(statusCode);
-            processListener.onExit(statusCode);
+            processHandler.onExit(statusCode);
         }
         catch (Exception e)
         {
@@ -435,7 +442,7 @@ public final class WindowsProcess implements NuProcess
             stderrPipe = null;
             stdoutPipe = null;
             stdinPipe = null;
-            processListener = null;
+            processHandler = null;
         }
     }
 
@@ -457,7 +464,7 @@ public final class WindowsProcess implements NuProcess
     {
         try
         {
-            processListener.onStart(this);
+            processHandler.onStart(this);
         }
         catch (Exception e)
         {

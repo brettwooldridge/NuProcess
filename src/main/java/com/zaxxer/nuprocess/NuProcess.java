@@ -97,4 +97,12 @@ public interface NuProcess
      * @return true if the process is still running, false if it has exited
      */
     boolean isRunning();
+
+    /**
+     * Sets a new process handler for this {@code NuProcess} instance.  This method is only
+     * safe to call from within one of the callback methods of the existing {@link NuProcessHandler}.
+     *
+     * @param processHandler the new {@link NuProcessHandler}
+     */
+    void setProcessHandler(NuProcessHandler processHandler);
 }
