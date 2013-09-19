@@ -3,7 +3,7 @@
 
     <!-- For release: mvn release:perform -Darguments=-Dgpg.passphrase=PASSPHRASE -->
 
-    <groupId>com.zaxxer.nuprocess</groupId>
+    <groupId>com.zaxxer</groupId>
     <artifactId>nuprocess</artifactId>
     <version>0.9.0</version>
     <packaging>bundle</packaging>
