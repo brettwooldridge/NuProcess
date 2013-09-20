@@ -160,12 +160,16 @@ public final class WindowsProcess implements NuProcess
 
     /** {@inheritDoc} */
     @Override
-    public void writeStdin(ByteBuffer buffer)
+    public synchronized void writeStdin(ByteBuffer buffer)
     {
         if (hStdinWidow != null && !WinBase.INVALID_HANDLE_VALUE.getPointer().equals(hStdinWidow.getPointer()))
         {
+            boolean needWantWrite = pendingWrites.isEmpty();
             pendingWrites.add(buffer);
-            myProcessor.wantWrite(this);
+            if (needWantWrite)
+            {
+                myProcessor.wantWrite(this);
+            }
         }
         else
         {
