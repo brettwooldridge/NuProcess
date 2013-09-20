@@ -62,7 +62,7 @@ public final class WindowsProcess implements NuProcess
 
     private static final AtomicInteger namedPipeCounter;
 
-    private ProcessCompletions myProcessor;
+    private volatile ProcessCompletions myProcessor;
     private volatile NuProcessHandler processHandler;
 
     private AtomicInteger exitCode;
@@ -70,9 +70,9 @@ public final class WindowsProcess implements NuProcess
 
     AtomicBoolean userWantsWrite;
 
-    private PipeBundle stdinPipe;
-    private PipeBundle stdoutPipe;
-    private PipeBundle stderrPipe;
+    private volatile PipeBundle stdinPipe;
+    private volatile PipeBundle stdoutPipe;
+    private volatile PipeBundle stderrPipe;
 
     private HANDLE hStdinWidow;
     private HANDLE hStdoutWidow;
