@@ -69,6 +69,7 @@ public final class WindowsProcess implements NuProcess
     private CountDownLatch exitPending;
 
     AtomicBoolean userWantsWrite;
+    private boolean writePending;
 
     private volatile PipeBundle stdinPipe;
     private volatile PipeBundle stdoutPipe;
@@ -164,12 +165,8 @@ public final class WindowsProcess implements NuProcess
     {
         if (hStdinWidow != null && !WinBase.INVALID_HANDLE_VALUE.getPointer().equals(hStdinWidow.getPointer()))
         {
-            boolean needWantWrite = pendingWrites.isEmpty();
             pendingWrites.add(buffer);
-            if (needWantWrite)
-            {
-                myProcessor.wantWrite(this);
-            }
+            myProcessor.wantWrite(this);
         }
         else
         {
@@ -348,15 +345,22 @@ public final class WindowsProcess implements NuProcess
 
     boolean writeStdin(int transferred)
     {
+        if (writePending && transferred == 0)
+        {
+            return false;
+        }
+
         writeOffset += transferred;
         remainingWrite -= transferred;
         if (remainingWrite > 0)
         {
             NuKernel32.WriteFile(stdinPipe.pipeHandle, stdinPipe.bufferPointer.share(writeOffset), remainingWrite, null, stdinPipe.overlapped);
 
+            writePending = true;
             return false;
         }
 
+        writePending = false;
         stdinPipe.buffer.clear();
         remainingWrite = 0;
         writeOffset = 0;
