@@ -18,6 +18,7 @@ package com.zaxxer.nuprocess;
 
 import java.nio.ByteBuffer;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import org.junit.Assert;
 import org.junit.Before;
@@ -59,6 +60,40 @@ public class DirectWrite
         nuProcess.waitFor(0, TimeUnit.SECONDS);
         Assert.assertEquals("Checksums did not match", processListener.checksum, processListener.checksum2);
     }
+
+    @Test
+    public void testManyWrites() throws InterruptedException
+    {
+        final AtomicInteger count = new AtomicInteger();
+
+        NuProcessHandler processListener = new NuAbstractProcessHandler()
+        {
+            @Override
+            public void onStdout(ByteBuffer buffer)
+            {
+                if (buffer != null)
+                {
+                    count.addAndGet(buffer.remaining());
+                }
+            }
+        };
+
+        NuProcessBuilder pb = new NuProcessBuilder(processListener, command);
+        NuProcess nuProcess = pb.start();
+        for (int i = 0; i < 1000; i++)
+        {
+            ByteBuffer buffer = ByteBuffer.allocate(64);
+            buffer.put("This is a test".getBytes());
+            buffer.flip();
+            nuProcess.writeStdin(buffer);
+        }
+
+        Thread.sleep(1000);
+        
+        nuProcess.closeStdin();
+        nuProcess.waitFor(0, TimeUnit.SECONDS);
+        Assert.assertEquals("Count did not match", 14000, count.get());
+}
 
     private static class ProcessHandler1 extends NuAbstractProcessHandler
     {

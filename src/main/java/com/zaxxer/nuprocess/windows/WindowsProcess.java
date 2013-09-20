@@ -69,7 +69,7 @@ public final class WindowsProcess implements NuProcess
     private CountDownLatch exitPending;
 
     AtomicBoolean userWantsWrite;
-    private boolean writePending;
+    private volatile boolean writePending;
 
     private volatile PipeBundle stdinPipe;
     private volatile PipeBundle stdoutPipe;
@@ -166,7 +166,10 @@ public final class WindowsProcess implements NuProcess
         if (hStdinWidow != null && !WinBase.INVALID_HANDLE_VALUE.getPointer().equals(hStdinWidow.getPointer()))
         {
             pendingWrites.add(buffer);
-            myProcessor.wantWrite(this);
+            if (!writePending)
+            {
+                myProcessor.wantWrite(this);
+            }
         }
         else
         {
