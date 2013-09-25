@@ -97,6 +97,22 @@ public abstract class BasePosixProcess implements NuProcess
         }
 
         processors = new IEventProcessor<?>[numThreads];
+
+        if (Boolean.valueOf(System.getProperty("com.zaxxer.nuprocess.enableShutdownHook", "true")))
+        {
+            Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
+                public void run()
+                {
+                    for (int i = 0; i < processors.length; i++)
+                    {
+                        if (processors[i] != null)
+                        {
+                            processors[i].shutdown();
+                        }
+                    }
+                }
+            }));
+        }
     }
 
     protected BasePosixProcess(NuProcessHandler processListener)
@@ -172,14 +188,14 @@ public abstract class BasePosixProcess implements NuProcess
     @Override
     public void closeStdin()
     {
-        int fd = stdin.get();
+        int fd = stdin.getAndSet(-1);
         if (fd != -1)
         {
             if (myProcessor != null)
             {
                 myProcessor.closeStdin(this);
             }
-            close(stdin);
+            LibC.close(fd);
         }
     }
 
@@ -329,7 +345,10 @@ public abstract class BasePosixProcess implements NuProcess
             close(stderr);
 
             exitCode.set(statusCode);
-            processHandler.onExit(statusCode);
+            if (statusCode != Integer.MAX_VALUE - 1)
+            {
+                processHandler.onExit(statusCode);
+            }
         }
         catch (Exception e)
         {
@@ -443,6 +462,7 @@ public abstract class BasePosixProcess implements NuProcess
                     }
     
                     // EOF?
+                    System.err.println("EOF?");
                     close(stdin);
                     return false;
                 }

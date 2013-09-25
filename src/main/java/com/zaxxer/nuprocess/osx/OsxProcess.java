@@ -18,6 +18,7 @@ package com.zaxxer.nuprocess.osx;
 
 import com.zaxxer.nuprocess.NuProcessHandler;
 import com.zaxxer.nuprocess.internal.BasePosixProcess;
+import com.zaxxer.nuprocess.internal.LibC;
 
 /**
  * @author Brett Wooldridge
@@ -30,10 +31,22 @@ public class OsxProcess extends BasePosixProcess
         {
             processors[i] = new ProcessKqueue();
         }
+
+        // Setup a private signal for waking up the kqueue processing threads
+        LibC.signal(LibC.SIGUSR2, LibC.SIG_IGN);
     }
 
     public OsxProcess(NuProcessHandler processListener)
     {
         super(processListener);
+    }
+
+    void stdinClose()
+    {
+        int fd = stdin.getAndSet(-1);
+        if (fd != -1)
+        {
+            LibC.close(fd);
+        }
     }
 }

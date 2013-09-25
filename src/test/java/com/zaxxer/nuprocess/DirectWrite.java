@@ -62,6 +62,38 @@ public class DirectWrite
     }
 
     @Test
+    public void testFewWrites() throws InterruptedException
+    {
+        final AtomicInteger count = new AtomicInteger();
+
+        NuProcessHandler processListener = new NuAbstractProcessHandler()
+        {
+            @Override
+            public void onStdout(ByteBuffer buffer)
+            {
+                if (buffer != null)
+                {
+                    count.addAndGet(buffer.remaining());
+                }
+            }
+        };
+
+        NuProcessBuilder pb = new NuProcessBuilder(processListener, command);
+        NuProcess nuProcess = pb.start();
+
+        ByteBuffer buffer = ByteBuffer.allocate(64);
+        buffer.put("This is a test".getBytes());
+        buffer.flip();
+        nuProcess.writeStdin(buffer);
+
+        Thread.sleep(500);
+        
+        nuProcess.closeStdin();
+        nuProcess.waitFor(0, TimeUnit.SECONDS);
+        Assert.assertEquals("Count did not match", 14, count.get());
+    }
+
+    @Test
     public void testManyWrites() throws InterruptedException
     {
         final AtomicInteger count = new AtomicInteger();
@@ -88,12 +120,12 @@ public class DirectWrite
             nuProcess.writeStdin(buffer);
         }
 
-        Thread.sleep(1000);
+        Thread.sleep(500);
         
         nuProcess.closeStdin();
         nuProcess.waitFor(0, TimeUnit.SECONDS);
         Assert.assertEquals("Count did not match", 14000, count.get());
-}
+    }
 
     private static class ProcessHandler1 extends NuAbstractProcessHandler
     {

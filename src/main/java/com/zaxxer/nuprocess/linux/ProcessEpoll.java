@@ -65,6 +65,11 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
     @Override
     public void registerProcess(LinuxProcess process)
     {
+        if (shutdown)
+        {
+            return;
+        }
+
         pidToProcessMap.put(process.getPid(), process);
         fildesToProcessMap.put(process.getStdin().get(), process);
         fildesToProcessMap.put(process.getStdout().get(), process);
@@ -105,6 +110,11 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
     @Override
     public void queueWrite(LinuxProcess process)
     {
+        if (shutdown)
+        {
+            return;
+        }
+   
     	try
     	{
     	    int stdin = process.getStdin().get();

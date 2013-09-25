@@ -16,10 +16,13 @@
 
 package com.zaxxer.nuprocess.internal;
 
+import java.util.Collection;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.atomic.AtomicBoolean;
+
+import com.sun.jna.ptr.IntByReference;
 
 /**
  * @author Brett Wooldridge
@@ -31,6 +34,8 @@ public abstract class BaseEventProcessor<T extends BasePosixProcess> implements 
 
     protected Map<Integer, T> pidToProcessMap;
     protected Map<Integer, T> fildesToProcessMap;
+
+    protected volatile boolean shutdown;
 
     private CyclicBarrier startBarrier;
     private AtomicBoolean isRunning;
@@ -64,7 +69,7 @@ public abstract class BaseEventProcessor<T extends BasePosixProcess> implements 
             int idleCount = 0;
             while (!isRunning.compareAndSet(idleCount > LINGER_ITERATIONS && pidToProcessMap.isEmpty(), false))
             {
-                idleCount = process() ? 0 : (idleCount + 1);
+                idleCount = (!shutdown && process()) ? 0 : (idleCount + 1);
             }
         }
         catch (Exception e)
@@ -87,5 +92,20 @@ public abstract class BaseEventProcessor<T extends BasePosixProcess> implements 
     public boolean checkAndSetRunning()
     {
         return isRunning.compareAndSet(false, true);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public void shutdown()
+    {
+        shutdown = true;
+        Collection<T> processes = pidToProcessMap.values();
+        IntByReference exitCode = new IntByReference();
+        for (T process : processes)
+        {
+            LibC.kill(process.getPid(), LibC.SIGTERM);
+            process.onExit(Integer.MAX_VALUE - 1);
+            LibC.waitpid(process.getPid(), exitCode, LibC.WNOHANG);
+        }
     }
 }

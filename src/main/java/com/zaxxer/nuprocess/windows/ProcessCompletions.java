@@ -16,11 +16,13 @@
 
 package com.zaxxer.nuprocess.windows;
 
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -52,6 +54,7 @@ public final class ProcessCompletions implements Runnable
     private Map<Long, WindowsProcess> completionKeyToProcessMap;
 
     private volatile CyclicBarrier startBarrier;
+    private volatile boolean shutdown;
     private AtomicBoolean isRunning;
     private IntByReference numberOfBytes;
     private ULONG_PTRByReference completionKey;
@@ -69,8 +72,8 @@ public final class ProcessCompletions implements Runnable
     public ProcessCompletions()
     {
         completionKeyToProcessMap = new HashMap<Long, WindowsProcess>();
+        wantsWrite = new ArrayBlockingQueue<WindowsProcess>(512);
         pendingPool = new LinkedBlockingQueue<WindowsProcess>();
-        wantsWrite = new LinkedBlockingQueue<WindowsProcess>();
         deadPool = new LinkedList<WindowsProcess>();
         isRunning = new AtomicBoolean();
 
@@ -94,7 +97,7 @@ public final class ProcessCompletions implements Runnable
             int idleCount = 0;
             while (!isRunning.compareAndSet(idleCount > LINGER_ITERATIONS && deadPool.isEmpty() && completionKeyToProcessMap.isEmpty(), false))
             {
-                idleCount = process() ? 0 : (idleCount + 1);
+                idleCount = (!shutdown && process()) ? 0 : (idleCount + 1);
             }
         }
         catch (Exception e)
@@ -178,6 +181,17 @@ public final class ProcessCompletions implements Runnable
         }
     }
 
+    void shutdown()
+    {
+        shutdown = true;
+        Collection<WindowsProcess> processes = completionKeyToProcessMap.values();
+        for (WindowsProcess process : processes)
+        {
+            NuKernel32.TerminateProcess(process.getPid(), Integer.MAX_VALUE - 1);
+            process.onExit(Integer.MAX_VALUE - 1);
+        }
+    }
+
     CyclicBarrier getSpawnBarrier()
     {
         startBarrier = new CyclicBarrier(2);
@@ -204,6 +218,11 @@ public final class ProcessCompletions implements Runnable
 
     public void registerProcess(final WindowsProcess process)
     {
+        if (shutdown)
+        {
+            return;
+        }
+
         try
         {
             pendingPool.put(process);
@@ -217,6 +236,11 @@ public final class ProcessCompletions implements Runnable
 
     private void queueWrite(final WindowsProcess process)
     {
+        if (shutdown)
+        {
+            return;
+        }
+
         final PipeBundle stdinPipe = process.getStdinPipe();
 
         if (!stdinPipe.registered)

@@ -67,4 +67,9 @@ public interface IEventProcessor<T extends BasePosixProcess> extends Runnable
      * @return true if events were processed, false if an idle timeout occurred
      */
     boolean process();
+
+    /**
+     * Cleanly shutdown the processors and cleanup all resources.
+     */
+    void shutdown();
 }

@@ -114,6 +114,22 @@ public final class WindowsProcess implements NuProcess
         {
             processors[i] = new ProcessCompletions();
         }
+
+        if (Boolean.valueOf(System.getProperty("com.zaxxer.nuprocess.enableShutdownHook", "true")))
+        {
+            Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
+                public void run()
+                {
+                    for (int i = 0; i < processors.length; i++)
+                    {
+                        if (processors[i] != null)
+                        {
+                            processors[i].shutdown();
+                        }
+                    }
+                }
+            }));
+        }
     }
 
     public WindowsProcess(NuProcessHandler processListener)
@@ -427,7 +443,10 @@ public final class WindowsProcess implements NuProcess
         {
             exitPending.countDown();
             exitCode.set(statusCode);
-            processHandler.onExit(statusCode);
+            if (statusCode != Integer.MAX_VALUE - 1)
+            {
+                processHandler.onExit(statusCode);
+            }
         }
         catch (Exception e)
         {

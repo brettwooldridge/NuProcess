@@ -16,6 +16,7 @@
 
 package com.zaxxer.nuprocess.internal;
 
+import com.sun.jna.Callback;
 import com.sun.jna.Native;
 import com.sun.jna.Pointer;
 import com.sun.jna.StringArray;
@@ -49,6 +50,8 @@ public class LibC
 
     public static native int read(int fildes, Pointer buf, int nbyte);
 
+    public static native int getpid();
+
     public static native int kill(int pid, int sig);
 
     public static native int waitpid(int pid, IntByReference status, int options);
@@ -67,11 +70,11 @@ public class LibC
 
     public static native int posix_spawn_file_actions_adddup2(Pointer actions, int fildes, int newfildes);
 
-    // public static native int posix_spawn_file_actions_addinherit_np(PointerByReference actions, int filedes);
-
     public static native int posix_spawn(IntByReference restrict_pid, String restrict_path, Pointer file_actions,
                                          Pointer /*const posix_spawnattr_t*/ restrict_attrp, StringArray /*String[]*/ argv,
                                          Pointer /*String[]*/ envp);
+
+    public static native Pointer signal(int signal, Pointer func);
 
     public static final int F_GETFL = 3;
     public static final int F_SETFL = 4;
@@ -89,4 +92,12 @@ public class LibC
     public static final int SIGKILL = 9;
     public static final int SIGTERM = 15;
     public static final int SIGCONT = 19;
+    public static final int SIGUSR2 = 31;
+
+    public static final Pointer SIG_IGN = Pointer.createConstant(1);
+
+    public interface SignalFunction extends Callback
+    {
+        void invoke(int signal);
+    }
 }
