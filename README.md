@@ -1,4 +1,4 @@
-[![Build Status](https://www.travis-ci.org/brettwooldridge/NuProcess.png?branch=master)](https://www.travis-ci.org/brettwooldridge/NuProcess)
+[![Build Status](https://travis-ci.org/brettwooldridge/NuProcess.png?branch=master)](https://travis-ci.org/brettwooldridge/NuProcess)
 
 NuProcess
 =========
@@ -16,6 +16,14 @@ Java process and the spawned processes:
  * Linux: uses epoll
  * MacOS X: uses kqueue/kevent
  * Windows: uses IO Completion Ports
+
+#### Maven ####
+<dependency>
+    <groupId>com.zaxxer</groupId>
+    <artifactId>nuprocess</artifactId>
+    <version>0.9.0</version>
+    <scope>compile</scope>
+</dependency>
 
 #### It's mostly about the memory ####
 Speed-wise, there is not a significant difference between NuProcess and the standard Java Process class, even when running
