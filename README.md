@@ -18,12 +18,12 @@ Java process and the spawned processes:
  * Windows: uses IO Completion Ports
 
 #### Maven ####
-<dependency>
-    <groupId>com.zaxxer</groupId>
-    <artifactId>nuprocess</artifactId>
-    <version>0.9.0</version>
-    <scope>compile</scope>
-</dependency>
+    <dependency>
+        <groupId>com.zaxxer</groupId>
+        <artifactId>nuprocess</artifactId>
+        <version>0.9.0</version>
+        <scope>compile</scope>
+    </dependency>
 
 #### It's mostly about the memory ####
 Speed-wise, there is not a significant difference between NuProcess and the standard Java Process class, even when running
@@ -36,7 +36,7 @@ large compared to the one or few threads employed by NuProcess.
 Additionally, on unix-based platforms such as Linux, when creating a new process ``java.lang.Process`` uses a fork()/exec()
 operation.  This requires a temporary copy of the Java process (the fork), before the exec is performed.  When running
 tests on Linux, in order to spawn 500 processes required setting the JVM max. memory to 3Gb (-Xmx3g).  NuProcess uses a
-variant of fork() called vfork(), which does not impose this overhead.  NuProcess can comfortably spawn 500 processes
+variant of ``fork()`` called ``vfork()``, which does not impose this overhead.  NuProcess can comfortably spawn 500 processes
 even when running the JVM with only 128Mb (-Xmx128m).
 
 #### Settings ####
