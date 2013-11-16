@@ -28,7 +28,7 @@ Java process and the spawned processes:
 #### It's mostly about the memory ####
 Speed-wise, there is not a significant difference between NuProcess and the standard Java Process class, even when running
 500 concurrent processes.  On some platforms such as MacOS X or Linux, NuProcess is 20% faster than ``java.lang.Process``
-for large numbers of processes, while on Windows NuProcess is about 20% slower.
+for large numbers of processes.
 
 However, when it comes to memory there is a significant difference.  The overhead of 500 threads, for example, is quite
 large compared to the one or few threads employed by NuProcess.
