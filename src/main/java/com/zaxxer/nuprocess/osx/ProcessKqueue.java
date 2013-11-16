@@ -58,7 +58,7 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
             throw new RuntimeException("Unable to create kqueue");
         }
 
-        closeQueue = new ArrayBlockingQueue<OsxProcess>(16);
+        closeQueue = new ArrayBlockingQueue<OsxProcess>(512);
         wantsWrite = new ArrayBlockingQueue<OsxProcess>(512);
 
         triggeredEvent = new Kevent();
