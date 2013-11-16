@@ -40,6 +40,7 @@ variant of ``fork()`` called ``vfork()``, which does not impose this overhead.  
 even when running the JVM with only 128Mb (-Xmx128m).
 
 #### Settings ####
+These are settings that can be defined as System properties that control various behaviors of the NuProcess library.
 
 ##### ``com.zaxxer.nuprocess.threads`` #####
 This setting controls how many threads are used to handle the STDIN, STDOUT, STDERR streams of spawned processes.  No
