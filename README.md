@@ -47,7 +47,7 @@ NuProcess process = pb.start();
 process.wantWrite();
 process.waitFor(0, TimeUnit.SECONDS); // when 0 is used for waitFor() the wait is infinite
 ```
-You'll notice the ``ProcessHandler`` in code above.  This is a class you provide which receives callbacks from the process to handle input, output, termination, etc.  And notice the ``wantWrite()`` call on the last line, this expresses that we have something we want to write to the process, so our ``ProcessHandler`` will be called back to perform the write.  Here's what ``ProcessHandler`` looks like for our example:
+You'll notice the ``ProcessHandler`` in code above.  This is a class you provide which receives callbacks from the process to handle input, output, termination, etc.  And notice the ``wantWrite()`` call, this expresses that we have something we want to write to the process, so our ``ProcessHandler`` will be called back to perform the write.  Here's what ``ProcessHandler`` looks like for our example:
 ```java
 class ProcessHandler extends NuAbstractProcessHandler {
    private NuProcess nuProcess;
