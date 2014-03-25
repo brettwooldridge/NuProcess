@@ -76,7 +76,7 @@ for the processing thread to remain (linger) for some amount of time (default 25
 #### Limitations ####
 The following limitations exist in NuProcess:
  * Currently only supports Linux, Windows, and MacOS X.
- * The provided library has only been tested on Java 7.
+ * The provided library has only been fully tested on Java 7, but is builds under Java 6.
  * Linux support requires at least kernel version 2.6.17 or higher (kernels after June 2006)
  * Unlike ``java.lang.Process``, NuProcess does not currently permit setting an alternate current working directory (cwd) for the child process.
 
