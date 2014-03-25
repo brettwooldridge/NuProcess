@@ -1,4 +1,4 @@
-NuProcess&nbsp;[![Build Status](https://travis-ci.org/brettwooldridge/NuProcess.png?branch=master)](https://travis-ci.org/brettwooldridge/NuProcess)
+NuProcess&nbsp;[![Build Status](https://travis-ci.org/brettwooldridge/NuProcess.svg?branch=master)](https://travis-ci.org/brettwooldridge/NuProcess)
 =========
 
 A low-overhead, non-blocking I/O, external Process execution implementation for Java.  It is a replacement for
