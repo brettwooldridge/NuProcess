@@ -15,15 +15,15 @@ Java process and the spawned processes:
  * MacOS X: uses kqueue/kevent
  * Windows: uses IO Completion Ports
 
-#### Maven ####
+#### Maven
     <dependency>
         <groupId>com.zaxxer</groupId>
         <artifactId>nuprocess</artifactId>
-        <version>0.9.0</version>
+        <version>0.9.1</version>
         <scope>compile</scope>
     </dependency>
 
-#### It's mostly about the memory ####
+#### It's mostly about the memory
 Speed-wise, there is not a significant difference between NuProcess and the standard Java Process class, even when running
 500 concurrent processes.  On some platforms such as MacOS X or Linux, NuProcess is 20% faster than ``java.lang.Process``
 for large numbers of processes.
@@ -37,10 +37,52 @@ tests on Linux, in order to spawn 500 processes required setting the JVM max. me
 variant of ``fork()`` called ``vfork()``, which does not impose this overhead.  NuProcess can comfortably spawn 500 processes
 even when running the JVM with only 128Mb (-Xmx128m).
 
-#### Settings ####
-These are settings that can be defined as System properties that control various behaviors of the NuProcess library.
+#### Example
+Like the Java ``ProcessBuilder``, NuProcess offers ``NuProcessBuilder``, building a process is fairly simple.  Let's make a simple example where we use the Unix "cat" command.  When launched with no parameters, *cat* reads from STDIN and echos the output to STDOUT.  We're going to start the *cat* process, write *"Hello, world!"* to its STDIN, and read the echoed reply and print it.  Let's build and start the process.
+```java
+String command = "/bin/cat";
+NuProcessBuilder pb = new NuProcessBuilder(Arrays.asList(command));
+ProcessHandler handler = new ProcessHandler();
+pb.setProcessListener(handler);
+NuProcess process = pb.start();
+process.wantWrite();
+process.waitFor(0, TimeUnit.SECONDS); // when 0 is used for waitFor() the wait is infinite
+```
+You'll notice the ``ProcessHandler`` in code above.  This is a class you provide which receives callbacks from the process to handle input, output, termination, etc.  And notice the ``wantWrite()`` call on the last line, this expresses that we have something we want to write to the process, so our ``ProcessHandler`` will be called back to perform the write.  Here's what ``ProcessHandler`` looks like for our example:
+```java
+class ProcessHandler extends NuAbstractProcessHandler {
+   private NuProcess nuProcess;
 
-##### ``com.zaxxer.nuprocess.threads`` #####
+   @Override
+   public void onStart(NuProcess nuProcess) {
+      this.nuProcess = nuProcess;
+   }
+   
+   @Override
+   public boolean onStdinReady(ByteBuffer buffer) {
+      buffer.put("Hello world!".getBytes());
+      buffer.flip();
+      return false; // false means we have nothing else to write at this time
+   }
+
+   @Override
+   public void onStdout(ByteBuffer buffer) {
+      if (buffer == null)
+         return;
+
+      byte[] bytes = new byte[buffer.remaining()];
+      buffer.get(bytes);
+      System.out.println(new String(bytes));
+
+      // We're done, so closing STDIN will cause the "cat" process to exit
+      nuProcess.closeStdin();
+}
+```
+
+#### Settings
+These are settings that can be defined as System properties that control various behaviors of the NuProcess library.  *You typically do not need to modify these.*
+
+##### ``com.zaxxer.nuprocess.threads``
 This setting controls how many threads are used to handle the STDIN, STDOUT, STDERR streams of spawned processes.  No
 matter how many processes are spawned, this setting will be the *maximum* number of threads used.  Possible values are:
 
@@ -51,7 +93,7 @@ matter how many processes are spawned, this setting will be the *maximum* number
 The default is ``auto``, but in reality if your child processes are "bursty" in their output, rather than producing a
 constant stream of data, a single thread may provide equivalent performance even with hundreds of processes.
 
-##### ``com.zaxxer.nuprocess.softExitDetection`` #####
+##### ``com.zaxxer.nuprocess.softExitDetection``
 On Linux and Windows there is no method by which you can be notified in an asynchronous manner that a child process has
 exited.  Rather than polling all child processes constantly NuProcess uses what we call "Soft Exit Detection".  When a
 child process exits, the OS automatically closes all of it's open file handles; which *is* something about we can be
@@ -64,16 +106,16 @@ detection, and the ``NuProcess.waitFor()" API __MUST__ be used.  Failure to invo
 ever-growing accumulation of "zombie" processes and eventually an inability to create new processes.  There is very little
 reason to disable soft exit detection unless you have child process that itself closes the STDOUT and STDERR streams.
 
-##### ``com.zaxxer.nuprocess.deadPoolPollMs`` #####
+##### ``com.zaxxer.nuprocess.deadPoolPollMs``
 On Linux and Windows, when Soft Exit Detection is enabled (the default), this property controls how often the processes in
 the dead pool are polled for their exit status.  The default value is 250ms, and the minimum value is 100ms.
 
-##### ``com.zaxxer.nuprocess.lingerTimeMs`` #####
+##### ``com.zaxxer.nuprocess.lingerTimeMs``
 This property controls how long the processing thread(s) remains after the last executing child process has exited.  In
 order to avoid the overhead of starting up another processing thread, if processes are frequently run it may be desirable
 for the processing thread to remain (linger) for some amount of time (default 2500ms).
 
-#### Limitations ####
+#### Limitations
 The following limitations exist in NuProcess:
  * Currently only supports Linux, Windows, and MacOS X.
  * The provided library has only been fully tested on Java 7, but is builds under Java 6.
