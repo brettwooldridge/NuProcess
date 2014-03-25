@@ -79,7 +79,7 @@ class ProcessHandler extends NuAbstractProcessHandler {
 ```
 
 #### JavaDocs
-You can read the [JavaDoc here](http://brettwooldridge.github.io/NuProcess/apidocs/index.html).
+You can read the [JavaDoc here](http://brettwooldridge.github.io/NuProcess/apidocs/index.html).  Make sure you read and fully understand the JavaDoc for the ``NuProcessHandler`` interface as it is your primary contract with NuProcess.
 
 #### Settings
 These are settings that can be defined as System properties that control various behaviors of the NuProcess library.  *You typically do not need to modify these.*
