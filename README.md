@@ -38,10 +38,9 @@ variant of ``fork()`` called ``vfork()``, which does not impose this overhead.  
 even when running the JVM with only 128Mb (-Xmx128m).
 
 #### Example
-Like the Java ``ProcessBuilder``, NuProcess offers ``NuProcessBuilder``, building a process is fairly simple.  Let's make a simple example where we use the Unix "cat" command.  When launched with no parameters, *cat* reads from STDIN and echos the output to STDOUT.  We're going to start the *cat* process, write *"Hello, world!"* to its STDIN, and read the echoed reply and print it.  Let's build and start the process.
+Like the Java ``ProcessBuilder``, NuProcess offers ``NuProcessBuilder``, building a process is fairly simple.  Let's make a simple example where we use the Unix "cat" command.  When launched with no parameters, *cat* reads from STDIN and echos the output to STDOUT.  We're going to start the *cat* process, write *"Hello world!"* to its STDIN, and read the echoed reply from STDOUT and print it.  Let's build and start the process.
 ```java
-String command = "/bin/cat";
-NuProcessBuilder pb = new NuProcessBuilder(Arrays.asList(command));
+NuProcessBuilder pb = new NuProcessBuilder(Arrays.asList("/bin/cat"));
 ProcessHandler handler = new ProcessHandler();
 pb.setProcessListener(handler);
 NuProcess process = pb.start();
