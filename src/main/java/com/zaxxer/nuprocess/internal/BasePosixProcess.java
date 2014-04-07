@@ -272,6 +272,12 @@ public abstract class BasePosixProcess implements NuProcess
             {
 	            IntByReference exit = new IntByReference();
 	            LibC.waitpid(pid, exit, LibC.WNOHANG);
+	            rc = (exit.getValue() & 0xff00) >> 8;
+	            if (rc == 127)
+	            {
+	                onExit(Integer.MIN_VALUE);
+	                return null;
+	            }
             }
 
             checkReturnCode(rc, "Invocation of posix_spawn() failed");
