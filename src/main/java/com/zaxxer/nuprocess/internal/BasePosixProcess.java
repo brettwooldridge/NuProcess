@@ -719,6 +719,7 @@ public abstract class BasePosixProcess implements NuProcess
     {
         if (rc != 0)
         {
+        	exitPending.countDown();
             throw new RuntimeException(failureMessage + ", return code: " + rc + ", last error: " + Native.getLastError());
         }
     }
