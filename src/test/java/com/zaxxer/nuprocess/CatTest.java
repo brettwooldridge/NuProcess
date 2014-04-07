@@ -131,7 +131,8 @@ public class CatTest
         };
 
         NuProcessBuilder pb = new NuProcessBuilder(processListener, "/bin/zxczxc");
-        pb.start();
+        NuProcess process = pb.start();
+        Assert.assertFalse("Process incorrectly reported running", process.isRunning());
         semaphore.acquireUninterruptibly();
         Assert.assertEquals("Output did not matched expected result", Integer.MIN_VALUE, exitCode.get());
     }
