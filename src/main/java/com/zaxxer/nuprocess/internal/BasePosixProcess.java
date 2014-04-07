@@ -262,9 +262,15 @@ public abstract class BasePosixProcess implements NuProcess
 
             IntByReference restrict_pid = new IntByReference();
             rc = LibC.posix_spawn(restrict_pid, commands[0], posix_spawn_file_actions, posix_spawnattr, new StringArray(commands), new StringArray(environment));
-            checkReturnCode(rc, "Invocation of posix_spawn() failed");
 
             pid = restrict_pid.getValue();
+        	if (rc != 0 && pid != 0)
+        	{
+                IntByReference exit = new IntByReference();
+                LibC.waitpid(pid, exit, LibC.WNOHANG);
+        	}
+
+            checkReturnCode(rc, "Invocation of posix_spawn() failed");
 
             afterStart();
 
@@ -719,7 +725,6 @@ public abstract class BasePosixProcess implements NuProcess
     {
         if (rc != 0)
         {
-        	exitPending.countDown();
             throw new RuntimeException(failureMessage + ", return code: " + rc + ", last error: " + Native.getLastError());
         }
     }
