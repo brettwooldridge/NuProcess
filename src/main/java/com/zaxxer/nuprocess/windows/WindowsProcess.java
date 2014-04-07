@@ -118,6 +118,7 @@ public final class WindowsProcess implements NuProcess
         if (Boolean.valueOf(System.getProperty("com.zaxxer.nuprocess.enableShutdownHook", "true")))
         {
             Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
+            	@Override
                 public void run()
                 {
                     for (int i = 0; i < processors.length; i++)

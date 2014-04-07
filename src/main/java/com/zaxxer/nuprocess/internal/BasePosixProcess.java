@@ -101,6 +101,7 @@ public abstract class BasePosixProcess implements NuProcess
         if (Boolean.valueOf(System.getProperty("com.zaxxer.nuprocess.enableShutdownHook", "true")))
         {
             Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
+            	@Override
                 public void run()
                 {
                     for (int i = 0; i < processors.length; i++)
@@ -264,11 +265,14 @@ public abstract class BasePosixProcess implements NuProcess
             rc = LibC.posix_spawn(restrict_pid, commands[0], posix_spawn_file_actions, posix_spawnattr, new StringArray(commands), new StringArray(environment));
 
             pid = restrict_pid.getValue();
-        	if (rc != 0 && pid != 0)
-        	{
-                IntByReference exit = new IntByReference();
-                LibC.waitpid(pid, exit, LibC.WNOHANG);
-        	}
+
+            // This is necessary on Linux because spawn failures are not reflected in the rc, and this will reap
+            // any zombies due to launch failure
+            if (IS_LINUX)
+            {
+	            IntByReference exit = new IntByReference();
+	            LibC.waitpid(pid, exit, LibC.WNOHANG);
+            }
 
             checkReturnCode(rc, "Invocation of posix_spawn() failed");
 
@@ -351,6 +355,7 @@ public abstract class BasePosixProcess implements NuProcess
             close(stderr);
 
             exitCode.set(statusCode);
+            exitPending.countDown();
             if (statusCode != Integer.MAX_VALUE - 1)
             {
                 processHandler.onExit(statusCode);
@@ -362,7 +367,6 @@ public abstract class BasePosixProcess implements NuProcess
         }
         finally
         {
-            exitPending.countDown();
 
             Native.free(Pointer.nativeValue(outBufferPointer));
             Native.free(Pointer.nativeValue(inBufferPointer));
