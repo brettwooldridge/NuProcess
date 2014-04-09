@@ -81,6 +81,44 @@ class ProcessHandler extends NuAbstractProcessHandler {
 #### Synchronous Operation
 NuProcess does allow you to perform synchronous *writes* to the *stdin* of the spawned process.  Even though the writes are *synchronous* they are *non-blocking*; meaning the write returns immediately.  In this model, you do not use ``NuProcess.wantWrite()`` and your ``onStdinReady()`` method will not be called.  If you extend the ``NuAbstractProcessHandler`` you do not need to provide an implementation of ``onStdinReady()``.  Use the ``NuProcess.writeStdin()`` method to write data to the process.  This method will return immediately and writes are queued and occur in order.  Read the JavaDoc for the ``NuProcess.writeStdin()`` method for cautions and caveats.
 
+In the synchronous model, the above example would look like this:
+```java
+NuProcessBuilder pb = new NuProcessBuilder(Arrays.asList("/bin/cat"));
+ProcessHandler handler = new ProcessHandler();
+pb.setProcessListener(handler);
+NuProcess process = pb.start();
+
+ByteBuffer buffer = ByteBuffer.wrap("Hello, World!".getBytes());
+buffer.flip();
+process.writeStdin(buffer);
+
+process.waitFor(0, TimeUnit.SECONDS); // when 0 is used for waitFor() the wait is infinite
+```
+
+And the handler:
+```java
+class ProcessHandler extends NuAbstractProcessHandler {
+   private NuProcess nuProcess;
+
+   @Override
+   public void onStart(NuProcess nuProcess) {
+      this.nuProcess = nuProcess;
+   }
+   
+   @Override
+   public void onStdout(ByteBuffer buffer) {
+      if (buffer == null)
+         return;
+
+      byte[] bytes = new byte[buffer.remaining()];
+      buffer.get(bytes);
+      System.out.println(new String(bytes));
+
+      // We're done, so closing STDIN will cause the "cat" process to exit
+      nuProcess.closeStdin();
+}
+```
+
 #### JavaDocs
 You can read the [JavaDoc here](http://brettwooldridge.github.io/NuProcess/apidocs/index.html).  Make sure you read and fully understand the JavaDoc for the ``NuProcessHandler`` interface as it is your primary contract with NuProcess.
 
