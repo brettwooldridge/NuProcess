@@ -78,6 +78,9 @@ class ProcessHandler extends NuAbstractProcessHandler {
 }
 ```
 
+#### Synchronous Operation
+NuProcess does allow you to perform synchronous *writes* to the *stdin* of the spawned process.  Even though the writes are *synchronous* they are *non-blocking*; meaning the write returns immediately.  In this model, you do not use ``NuProcess.wantWrite()`` and your ``onStdinReady()`` method will not be called.  If you extend the ``NuAbstractProcessHandler`` you do not need to provide an implementation of ``onStdinReady()``.  Use the ``NuProcess.writeStdin()`` method to write data to the process.  This method will return immediately and writes are queued and occur in order.  Read the JavaDoc for the ``NuProcess.writeStdin()`` method for cautions and caveats.
+
 #### JavaDocs
 You can read the [JavaDoc here](http://brettwooldridge.github.io/NuProcess/apidocs/index.html).  Make sure you read and fully understand the JavaDoc for the ``NuProcessHandler`` interface as it is your primary contract with NuProcess.
 
