@@ -262,7 +262,7 @@ public abstract class BasePosixProcess implements NuProcess
             LibC.posix_spawnattr_setflags(posix_spawnattr, flags);
 
             IntByReference restrict_pid = new IntByReference();
-            rc = LibC.posix_spawn(restrict_pid, commands[0], posix_spawn_file_actions, posix_spawnattr, new StringArray(commands), new StringArray(environment));
+            rc = LibC.posix_spawnp(restrict_pid, commands[0], posix_spawn_file_actions, posix_spawnattr, new StringArray(commands), new StringArray(environment));
 
             pid = restrict_pid.getValue();
 

@@ -39,7 +39,6 @@ public class InterruptTest
 
         NuProcessHandler processListener = new NuAbstractProcessHandler()
         {
-
             @Override
             public void onStart(NuProcess nuProcess)
             {
@@ -70,7 +69,6 @@ public class InterruptTest
                 buffer.put("This is a test".getBytes());
                 return true;
             }
-
         };
 
         NuProcessBuilder pb = new NuProcessBuilder(processListener, command);

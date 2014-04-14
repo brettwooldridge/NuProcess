@@ -37,7 +37,7 @@ public class CatTest
     @Before
     public void setup()
     {
-        command = "/bin/cat";
+        command = "cat";
         if (System.getProperty("os.name").toLowerCase().contains("win"))
         {
             command = "src\\test\\java\\com\\zaxxer\\nuprocess\\cat.exe";

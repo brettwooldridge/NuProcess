@@ -70,7 +70,7 @@ public class LibC
 
     public static native int posix_spawn_file_actions_adddup2(Pointer actions, int fildes, int newfildes);
 
-    public static native int posix_spawn(IntByReference restrict_pid, String restrict_path, Pointer file_actions,
+    public static native int posix_spawnp(IntByReference restrict_pid, String restrict_path, Pointer file_actions,
                                          Pointer /*const posix_spawnattr_t*/ restrict_attrp, StringArray /*String[]*/ argv,
                                          Pointer /*String[]*/ envp);
 
