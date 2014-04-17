@@ -625,7 +625,16 @@ public final class WindowsProcess implements NuProcess
 
         for (String s : commands)
         {
-            sb.append(s).append(' ');
+            if (s.contains(" "))
+            {
+                sb.append('"').append(s).append('"');
+            }
+            else
+            {
+                sb.append(s);
+            }
+
+            sb.append(' ');
         }
 
         if (sb.length() > 0)
