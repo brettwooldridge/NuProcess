@@ -5,7 +5,7 @@
 
     <groupId>com.zaxxer</groupId>
     <artifactId>nuprocess</artifactId>
-    <version>0.9.3-SNAPSHOT</version>
+    <version>0.9.3</version>
     <packaging>bundle</packaging>
 
     <name>NuProcess</name>
