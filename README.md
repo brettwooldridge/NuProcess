@@ -35,10 +35,10 @@ Additionally, on unix-based platforms such as Linux, when creating a new process
 operation.  This requires a temporary copy of the Java process (the fork), before the exec is performed.  When running
 tests on Linux, in order to spawn 500 processes required setting the JVM max. memory to 3Gb (-Xmx3g).  NuProcess uses a
 variant of ``fork()`` called ``vfork()``, which does not impose this overhead.  NuProcess can comfortably spawn 500 processes
-even when running the JVM with only 128Mb (-Xmx128m).
+even when running the JVM with only 128Mb.
 
 #### Example
-Like the Java ``ProcessBuilder``, NuProcess offers ``NuProcessBuilder``, building a process is fairly simple.  Let's make a simple example where we use the Unix "cat" command.  When launched with no parameters, *cat* reads from STDIN and echos the output to STDOUT.  We're going to start the *cat* process, write *"Hello world!"* to its STDIN, and read the echoed reply from STDOUT and print it.  Let's build and start the process.
+Like the Java ``ProcessBuilder``, NuProcess offers ``NuProcessBuilder``, so building a process is fairly simple.  Let's make a simple example where we use the Unix "cat" command.  When launched with no parameters, *cat* reads from STDIN and echos the output to STDOUT.  We're going to start the *cat* process, write *"Hello world!"* to its STDIN, and read the echoed reply from STDOUT and print it.  Let's build and start the process.
 ```java
 NuProcessBuilder pb = new NuProcessBuilder(Arrays.asList("/bin/cat"));
 ProcessHandler handler = new ProcessHandler();
