@@ -21,6 +21,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -623,8 +624,11 @@ public final class WindowsProcess implements NuProcess
             commands.set(0, "\"" + commands.get(0).replaceAll("\\\"", "\\\"") + "\"");
         }
 
-        for (String s : commands)
+        Iterator<String> iterator = commands.iterator();
+        sb.append(iterator.next()).append(' '); // skip the executable itself
+        while (iterator.hasNext())
         {
+            String s = iterator.next();
             if (s.contains(" "))
             {
                 sb.append('"').append(s).append('"');
