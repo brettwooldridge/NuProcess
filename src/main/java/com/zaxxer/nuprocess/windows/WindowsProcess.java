@@ -485,11 +485,11 @@ public final class WindowsProcess implements NuProcess
 
     void stdinClose()
     {
-        if (!inClosed)
+        if (!inClosed && stdinPipe != null)
         {
             NuKernel32.CloseHandle(stdinPipe.pipeHandle);
-            inClosed = true;
         }
+        inClosed = true;
     }
 
     private void callStart()
