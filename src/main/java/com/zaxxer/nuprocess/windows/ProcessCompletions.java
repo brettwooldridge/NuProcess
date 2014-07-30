@@ -136,7 +136,7 @@ public final class ProcessCompletions implements Runnable
             }
 
             int transferred = numberOfBytes.getValue();
-            if (process.getStdoutPipe().ioCompletionKey == key)
+            if (process.getStdoutPipe() != null && process.getStdoutPipe().ioCompletionKey == key)
             {
                 if (transferred > 0)
                 {
@@ -148,14 +148,14 @@ public final class ProcessCompletions implements Runnable
                     process.readStdout(-1);
                 }
             }
-            else if (process.getStdinPipe().ioCompletionKey == key)
+            else if (process.getStdinPipe() != null && process.getStdinPipe().ioCompletionKey == key)
             {
                 if (process.writeStdin(transferred))
                 {
                     queueWrite(process);
                 }
             }
-            else if (process.getStderrPipe().ioCompletionKey == key)
+            else if (process.getStderrPipe() != null && process.getStderrPipe().ioCompletionKey == key)
             {
                 if (transferred > 0)
                 {
