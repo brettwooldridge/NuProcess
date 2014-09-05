@@ -29,83 +29,77 @@ import com.sun.jna.ptr.IntByReference;
  */
 public abstract class BaseEventProcessor<T extends BasePosixProcess> implements IEventProcessor<T>
 {
-    protected static final int DEADPOOL_POLL_INTERVAL;
-    protected static final int LINGER_ITERATIONS;
+   protected static final int DEADPOOL_POLL_INTERVAL;
+   protected static final int LINGER_ITERATIONS;
 
-    protected Map<Integer, T> pidToProcessMap;
-    protected Map<Integer, T> fildesToProcessMap;
+   protected Map<Integer, T> pidToProcessMap;
+   protected Map<Integer, T> fildesToProcessMap;
 
-    protected volatile boolean shutdown;
+   protected volatile boolean shutdown;
 
-    private CyclicBarrier startBarrier;
-    private AtomicBoolean isRunning;
+   private CyclicBarrier startBarrier;
+   private AtomicBoolean isRunning;
 
-    static
-    {
-        int lingerTimeMs = Math.max(1000, Integer.getInteger("com.zaxxer.nuprocess.lingerTimeMs", 2500));
+   static {
+      int lingerTimeMs = Math.max(1000, Integer.getInteger("com.zaxxer.nuprocess.lingerTimeMs", 2500));
 
-        DEADPOOL_POLL_INTERVAL = Math.min(lingerTimeMs, Math.max(100, Integer.getInteger("com.zaxxer.nuprocess.deadPoolPollMs", 250)));
-        
-        LINGER_ITERATIONS = lingerTimeMs / DEADPOOL_POLL_INTERVAL;
-    }
+      DEADPOOL_POLL_INTERVAL = Math.min(lingerTimeMs, Math.max(100, Integer.getInteger("com.zaxxer.nuprocess.deadPoolPollMs", 250)));
 
-    public BaseEventProcessor()
-    {
-        pidToProcessMap = new ConcurrentHashMap<Integer, T>();
-        fildesToProcessMap = new ConcurrentHashMap<Integer, T>();
-        isRunning = new AtomicBoolean();
-    }
+      LINGER_ITERATIONS = lingerTimeMs / DEADPOOL_POLL_INTERVAL;
+   }
 
-    /**
-     * The primary run loop of the event processor.
-     */
-    @Override
-    public void run()
-    {
-        try
-        {
-            startBarrier.await();
+   public BaseEventProcessor() {
+      pidToProcessMap = new ConcurrentHashMap<Integer, T>();
+      fildesToProcessMap = new ConcurrentHashMap<Integer, T>();
+      isRunning = new AtomicBoolean();
+   }
 
-            int idleCount = 0;
-            while (!isRunning.compareAndSet(idleCount > LINGER_ITERATIONS && pidToProcessMap.isEmpty(), false))
-            {
-                idleCount = (!shutdown && process()) ? 0 : (idleCount + 1);
-            }
-        }
-        catch (Exception e)
-        {
-            // TODO: how to handle this error?
-            isRunning.set(false);
-        }
-    }
+   /**
+    * The primary run loop of the event processor.
+    */
+   @Override
+   public void run()
+   {
+      try {
+         startBarrier.await();
 
-    /** {@inheritDoc} */
-    @Override
-    public CyclicBarrier getSpawnBarrier()
-    {
-        startBarrier = new CyclicBarrier(2);
-        return startBarrier;
-    }
+         int idleCount = 0;
+         while (!isRunning.compareAndSet(idleCount > LINGER_ITERATIONS && pidToProcessMap.isEmpty(), false)) {
+            idleCount = (!shutdown && process()) ? 0 : (idleCount + 1);
+         }
+      }
+      catch (Exception e) {
+         // TODO: how to handle this error?
+         isRunning.set(false);
+      }
+   }
 
-    /** {@inheritDoc} */
-    @Override
-    public boolean checkAndSetRunning()
-    {
-        return isRunning.compareAndSet(false, true);
-    }
+   /** {@inheritDoc} */
+   @Override
+   public CyclicBarrier getSpawnBarrier()
+   {
+      startBarrier = new CyclicBarrier(2);
+      return startBarrier;
+   }
 
-    /** {@inheritDoc} */
-    @Override
-    public void shutdown()
-    {
-        shutdown = true;
-        Collection<T> processes = pidToProcessMap.values();
-        IntByReference exitCode = new IntByReference();
-        for (T process : processes)
-        {
-            LibC.kill(process.getPid(), LibC.SIGTERM);
-            process.onExit(Integer.MAX_VALUE - 1);
-            LibC.waitpid(process.getPid(), exitCode, LibC.WNOHANG);
-        }
-    }
+   /** {@inheritDoc} */
+   @Override
+   public boolean checkAndSetRunning()
+   {
+      return isRunning.compareAndSet(false, true);
+   }
+
+   /** {@inheritDoc} */
+   @Override
+   public void shutdown()
+   {
+      shutdown = true;
+      Collection<T> processes = pidToProcessMap.values();
+      IntByReference exitCode = new IntByReference();
+      for (T process : processes) {
+         LibC.kill(process.getPid(), LibC.SIGTERM);
+         process.onExit(Integer.MAX_VALUE - 1);
+         LibC.waitpid(process.getPid(), exitCode, LibC.WNOHANG);
+      }
+   }
 }

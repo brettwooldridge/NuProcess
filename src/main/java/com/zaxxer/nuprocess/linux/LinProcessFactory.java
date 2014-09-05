@@ -29,15 +29,14 @@ import com.zaxxer.nuprocess.NuProcessHandler;
  */
 public class LinProcessFactory implements NuProcessFactory
 {
-    /** {@inheritDoc} */
-    @Override
-    public NuProcess createProcess(List<String> commands, String[] env, NuProcessHandler processListener)
-    {
-        LinuxProcess process = new LinuxProcess(processListener);
-        synchronized (LinProcessFactory.class)
-        {
-            process.start(commands, env);
-        }
-        return process;
-    }
+   /** {@inheritDoc} */
+   @Override
+   public NuProcess createProcess(List<String> commands, String[] env, NuProcessHandler processListener)
+   {
+      LinuxProcess process = new LinuxProcess(processListener);
+      synchronized (LinProcessFactory.class) {
+         process.start(commands, env);
+      }
+      return process;
+   }
 }

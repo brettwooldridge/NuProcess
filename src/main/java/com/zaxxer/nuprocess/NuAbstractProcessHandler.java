@@ -26,34 +26,34 @@ import java.nio.ByteBuffer;
  */
 public abstract class NuAbstractProcessHandler implements NuProcessHandler
 {
-    /** {@inheritDoc} */
-    @Override
-    public void onStart(NuProcess nuProcess)
-    {
-    }
+   /** {@inheritDoc} */
+   @Override
+   public void onStart(NuProcess nuProcess)
+   {
+   }
 
-    /** {@inheritDoc} */
-    @Override
-    public void onExit(int statusCode)
-    {
-    }
+   /** {@inheritDoc} */
+   @Override
+   public void onExit(int statusCode)
+   {
+   }
 
-    /** {@inheritDoc} */
-    @Override
-    public void onStdout(ByteBuffer buffer)
-    {
-    }
+   /** {@inheritDoc} */
+   @Override
+   public void onStdout(ByteBuffer buffer)
+   {
+   }
 
-    /** {@inheritDoc} */
-    @Override
-    public void onStderr(ByteBuffer buffer)
-    {
-    }
+   /** {@inheritDoc} */
+   @Override
+   public void onStderr(ByteBuffer buffer)
+   {
+   }
 
-    /** {@inheritDoc} */
-    @Override
-    public boolean onStdinReady(ByteBuffer buffer)
-    {
-    	return false;
-    }
+   /** {@inheritDoc} */
+   @Override
+   public boolean onStdinReady(ByteBuffer buffer)
+   {
+      return false;
+   }
 }

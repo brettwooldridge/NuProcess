@@ -28,25 +28,24 @@ import com.sun.jna.Structure;
  */
 public class LibKevent
 {
-    static
-    {
-        Native.register("c");
-    }
+   static {
+      Native.register("c");
+   }
 
-    public static native int kqueue();
+   public static native int kqueue();
 
-    public static native int kevent(int kq, Pointer changeList, int nchanges, Pointer eventList, int nevents, TimeSpec timespec);
+   public static native int kevent(int kq, Pointer changeList, int nchanges, Pointer eventList, int nevents, TimeSpec timespec);
 
-    public static class TimeSpec extends Structure
-    {
-        public long tv_sec;
-        public long tv_nsec;
+   public static class TimeSpec extends Structure
+   {
+      public long tv_sec;
+      public long tv_nsec;
 
-        @SuppressWarnings("rawtypes")
-        @Override
-        protected List getFieldOrder()
-        {
-            return Arrays.asList("tv_sec", "tv_nsec");
-        }   
-    }
+      @SuppressWarnings("rawtypes")
+      @Override
+      protected List getFieldOrder()
+      {
+         return Arrays.asList("tv_sec", "tv_nsec");
+      }
+   }
 }

@@ -24,20 +24,17 @@ import com.zaxxer.nuprocess.internal.BasePosixProcess;
  */
 public class LinuxProcess extends BasePosixProcess
 {
-    static
-    {
-        LibEpoll.sigignore(LibEpoll.SIGPIPE);
+   static {
+      LibEpoll.sigignore(LibEpoll.SIGPIPE);
 
-        // TODO: install signal handler for SIGCHLD, and call onExit() when received, call the default (JVM) hook if the PID is not ours
+      // TODO: install signal handler for SIGCHLD, and call onExit() when received, call the default (JVM) hook if the PID is not ours
 
-        for (int i = 0; i < processors.length; i++)
-        {
-            processors[i] = new ProcessEpoll();
-        }
-    }
+      for (int i = 0; i < processors.length; i++) {
+         processors[i] = new ProcessEpoll();
+      }
+   }
 
-    public LinuxProcess(NuProcessHandler processListener)
-    {
-        super(processListener);
-    }
+   public LinuxProcess(NuProcessHandler processListener) {
+      super(processListener);
+   }
 }

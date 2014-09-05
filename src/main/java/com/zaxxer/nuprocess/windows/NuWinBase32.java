@@ -6,11 +6,10 @@ import com.sun.jna.win32.W32APIOptions;
 
 public class NuWinBase32
 {
-    static
-    {
-        NativeLibrary nativeLibrary = NativeLibrary.getInstance("winbase", W32APIOptions.UNICODE_OPTIONS);
-        Native.register(nativeLibrary);
-    }
+   static {
+      NativeLibrary nativeLibrary = NativeLibrary.getInstance("winbase", W32APIOptions.UNICODE_OPTIONS);
+      Native.register(nativeLibrary);
+   }
 
-    public static native boolean HasOverlappedIoCompleted(NuKernel32.OVERLAPPED lpOverlapped);
+   public static native boolean HasOverlappedIoCompleted(NuKernel32.OVERLAPPED lpOverlapped);
 }
