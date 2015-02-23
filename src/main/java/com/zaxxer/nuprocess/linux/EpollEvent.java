@@ -24,10 +24,28 @@ public class EpollEvent
 {
    private Pointer pointer;
 
+   /*
+       typedef union epoll_data
+       {
+         void *ptr;
+         int fd;
+         uint32_t u32;
+         uint64_t u64;
+       } epoll_data_t;
+    
+       struct epoll_event
+       {
+         uint32_t events;   // Epoll events
+         epoll_data_t data; // User data variable
+       };
+   */
+   private static final int MALLOC_SIZE = 4 + Pointer.SIZE + 4 + 4 + 8;
+   private static final int EPOLL_DATA_START = Pointer.SIZE;
+
    EpollEvent() {
-      long memory = Native.malloc(16);
+      long memory = Native.malloc(MALLOC_SIZE);
       pointer = new Pointer(memory);
-      pointer.clear(16);
+      pointer.clear(MALLOC_SIZE);
    }
 
    void free()
@@ -37,7 +55,7 @@ public class EpollEvent
 
    void clear()
    {
-      pointer.clear(12);
+      pointer.clear(MALLOC_SIZE);
    }
 
    Pointer getPointer()
@@ -57,12 +75,12 @@ public class EpollEvent
 
    int getFd()
    {
-      return pointer.getInt(4);
+      return pointer.getInt(EPOLL_DATA_START);
    }
 
    void setFd(int fd)
    {
-      pointer.setInt(4, fd);
+      pointer.setInt(EPOLL_DATA_START, fd);
    }
 
    int getUnused()
@@ -78,7 +96,7 @@ public class EpollEvent
    @Override
     public String toString()
     {
-        byte[] byteArray = pointer.getByteArray(0, 16);
+        byte[] byteArray = pointer.getByteArray(0, MALLOC_SIZE);
         return HexDumpElf.dump(0, byteArray, 0, byteArray.length);
     }
 
