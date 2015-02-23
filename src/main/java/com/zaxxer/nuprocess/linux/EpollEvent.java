@@ -27,6 +27,7 @@ public class EpollEvent
    EpollEvent() {
       long memory = Native.malloc(16);
       pointer = new Pointer(memory);
+      pointer.clear(16);
    }
 
    void free()
