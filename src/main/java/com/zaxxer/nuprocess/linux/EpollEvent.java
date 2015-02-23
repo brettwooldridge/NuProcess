@@ -75,12 +75,12 @@ public class EpollEvent
 
    int getFd()
    {
-      return pointer.getInt(EPOLL_DATA_START);
+      return pointer.getInt(EPOLL_DATA_START + 4);
    }
 
    void setFd(int fd)
    {
-      pointer.setInt(EPOLL_DATA_START, fd);
+      pointer.setInt(EPOLL_DATA_START + 4, fd);
    }
 
    int getUnused()
