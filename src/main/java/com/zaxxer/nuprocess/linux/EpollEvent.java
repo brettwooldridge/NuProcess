@@ -18,6 +18,7 @@ package com.zaxxer.nuprocess.linux;
 
 import com.sun.jna.Native;
 import com.sun.jna.Pointer;
+import com.zaxxer.nuprocess.internal.HexDumpElf;
 
 public class EpollEvent
 {
@@ -72,6 +73,13 @@ public class EpollEvent
    {
       pointer.setInt(8, unused);
    }
+
+   @Override
+    public String toString()
+    {
+        byte[] byteArray = pointer.getByteArray(0, 16);
+        return HexDumpElf.dump(0, byteArray, 0, byteArray.length);
+    }
 
    /* from /usr/include/sys/epoll.h */
    public static final int EPOLL_CTL_ADD = 1; /* Add a file decriptor to the interface.  */
