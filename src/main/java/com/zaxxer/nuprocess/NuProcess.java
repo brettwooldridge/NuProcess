@@ -60,7 +60,7 @@ public interface NuProcess
    void wantWrite();
 
    /**
-    * Performs a "direct write" rather than expressing a desire to write using {@link #wantWrite()}
+    * Performs a "direct write" rather than expressing a desire to write using {@link #wantWrite}
     * and performing the write in a callback.  Be careful mixing this paradigm with the
     * asynchronous paradigm imposed by {@link #wantWrite()}.  This method returns immediately and
     * the write of the data occurs on the asynchronous processing thread.  You can perform multiple
@@ -82,6 +82,15 @@ public interface NuProcess
     * and even data that has been written into the pipe will be immediately discarded.
     */
    void closeStdin();
+
+   /**
+    * This method is most useful in combination with {@link #writeStdin}.  This method returns
+    * true if there is outstanding data to be written to the stdin stream, and false if there
+    * are no pending writes.
+    *   
+    * @return <code>true</code> if there are pending writes, <code>false</code> otherwise
+    */
+   boolean hasPendingWrites();
 
    /**
     * Forcefully destroy the process.  When this method is called, the exit code returned by

@@ -189,6 +189,13 @@ public final class WindowsProcess implements NuProcess
 
    /** {@inheritDoc} */
    @Override
+   public boolean hasPendingWrites()
+   {
+      return !pendingWrites.isEmpty();
+   }
+
+   /** {@inheritDoc} */
+   @Override
    public void destroy()
    {
       NuKernel32.TerminateProcess(processInfo.hProcess, Integer.MAX_VALUE);

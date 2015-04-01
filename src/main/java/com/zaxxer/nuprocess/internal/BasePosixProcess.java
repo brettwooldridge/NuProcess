@@ -201,6 +201,13 @@ public abstract class BasePosixProcess implements NuProcess
 
    /** {@inheritDoc} */
    @Override
+   public boolean hasPendingWrites()
+   {
+      return !pendingWrites.isEmpty();
+   }
+
+   /** {@inheritDoc} */
+   @Override
    public void setProcessHandler(NuProcessHandler processHandler)
    {
       this.processHandler = processHandler;
