@@ -17,6 +17,7 @@
 package com.zaxxer.nuprocess;
 
 import java.nio.ByteBuffer;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -92,27 +93,27 @@ public class CatTest
     @Test
     public void badExit() throws InterruptedException
     {
-        final AtomicInteger exitCode = new AtomicInteger();
+        final AtomicInteger asyncExitCode = new AtomicInteger();
+        final CountDownLatch exitLatch = new CountDownLatch(1);
 
         NuProcessHandler processListener = new NuAbstractProcessHandler() {
             @Override
             public void onExit(int statusCode)
             {
-                exitCode.set(statusCode);
+            	asyncExitCode.set(statusCode);
+                exitLatch.countDown();
             }
         };
 
         NuProcessBuilder pb = new NuProcessBuilder(processListener, command, "/tmp/sdfadsf");
         NuProcess nuProcess = pb.start();
-        nuProcess.waitFor(5, TimeUnit.SECONDS);
-        if (System.getProperty("os.name").toLowerCase().contains("win"))
-        {
-            Assert.assertEquals("Exit code did not match expectation", -1, exitCode.get());
-        }
-        else
-        {
-            Assert.assertEquals("Exit code did not match expectation", 1, exitCode.get());
-        }
+        int syncExitCode = nuProcess.waitFor(5, TimeUnit.SECONDS);
+        boolean countedDown = exitLatch.await(5, TimeUnit.SECONDS);
+        Assert.assertTrue("Async exit latch was not triggered", countedDown);
+        
+        int expectedExitCode = System.getProperty("os.name").toLowerCase().contains("win") ? -1 : 1;
+        Assert.assertEquals("Exit code (synchronous) did not match expectation", expectedExitCode, syncExitCode);
+        Assert.assertEquals("Exit code (asynchronous) did not match expectation", expectedExitCode, asyncExitCode.get());
     }
 
     @Test
