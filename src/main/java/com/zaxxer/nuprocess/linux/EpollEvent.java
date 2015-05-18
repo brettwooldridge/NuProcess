@@ -16,13 +16,15 @@
 
 package com.zaxxer.nuprocess.linux;
 
-import com.sun.jna.Native;
-import com.sun.jna.Pointer;
-import com.zaxxer.nuprocess.internal.HexDumpElf;
+import java.util.Arrays;
+import java.util.List;
 
-public class EpollEvent
+import com.sun.jna.Pointer;
+import com.sun.jna.Structure;
+import com.sun.jna.Union;
+
+public class EpollEvent extends Structure
 {
-   private Pointer pointer;
 
    /*
        typedef union epoll_data
@@ -39,77 +41,29 @@ public class EpollEvent
          epoll_data_t data; // User data variable
        };
    */
-   private static final int MALLOC_SIZE = 4 + Pointer.SIZE + 4 + 4 + 8;
-   private static final int EPOLL_DATA_START = Pointer.SIZE;
+
+	public int events;
+	public EpollData data;
 
    EpollEvent() {
-      long memory = Native.malloc(MALLOC_SIZE);
-      pointer = new Pointer(memory);
-      pointer.clear(MALLOC_SIZE);
+	  // per eventpoll.h, x86_64 has the same alignment as 32-bit
+      super(ALIGN_GNUC);
+      
+      data = new EpollData();
+      data.setType("fd");
    }
-
-   void free()
-   {
-      Native.free(Pointer.nativeValue(pointer));
-   }
-
-   void clear()
-   {
-      pointer.clear(MALLOC_SIZE);
-   }
-
-   Pointer getPointer()
-   {
-      return pointer;
-   }
-
-   int getEvents()
-   {
-      return pointer.getInt(0);
-   }
-
-   void setEvents(int events)
-   {
-      pointer.setInt(0, events);
-   }
-
-   int getFd()
-   {
-      return pointer.getInt(EPOLL_DATA_START + 4);
-   }
-
-   void setFd(int fd)
-   {
-      pointer.setInt(EPOLL_DATA_START + 4, fd);
-   }
-
-   int getUnused()
-   {
-      return pointer.getInt(8);
-   }
-
-   void setUnused(int unused)
-   {
-      pointer.setInt(8, unused);
-   }
-
+   
+   @SuppressWarnings("rawtypes")
    @Override
-    public String toString()
-    {
-        byte[] byteArray = pointer.getByteArray(0, MALLOC_SIZE);
-        return HexDumpElf.dump(0, byteArray, 0, byteArray.length);
-    }
+   protected List getFieldOrder() {
+	   return Arrays.asList("events", "data");
+   }
 
-   /* from /usr/include/sys/epoll.h */
-   public static final int EPOLL_CTL_ADD = 1; /* Add a file decriptor to the interface.  */
-   public static final int EPOLL_CTL_DEL = 2; /* Change file decriptor epoll_event structure.  */
-   public static final int EPOLL_CTL_MOD = 3; /* Remove a file decriptor from the interface.  */
-
-   public static final int EPOLLIN = 0x001;
-   public static final int EPOLLOUT = 0x004;
-   public static final int EPOLLERR = 0x008;
-   public static final int EPOLLHUP = 0x010;
-   public static final int EPOLLRDHUP = 0x2000;
-   public static final int EPOLLONESHOT = (1 << 30);
-   public static final int EPOLLET = (1 << 31);
+   public static class EpollData extends Union {
+	   public Pointer ptr;
+	   public int fd;
+	   public int u32;
+	   public int u64;
+   }
+   
 }
