@@ -21,6 +21,8 @@ public class ThreadedTest
     @Test
     public void threadTest1() throws InterruptedException
     {
+        System.err.println("Starting threadTest1()");
+
         ArrayList<Thread> threads = new ArrayList<Thread>();
         int threadCount = 4;
         int procCount = 50;
@@ -30,12 +32,15 @@ public class ThreadedTest
             MyThread mt = new MyThread(ii, procCount);
             mt.start();
             threads.add(mt);
+            System.err.printf("  started thread: %d\n", ii);
         }
 
         for (Thread th : threads)
         {
             th.join(TimeUnit.SECONDS.toMillis(20));
         }
+
+        System.err.println("Completed threadTest1()");
     }
 
     static class MyThread extends Thread
@@ -68,18 +73,21 @@ public class ThreadedTest
                     handlers[i] = new LottaProcessHandler();
                     pb.setProcessListener(handlers[i]);
                     processes[i] = pb.start();
+                    System.err.printf("  thread %d starting process %d: %s\n", id, i + 1, processes[i].toString());
                 }
 
                 // Kick all of the processes to start going
-                for (NuProcess process : processes)
+                for (NuProcess process : processes) {
+                    System.err.printf("  Thread %d calling wantWrite() on process: %s\n", id, process.toString());
                     process.wantWrite();
+                }
 
                 for (NuProcess process : processes)
                 {
                     try
                     {
                         maxFreeMem = Math.max(maxFreeMem, Runtime.getRuntime().freeMemory());
-                        process.waitFor(0, TimeUnit.SECONDS);
+                        process.waitFor(90, TimeUnit.SECONDS);
                     }
                     catch (InterruptedException ex)
                     {
