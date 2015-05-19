@@ -45,10 +45,13 @@ public class CatTest
     }
 
     @Test
-    public void lotOfProcesses()
+    public void lotOfProcesses() throws Exception
     {
+        System.err.println("Starting test lotOfProcesses()");
         for (int times = 0; times < 20; times++)
         {
+            System.err.printf(" Iteration %d\n", times + 1);
+
             Semaphore[] semaphores = new Semaphore[100];
             LottaProcessListener[] listeners = new LottaProcessListener[100];
     
@@ -58,11 +61,12 @@ public class CatTest
                 listeners[i] = new LottaProcessListener(semaphores[i]);
                 NuProcessBuilder pb = new NuProcessBuilder(listeners[i], command);
                 pb.start();
+                System.err.printf("  starting process: %d\n", i + 1);
             }
     
             for (Semaphore sem : semaphores)
             {
-                sem.acquireUninterruptibly();
+                sem.acquire();
             }
             
             for (LottaProcessListener listen : listeners)
@@ -71,11 +75,14 @@ public class CatTest
                 Assert.assertEquals("Exit code mismatch", 0, listen.getExitCode());
             }
         }
+
+        System.err.println("Completed test lotOfProcesses()");
     }
 
     @Test
     public void lotOfData() throws Exception
     {
+        System.err.println("Starting test lotOfData()");
         for (int i = 0; i < 100; i++)
         {
             Semaphore semaphore = new Semaphore(0);
@@ -87,11 +94,15 @@ public class CatTest
     
             Assert.assertTrue("Adler32 mismatch between written and read", processListener.checkAdlers());
         }
+
+        System.err.println("Completed test lotOfData()");
     }
 
     @Test
     public void badExit() throws InterruptedException
     {
+        System.err.println("Starting test badExit()");
+
         final AtomicInteger exitCode = new AtomicInteger();
 
         NuProcessHandler processListener = new NuAbstractProcessHandler() {
@@ -113,11 +124,15 @@ public class CatTest
         {
             Assert.assertEquals("Exit code did not match expectation", 1, exitCode.get());
         }
+
+        System.err.println("Completed test badExit()");
     }
 
     @Test
     public void noExecutableFound()
     {
+        System.err.println("Starting test noExecutableFound()");
+
         final Semaphore semaphore = new Semaphore(0);
         final AtomicInteger exitCode = new AtomicInteger();
 
@@ -135,6 +150,8 @@ public class CatTest
         semaphore.acquireUninterruptibly();
         Assert.assertFalse("Process incorrectly reported running", process.isRunning());
         Assert.assertEquals("Output did not matched expected result", Integer.MIN_VALUE, exitCode.get());
+
+        System.err.println("Completed test noExecutableFound()");
     }
 
     private static class LottaProcessListener extends NuAbstractProcessHandler
