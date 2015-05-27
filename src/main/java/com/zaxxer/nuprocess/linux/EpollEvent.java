@@ -63,7 +63,7 @@ public class EpollEvent extends Structure
 	   public Pointer ptr;
 	   public int fd;
 	   public int u32;
-	   public int u64;
+	   public long u64;
    }
    
 }
