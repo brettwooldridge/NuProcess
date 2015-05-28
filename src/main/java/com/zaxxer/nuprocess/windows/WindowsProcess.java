@@ -221,6 +221,8 @@ public final class WindowsProcess implements NuProcess
 
    NuProcess start(List<String> commands, String[] environment)
    {
+      callPreStart();
+      
       try {
          createPipes();
 
@@ -452,6 +454,16 @@ public final class WindowsProcess implements NuProcess
          NuKernel32.CloseHandle(stdinPipe.pipeHandle);
       }
       inClosed = true;
+   }
+
+   private void callPreStart()
+   {
+      try {
+         processHandler.onPreStart(this);
+      }
+      catch (Exception e) {
+    	// Don't let an exception thrown from the user's handler interrupt us
+      }
    }
 
    private void callStart()
