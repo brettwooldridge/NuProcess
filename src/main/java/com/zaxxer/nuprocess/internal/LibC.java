@@ -27,8 +27,9 @@ public class LibC
    static {
       Native.register("c");
 
-      if (System.getProperty("os.name").toLowerCase().contains("mac")) {
-         O_NONBLOCK = 0x0004; // MacOS X
+      if (System.getProperty("os.name").toLowerCase().contains("mac")
+              || System.getProperty("os.name").toLowerCase().contains("freebsd")) {
+         O_NONBLOCK = 0x0004; // MacOS X, Freebsd
       }
       else {
          O_NONBLOCK = 2048; // Linux
