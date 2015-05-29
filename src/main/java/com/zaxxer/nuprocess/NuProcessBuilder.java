@@ -57,7 +57,7 @@ public class NuProcessBuilder
    static {
       String factoryClassName = null;
       String osname = System.getProperty("os.name").toLowerCase();
-      if (osname.contains("mac")) {
+      if (osname.contains("mac") || osname.contains("freebsd")) {
          factoryClassName = "com.zaxxer.nuprocess.osx.OsxProcessFactory";
       }
       else if (osname.contains("win")) {

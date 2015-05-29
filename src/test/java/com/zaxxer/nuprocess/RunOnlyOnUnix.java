@@ -32,7 +32,8 @@ public class RunOnlyOnUnix extends BlockJUnit4ClassRunner
     {
         if (System.getProperty("os.name").toLowerCase().contains("linux")
             || System.getProperty("os.name").toLowerCase().contains("mac")
-            || System.getProperty("os.name").toLowerCase().contains("solaris"))
+            || System.getProperty("os.name").toLowerCase().contains("solaris")
+            || System.getProperty("os.name").toLowerCase().contains("freebsd"))
         {
             super.run(notifier);
         }
