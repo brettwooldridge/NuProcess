@@ -20,6 +20,7 @@ import java.util.Arrays;
 import java.util.List;
 
 import com.sun.jna.Native;
+import com.sun.jna.NativeLibrary;
 import com.sun.jna.Pointer;
 import com.sun.jna.Structure;
 
@@ -29,7 +30,7 @@ import com.sun.jna.Structure;
 public class LibKevent
 {
    static {
-      Native.register("c");
+      Native.register(NativeLibrary.getProcess());
    }
 
    public static native int kqueue();
