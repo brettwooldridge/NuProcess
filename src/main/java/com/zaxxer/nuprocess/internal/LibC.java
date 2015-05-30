@@ -18,6 +18,7 @@ package com.zaxxer.nuprocess.internal;
 
 import com.sun.jna.Callback;
 import com.sun.jna.Native;
+import com.sun.jna.NativeLibrary;
 import com.sun.jna.Pointer;
 import com.sun.jna.StringArray;
 import com.sun.jna.ptr.IntByReference;
@@ -25,7 +26,7 @@ import com.sun.jna.ptr.IntByReference;
 public class LibC
 {
    static {
-      Native.register("c");
+      Native.register(NativeLibrary.getProcess());
 
       if (System.getProperty("os.name").toLowerCase().contains("mac")
               || System.getProperty("os.name").toLowerCase().contains("freebsd")) {

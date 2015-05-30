@@ -50,8 +50,8 @@ public class NuProcessBuilder
 {
    private static final NuProcessFactory factory;
 
-   private List<String> command;
-   private TreeMap<String, String> environment;
+   private final List<String> command;
+   private final TreeMap<String, String> environment;
    private NuProcessHandler processListener;
 
    static {
@@ -81,6 +81,23 @@ public class NuProcessBuilder
       catch (Exception e) {
          throw new RuntimeException(e);
       }
+   }
+
+   /**
+    * Constructs a process builder with the specified operating system program and arguments. This constructor
+    * makes a copy of the command list.  Invokers of this constuctor must later call {@link #setProcessListener(NuProcessHandler)}
+    * in order to set a {@link NuProcessHandler} instance.
+    *
+    * @param commands a {@link List} of commands
+    * @param environment The environment for the process
+    */
+   public NuProcessBuilder(List<String> commands, Map<String, String> environment) {
+      if (commands == null || commands.isEmpty()) {
+         throw new IllegalArgumentException("List of commands may not be null or empty");
+      }
+
+      this.environment = new TreeMap<String, String>(environment);
+      this.command = new ArrayList<String>(commands);
    }
 
    /**

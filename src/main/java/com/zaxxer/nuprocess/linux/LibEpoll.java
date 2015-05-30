@@ -17,6 +17,7 @@
 package com.zaxxer.nuprocess.linux;
 
 import com.sun.jna.Native;
+import com.sun.jna.NativeLibrary;
 import com.sun.jna.Pointer;
 
 /**
@@ -25,7 +26,7 @@ import com.sun.jna.Pointer;
 public class LibEpoll
 {
    static {
-      Native.register("c");
+      Native.register(NativeLibrary.getProcess());
    }
 
    public static native int sigignore(int signal);
