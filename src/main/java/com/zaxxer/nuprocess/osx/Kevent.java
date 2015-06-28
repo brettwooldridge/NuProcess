@@ -25,6 +25,61 @@ import com.sun.jna.Pointer;
  */
 public final class Kevent
 {
+   public static String getEventName(int event) {
+      switch (event) {
+         case Kevent.EV_ADD:
+            return "EV_ADD";
+         case Kevent.EV_CLEAR:
+            return "EV_CLEAR";
+         case Kevent.EV_DELETE:
+            return "EV_DELETE";
+         case Kevent.EV_DISABLE:
+            return "EV_DISABLE";
+         case Kevent.EV_DISPATCH:
+            return "EV_DISPATCH";
+         case Kevent.EV_ENABLE:
+            return "EV_ENABLE";
+         case Kevent.EV_EOF:
+            return "EV_EOF";
+         case Kevent.EV_ERROR:
+            return "EV_ERROR";
+         case Kevent.EV_FLAG0:
+            return "EV_FLAG0";
+         case Kevent.EV_FLAG1:
+            return "EV_FLAG1";
+         case Kevent.EV_ONESHOT:
+            return "EV_ONESHOT";
+         case Kevent.EV_RECEIPT:
+            return "EV_RECEIPT";
+         case Kevent.EV_SYSFLAGS:
+            return "EV_SYSFLAGS";
+         case Kevent.EVFILT_AIO:
+            return "EVFILT_AIO";
+         case Kevent.EVFILT_FS:
+            return "EVFILT_FS";
+         case Kevent.EVFILT_MACHPORT:
+            return "EVFILT_MACHPORT";
+         case Kevent.EVFILT_PROC:
+            return "EVFILT_PROC";
+         case Kevent.EVFILT_READ:
+            return "EVFILT_READ";
+         case Kevent.EVFILT_SIGNAL:
+            return "EVFILT_SIGNAL";
+         case Kevent.EVFILT_TIMER:
+            return "EVFILT_TIMER";
+         case Kevent.EVFILT_USER:
+            return "EVFILT_USER";
+         case Kevent.EVFILT_VM:
+            return "EVFILT_VM";
+         case Kevent.EVFILT_VNODE:
+            return "EVFILT_VNODE";
+         case Kevent.EVFILT_WRITE:
+            return "EVFILT_WRITE";
+         default:
+            return Integer.toString(event);
+      }
+   }
+
    private Pointer pointer;
 
    public Kevent() {

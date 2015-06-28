@@ -22,6 +22,9 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.atomic.AtomicBoolean;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.sun.jna.ptr.IntByReference;
 
 /**
@@ -31,6 +34,8 @@ public abstract class BaseEventProcessor<T extends BasePosixProcess> implements 
 {
    protected static final int DEADPOOL_POLL_INTERVAL;
    protected static final int LINGER_ITERATIONS;
+
+   protected final Logger logger = LoggerFactory.getLogger(getClass());
 
    protected Map<Integer, T> pidToProcessMap;
    protected Map<Integer, T> fildesToProcessMap;
@@ -70,6 +75,7 @@ public abstract class BaseEventProcessor<T extends BasePosixProcess> implements 
       }
       catch (Exception e) {
          // TODO: how to handle this error?
+         logger.error("Event processor failed", e);
          isRunning.set(false);
       }
    }
