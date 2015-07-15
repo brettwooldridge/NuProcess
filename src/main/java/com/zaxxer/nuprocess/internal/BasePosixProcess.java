@@ -437,7 +437,6 @@ public abstract class BasePosixProcess implements NuProcess
                }
 
                // EOF?
-               System.err.println("EOF?");
                close(stdin);
                return false;
             }

@@ -73,12 +73,12 @@ public class ThreadedTest
                     handlers[i] = new LottaProcessHandler();
                     pb.setProcessListener(handlers[i]);
                     processes[i] = pb.start();
-                    System.err.printf("  thread %d starting process %d: %s\n", id, i + 1, processes[i].toString());
+                    // System.err.printf("  thread %d starting process %d: %s\n", id, i + 1, processes[i].toString());
                 }
 
                 // Kick all of the processes to start going
                 for (NuProcess process : processes) {
-                    System.err.printf("  Thread %d calling wantWrite() on process: %s\n", id, process.toString());
+                    // System.err.printf("  Thread %d calling wantWrite() on process: %s\n", id, process.toString());
                     process.wantWrite();
                 }
 
