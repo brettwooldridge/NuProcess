@@ -66,6 +66,7 @@ public final class WindowsProcess implements NuProcess
    private volatile ProcessCompletions myProcessor;
    private volatile NuProcessHandler processHandler;
 
+   protected volatile boolean isRunning;
    private AtomicInteger exitCode;
    private CountDownLatch exitPending;
 
@@ -205,7 +206,7 @@ public final class WindowsProcess implements NuProcess
    @Override
    public boolean isRunning()
    {
-      return exitPending.getCount() != 0;
+      return isRunning;
    }
 
    /** {@inheritDoc} */
@@ -412,7 +413,7 @@ public final class WindowsProcess implements NuProcess
       }
 
       try {
-         exitPending.countDown();
+    	 isRunning = false;
          exitCode.set(statusCode);
          if (statusCode != Integer.MAX_VALUE - 1) {
             processHandler.onExit(statusCode);
@@ -423,6 +424,8 @@ public final class WindowsProcess implements NuProcess
          e.printStackTrace();
       }
       finally {
+    	 exitPending.countDown();
+
          if (!inClosed) {
             NuKernel32.CloseHandle(stdinPipe.pipeHandle);
          }
@@ -531,6 +534,7 @@ public final class WindowsProcess implements NuProcess
       outClosed = false;
       errClosed = false;
       inClosed = false;
+      isRunning = true;
 
       long peer = Native.malloc(BUFFER_CAPACITY);
       stdoutPipe.buffer = UnsafeHelper.wrapNativeMemory(peer, BUFFER_CAPACITY);

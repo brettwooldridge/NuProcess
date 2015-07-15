@@ -49,6 +49,7 @@ public abstract class BasePosixProcess implements NuProcess
    protected volatile NuProcessHandler processHandler;
 
    protected volatile int pid;
+   protected volatile boolean isRunning;
    protected AtomicInteger exitCode;
    protected CountDownLatch exitPending;
 
@@ -129,7 +130,7 @@ public abstract class BasePosixProcess implements NuProcess
    @Override
    public boolean isRunning()
    {
-      return exitPending.getCount() != 0;
+      return isRunning;
    }
 
    /** {@inheritDoc} */
@@ -150,10 +151,11 @@ public abstract class BasePosixProcess implements NuProcess
    @Override
    public void destroy()
    {
-      if (exitPending.getCount() != 0) {
+      if (isRunning) {
          LibC.kill(pid, LibC.SIGTERM);
          IntByReference exit = new IntByReference();
          LibC.waitpid(pid, exit, 0);
+         isRunning = false;
          exitCode.set(exit.getValue());
       }
    }
@@ -339,8 +341,8 @@ public abstract class BasePosixProcess implements NuProcess
          close(stdout);
          close(stderr);
 
+         isRunning = false;
          exitCode.set(statusCode);
-         exitPending.countDown();
          if (statusCode != Integer.MAX_VALUE - 1) {
             processHandler.onExit(statusCode);
          }
@@ -349,6 +351,7 @@ public abstract class BasePosixProcess implements NuProcess
          // Don't let an exception thrown from the user's handler interrupt us
       }
       finally {
+    	 exitPending.countDown();
 
          Native.free(Pointer.nativeValue(outBufferPointer));
          Native.free(Pointer.nativeValue(inBufferPointer));
@@ -504,6 +507,7 @@ public abstract class BasePosixProcess implements NuProcess
    {
       outClosed = false;
       errClosed = false;
+      isRunning = true;
 
       pendingWrites = new ConcurrentLinkedQueue<ByteBuffer>();
 
