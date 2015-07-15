@@ -101,6 +101,7 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
       }
 
       try {
+         logger.debug("queued write: {}", process.getPid());
          wantsWrite.put(process);
       }
       catch (InterruptedException e) {
@@ -113,6 +114,7 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
    @Override
    public void closeStdin(OsxProcess process)
    {
+      logger.debug("queued stdin close: {}", process.getPid());
       closeQueue.add(process);
    }
 
@@ -140,6 +142,8 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
             return true;
          }
       }
+
+      logger.debug("Processing event: {}", Kevent.getEventName(filter));
 
       if (filter == Kevent.EVFILT_READ) // stdout/stderr data available to read
       {
@@ -237,5 +241,8 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
       LibC.waitpid(osxProcess.getPid(), new IntByReference(), LibC.WNOHANG);
 
       pidToProcessMap.remove(osxProcess.getPid());
+
+      osxProcess.stdinClose();
+      logger.debug("cleanup closed stdin: {}", osxProcess.getPid());
    }
 }

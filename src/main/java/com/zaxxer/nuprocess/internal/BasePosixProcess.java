@@ -27,6 +27,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.sun.jna.Memory;
 import com.sun.jna.Native;
 import com.sun.jna.Pointer;
@@ -44,6 +47,8 @@ public abstract class BasePosixProcess implements NuProcess
 
    protected static IEventProcessor<? extends BasePosixProcess>[] processors;
    protected static int processorRoundRobin;
+
+   protected final Logger logger = LoggerFactory.getLogger(getClass());
 
    protected IEventProcessor<? super BasePosixProcess> myProcessor;
    protected volatile NuProcessHandler processHandler;
@@ -329,7 +334,9 @@ public abstract class BasePosixProcess implements NuProcess
 
    public void onExit(int statusCode)
    {
+      logger.debug("onExit({})", statusCode);
       if (exitPending.getCount() == 0) {
+         logger.debug("SIGCHLD");
          // TODO: handle SIGCHLD
          return;
       }
@@ -340,15 +347,16 @@ public abstract class BasePosixProcess implements NuProcess
          close(stderr);
 
          exitCode.set(statusCode);
-         exitPending.countDown();
          if (statusCode != Integer.MAX_VALUE - 1) {
             processHandler.onExit(statusCode);
          }
       }
       catch (Exception e) {
          // Don't let an exception thrown from the user's handler interrupt us
+         logger.error("Failed during onExit", e);
       }
       finally {
+         exitPending.countDown();
 
          Native.free(Pointer.nativeValue(outBufferPointer));
          Native.free(Pointer.nativeValue(inBufferPointer));
