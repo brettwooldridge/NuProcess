@@ -43,9 +43,32 @@ public interface NuProcessHandler
 {
    /**
     * This method is invoked when you call the {@link ProcessBuilder#start()}
+    * method. This is your opportunity to store away the {@code NuProcess}
+    * instance, possibly in your listener, so that it can be used for
+    * interaction within other callbacks in this interface.
+    * <p>
+    * Unlike the {@link #onStart(NuProcess)} method, this method is invoked
+    * before the process is spawned, and is guaranteed to be invoked before
+    * any other methods are called.
+    * 
+    * @param nuProcess
+    *    The {@link NuProcess} that is starting. Note that the instance is not
+    *    yet initialized, so it is not legal to call any of its methods, and
+    *    doing so will result in undefined behavior. If you need to call any
+    *    of the instance's methods, use {@link #onStart(NuProcess)} instead.
+    */
+   void onPreStart(NuProcess nuProcess);
+
+   /**
+    * This method is invoked when you call the {@link ProcessBuilder#start()}
     * method.  This is your opportunity to store away the {@code NuProcess}
     * instance, possibly in your listener, so that it can be used for
     * interaction within other callbacks in this interface.
+    * <p>
+    * Note that this method is called at some point after the process is spawned.
+    * It is possible for other methods (even {@link #onExit(int)}) to be called
+    * first. If you need a guarantee that no other methods will be called first,
+    * use {@link #onPreStart(NuProcess)} instead.
     *
     * @param nuProcess the {@link NuProcess} that is starting
     */

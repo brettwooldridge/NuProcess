@@ -219,6 +219,8 @@ public abstract class BasePosixProcess implements NuProcess
 
    public NuProcess start(List<String> command, String[] environment)
    {
+      callPreStart();
+      
       String[] commands = command.toArray(new String[0]);
 
       Pointer posix_spawn_file_actions = createPipes();
@@ -539,6 +541,16 @@ public abstract class BasePosixProcess implements NuProcess
          catch (Exception e) {
             throw new RuntimeException(e);
          }
+      }
+   }
+
+   private void callPreStart()
+   {
+      try {
+         processHandler.onPreStart(this);
+      }
+      catch (Exception e) {
+    	// Don't let an exception thrown from the user's handler interrupt us
       }
    }
 

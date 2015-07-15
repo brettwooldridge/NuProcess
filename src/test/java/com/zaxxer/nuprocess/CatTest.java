@@ -17,6 +17,8 @@
 package com.zaxxer.nuprocess;
 
 import java.nio.ByteBuffer;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
@@ -153,6 +155,59 @@ public class CatTest
         Assert.assertEquals("Output did not matched expected result", Integer.MIN_VALUE, exitCode.get());
 
         System.err.println("Completed test noExecutableFound()");
+    }
+    
+    @Test
+    public void callbackOrder() throws InterruptedException
+    {
+        final List<String> callbacks = new CopyOnWriteArrayList<String>();
+        final CountDownLatch latch = new CountDownLatch(1);
+        
+        NuProcessHandler handler = new NuProcessHandler() {
+            private NuProcess nuProcess;
+            
+            @Override
+            public void onStdout(ByteBuffer buffer) {
+                callbacks.add("stdout");
+                nuProcess.closeStdin();
+            }
+            
+            @Override
+            public boolean onStdinReady(ByteBuffer buffer) {
+                callbacks.add("stdin");
+                buffer.put("foobar".getBytes()).flip();
+                return false;
+            }
+            
+            @Override
+            public void onStderr(ByteBuffer buffer) {
+                callbacks.add("stderr");
+            }
+            
+            @Override
+            public void onStart(NuProcess nuProcess) {
+                callbacks.add("start");
+                this.nuProcess = nuProcess;
+                nuProcess.wantWrite();
+            }
+            
+            @Override
+            public void onPreStart(NuProcess nuProcess) {
+                callbacks.add("prestart");
+            }
+            
+            @Override
+            public void onExit(int exitCode) {
+                callbacks.add("exit");
+                latch.countDown();
+            }
+        };
+        
+        Assert.assertNotNull("process is null", new NuProcessBuilder(handler, command).start());
+        latch.await();
+        
+        Assert.assertEquals("onPreStart was not called first", 0, callbacks.indexOf("prestart"));
+        Assert.assertFalse("onExit was called before onStdout", callbacks.indexOf("exit") < callbacks.lastIndexOf("stdout"));
     }
 
     private static class LottaProcessListener extends NuAbstractProcessHandler
