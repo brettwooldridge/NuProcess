@@ -83,9 +83,9 @@ public class InterruptTest
             Thread.sleep(20);
         }
 
-        semaphore.acquireUninterruptibly();
+      semaphore.acquireUninterruptibly();
 		int exit = process.waitFor(2, TimeUnit.SECONDS);
-		Assert.assertTrue("Process exit code did not match", (exit == 0 || exit == Integer.MAX_VALUE));
+		Assert.assertTrue("Process exit code did not match", exit != 0);
     }
 
     @Test
@@ -158,7 +158,7 @@ public class InterruptTest
                 	for (int i = 0; i < 50; i++)
                 	{
                 		int exit = deadProcs.get(i).waitFor(2, TimeUnit.SECONDS);
-                		Assert.assertTrue("Process exit code did not match", (exit == 0 || exit == Integer.MAX_VALUE));
+                		Assert.assertTrue("Process exit code did not match", (exit != 0 || exit == Integer.MAX_VALUE));
                 	}
                     break;
                 }

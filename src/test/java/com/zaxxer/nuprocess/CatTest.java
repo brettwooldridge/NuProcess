@@ -64,7 +64,7 @@ public class CatTest
                 listeners[i] = new LottaProcessListener(semaphores[i]);
                 NuProcessBuilder pb = new NuProcessBuilder(listeners[i], command);
                 pb.start();
-                System.err.printf("  starting process: %d\n", i + 1);
+                // System.err.printf("  starting process: %d\n", i + 1);
             }
     
             for (Semaphore sem : semaphores)

@@ -154,9 +154,9 @@ public abstract class BasePosixProcess implements NuProcess
       if (isRunning) {
          LibC.kill(pid, LibC.SIGTERM);
          IntByReference exit = new IntByReference();
-         LibC.waitpid(pid, exit, 0);
+//         LibC.waitpid(pid, exit, 0);
          isRunning = false;
-         exitCode.set(exit.getValue());
+//         exitCode.set(exit.getValue());
       }
    }
 

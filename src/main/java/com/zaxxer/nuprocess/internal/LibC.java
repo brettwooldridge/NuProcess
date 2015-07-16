@@ -99,6 +99,52 @@ public class LibC
 
    public static final Pointer SIG_IGN = Pointer.createConstant(1);
 
+   /* If WIFEXITED(STATUS), the low-order 8 bits of the status.  */
+   public static int WEXITSTATUS(int status)
+   {
+      return (((status) & 0xff00) >> 8);
+   }
+
+   /* If WIFSIGNALED(STATUS), the terminating signal.  */
+   public static int WTERMSIG(int status)
+   {
+      return ((status) & 0x7f);
+   }
+
+   /* If WIFSTOPPED(STATUS), the signal that stopped the child.  */
+   public static int WSTOPSIG(int status)
+   {
+      return WEXITSTATUS(status);
+   }
+
+   /* Nonzero if STATUS indicates normal termination.  */
+   public static boolean WIFEXITED(int status)
+   {
+      return WTERMSIG(status) == 0;
+   }
+
+   /* Nonzero if STATUS indicates termination by a signal.  */
+   public static boolean WIFSIGNALED(int status)
+   {
+      return (((byte) (((status) & 0x7f) + 1) >> 1) > 0);
+   }
+   
+   /* Nonzero if STATUS indicates the child is stopped.  */
+   public static boolean WIFSTOPPED(int status)
+   {
+      return WTERMSIG(status) != 0;
+   }
+
+   public static int W_EXITCODE(int ret, int sig)
+   {
+      return ((ret) << 8 | (sig));
+   }
+
+   public static int W_STOPCODE(int sig)
+   {
+      return ((sig) << 8 | 0x7f);
+   }
+
    public interface SignalFunction extends Callback
    {
       void invoke(int signal);

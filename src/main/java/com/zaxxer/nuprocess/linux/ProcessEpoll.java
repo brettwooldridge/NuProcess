@@ -29,6 +29,11 @@ import com.zaxxer.nuprocess.NuProcess;
 import com.zaxxer.nuprocess.internal.BaseEventProcessor;
 import com.zaxxer.nuprocess.internal.LibC;
 
+import static com.zaxxer.nuprocess.internal.LibC.WIFEXITED;
+import static com.zaxxer.nuprocess.internal.LibC.WEXITSTATUS;
+import static com.zaxxer.nuprocess.internal.LibC.WIFSIGNALED;
+import static com.zaxxer.nuprocess.internal.LibC.WTERMSIG;
+
 /**
  * @author Brett Wooldridge
  */
@@ -222,11 +227,23 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
       //        linuxProcess.close(linuxProcess.getStdout());
       //        linuxProcess.close(linuxProcess.getStderr());
 
-      IntByReference exitCode = new IntByReference();
-      int rc = LibC.waitpid(linuxProcess.getPid(), exitCode, LibC.WNOHANG);
+      IntByReference ret = new IntByReference();
+      int rc = LibC.waitpid(linuxProcess.getPid(), ret, LibC.WNOHANG);
+
+      int status = ret.getValue();
+      if (WIFEXITED(status)) {
+         linuxProcess.onExit(WEXITSTATUS(status));
+         return;
+      }
+
+      if (WIFSIGNALED(status)) {
+         linuxProcess.onExit(WTERMSIG(status));
+         return;
+      }
+
       if (rc == -1) {
          if (Native.getLastError() == LibC.ECHILD) {
-            rc = (exitCode.getValue() & 0xff00) >> 8;
+            rc = WEXITSTATUS(status);
             if (rc == 127) {
                linuxProcess.onExit(Integer.MIN_VALUE);
                return;
@@ -237,14 +254,6 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
             deadPool.add(linuxProcess);
          }
       }
-      else {
-         rc = (exitCode.getValue() & 0xff00) >> 8;
-         if (rc == 127) {
-            linuxProcess.onExit(Integer.MIN_VALUE);
-            return;
-         }
-         linuxProcess.onExit(rc);
-      }
    }
 
    private void checkDeadPool()
@@ -253,13 +262,22 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
          return;
       }
 
-      IntByReference exitCode = new IntByReference();
+      IntByReference ret = new IntByReference();
       Iterator<LinuxProcess> iterator = deadPool.iterator();
       while (iterator.hasNext()) {
          LinuxProcess process = iterator.next();
-         int rc = LibC.waitpid(process.getPid(), exitCode, LibC.WNOHANG);
-         
-         if (rc == -1) {
+         int rc = LibC.waitpid(process.getPid(), ret, LibC.WNOHANG);
+
+         int status = ret.getValue();
+         if (WIFEXITED(status)) {
+            iterator.remove();
+            process.onExit(WEXITSTATUS(status));
+         }
+         else if (WIFSIGNALED(status)) {
+            iterator.remove();
+            process.onExit(WTERMSIG(status));
+         }
+         else if (rc == -1) {
             if (Native.getLastError() == LibC.ECHILD) {
                iterator.remove();
                process.onExit(Integer.MAX_VALUE);
@@ -267,7 +285,7 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
             // else, entry is not removed
          }
          else {
-            rc = (exitCode.getValue() & 0xff00) >> 8;
+            rc = WEXITSTATUS(status);
             if (rc == 127) {
                rc = Integer.MIN_VALUE;
             }
