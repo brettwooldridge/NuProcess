@@ -232,7 +232,13 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
 
       int status = ret.getValue();
       if (WIFEXITED(status)) {
-         linuxProcess.onExit(WEXITSTATUS(status));
+         status = WEXITSTATUS(status);
+         if (status == 127) {
+            linuxProcess.onExit(Integer.MIN_VALUE);
+         }
+         else {
+            linuxProcess.onExit(status);
+         }
          return;
       }
 
@@ -271,7 +277,13 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
          int status = ret.getValue();
          if (WIFEXITED(status)) {
             iterator.remove();
-            process.onExit(WEXITSTATUS(status));
+            status = WEXITSTATUS(status);
+            if (status == 127) {
+               process.onExit(Integer.MIN_VALUE);
+            }
+            else {
+               process.onExit(status);
+            }
          }
          else if (WIFSIGNALED(status)) {
             iterator.remove();
