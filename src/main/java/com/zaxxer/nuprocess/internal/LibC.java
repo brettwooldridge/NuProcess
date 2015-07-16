@@ -120,7 +120,7 @@ public class LibC
    /* Nonzero if STATUS indicates normal termination.  */
    public static boolean WIFEXITED(int status)
    {
-      return WTERMSIG(status) == 0;
+      return ((status) & 0x7f) == 0;
    }
 
    /* Nonzero if STATUS indicates termination by a signal.  */

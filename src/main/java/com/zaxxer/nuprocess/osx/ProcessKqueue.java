@@ -26,6 +26,8 @@ import com.zaxxer.nuprocess.internal.BaseEventProcessor;
 import com.zaxxer.nuprocess.internal.LibC;
 import com.zaxxer.nuprocess.osx.LibKevent.TimeSpec;
 
+import static com.zaxxer.nuprocess.internal.LibC.*;
+
 /**
  * @author Brett Wooldridge
  */
@@ -173,8 +175,22 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
       else if ((kevent.getFilterFlags() & Kevent.NOTE_EXIT) != 0) // process has exited System.gc()
       {
          cleanupProcess(osxProcess);
-         int rc = ((int) kevent.getData() & 0xff00) >> 8;
-         osxProcess.onExit(rc);
+         int status = (int) kevent.getData();
+         if (WIFEXITED(status)) {
+            status = WEXITSTATUS(status);
+            if (status == 127) {
+               osxProcess.onExit(Integer.MIN_VALUE);
+            }
+            else {
+               osxProcess.onExit(status);
+            }
+         }
+         else if (WIFSIGNALED(status)) {
+            osxProcess.onExit(WTERMSIG(status));
+         }
+         else {
+            osxProcess.onExit(status);
+         }
       }
       else if (filter == Kevent.EVFILT_SIGNAL) {
          checkStdinCloses();
