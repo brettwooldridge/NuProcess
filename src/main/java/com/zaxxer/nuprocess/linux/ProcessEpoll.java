@@ -230,34 +230,28 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
       IntByReference ret = new IntByReference();
       int rc = LibC.waitpid(linuxProcess.getPid(), ret, LibC.WNOHANG);
 
-      int status = ret.getValue();
-      if (WIFEXITED(status)) {
-         status = WEXITSTATUS(status);
-         if (status == 127) {
-            linuxProcess.onExit(Integer.MIN_VALUE);
-         }
-         else {
-            linuxProcess.onExit(status);
-         }
-         return;
+      if (rc == 0) {
+         deadPool.add(linuxProcess);
       }
-
-      if (WIFSIGNALED(status)) {
-         linuxProcess.onExit(WTERMSIG(status));
-         return;
+      else if (rc < 0) {
+         linuxProcess.onExit((Native.getLastError() == LibC.ECHILD) ? Integer.MAX_VALUE : Integer.MIN_VALUE);
       }
-
-      if (rc == -1) {
-         if (Native.getLastError() == LibC.ECHILD) {
-            rc = WEXITSTATUS(status);
-            if (rc == 127) {
+      else {
+         int status = ret.getValue();
+         if (WIFEXITED(status)) {
+            status = WEXITSTATUS(status);
+            if (status == 127) {
                linuxProcess.onExit(Integer.MIN_VALUE);
-               return;
             }
-            linuxProcess.onExit(rc);
+            else {
+               linuxProcess.onExit(status);
+            }
+         }
+         else if (WIFSIGNALED(status)) {
+            linuxProcess.onExit(WTERMSIG(status));
          }
          else {
-            deadPool.add(linuxProcess);
+            linuxProcess.onExit(Integer.MIN_VALUE);
          }
       }
    }
@@ -273,10 +267,18 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
       while (iterator.hasNext()) {
          LinuxProcess process = iterator.next();
          int rc = LibC.waitpid(process.getPid(), ret, LibC.WNOHANG);
+         if (rc == 0) {
+            continue;
+         }
+
+         iterator.remove();
+         if (rc < 0) {
+            process.onExit((Native.getLastError() == LibC.ECHILD) ? Integer.MAX_VALUE : Integer.MIN_VALUE);
+            continue;
+         }
 
          int status = ret.getValue();
          if (WIFEXITED(status)) {
-            iterator.remove();
             status = WEXITSTATUS(status);
             if (status == 127) {
                process.onExit(Integer.MIN_VALUE);
@@ -286,24 +288,10 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
             }
          }
          else if (WIFSIGNALED(status)) {
-            iterator.remove();
             process.onExit(WTERMSIG(status));
          }
-         else if (rc == -1) {
-            if (Native.getLastError() == LibC.ECHILD) {
-               iterator.remove();
-               process.onExit(Integer.MAX_VALUE);
-            }
-            // else, entry is not removed
-         }
          else {
-            rc = WEXITSTATUS(status);
-            if (rc == 127) {
-               rc = Integer.MIN_VALUE;
-            }
-
-            iterator.remove();
-            process.onExit(rc);
+            process.onExit(Integer.MIN_VALUE);
          }
       }
    }
