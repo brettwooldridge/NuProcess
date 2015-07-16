@@ -16,6 +16,11 @@
 
 package com.zaxxer.nuprocess.internal;
 
+import static com.zaxxer.nuprocess.internal.LibC.WEXITSTATUS;
+import static com.zaxxer.nuprocess.internal.LibC.WIFEXITED;
+import static com.zaxxer.nuprocess.internal.LibC.WIFSIGNALED;
+import static com.zaxxer.nuprocess.internal.LibC.WTERMSIG;
+
 import java.nio.ByteBuffer;
 import java.util.HashSet;
 import java.util.List;
@@ -258,11 +263,24 @@ public abstract class BasePosixProcess implements NuProcess
          // This is necessary on Linux because spawn failures are not reflected in the rc, and this will reap
          // any zombies due to launch failure
          if (IS_LINUX) {
-            IntByReference exit = new IntByReference();
-            LibC.waitpid(pid, exit, LibC.WNOHANG);
-            rc = (exit.getValue() & 0xff00) >> 8;
-            if (rc == 127) {
-               onExit(Integer.MIN_VALUE);
+            IntByReference ret = new IntByReference();
+            rc = LibC.waitpid(pid, ret, LibC.WNOHANG);
+
+            if (rc != 0) {
+               int status = ret.getValue();
+               if (WIFEXITED(status)) {
+                  status = WEXITSTATUS(status);
+                  if (status == 127) {
+                     onExit(Integer.MIN_VALUE);
+                  }
+                  else {
+                     onExit(status);
+                  }
+               }
+               else if (WIFSIGNALED(status)) {
+                  onExit(WTERMSIG(status));
+               }
+
                return null;
             }
          }
