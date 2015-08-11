@@ -199,6 +199,13 @@ public final class WindowsProcess implements NuProcess
    @Override
    public void destroy()
    {
+      destroyForcibly();
+   }
+   
+   /** {@inheritDoc} */
+   @Override
+   public void destroyForcibly()
+   {
       NuKernel32.TerminateProcess(processInfo.hProcess, Integer.MAX_VALUE);
    }
 

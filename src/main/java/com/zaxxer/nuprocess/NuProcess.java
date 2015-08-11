@@ -93,11 +93,35 @@ public interface NuProcess
    boolean hasPendingWrites();
 
    /**
-    * Forcefully destroy the process.  When this method is called, the exit code returned by
-    * {@link #waitFor} or passed to the {@link NuProcessHandler#onExit} callback method is
-    * non-deterministic.  
+    * Terminates the process. If possible, the process will be terminated gracefully (i.e.
+    * its shutdown logic will be allowed to execute).<br>
+    * <br>
+    * Note that the process may not actually terminate when calling this method, as its
+    * cleanup logic may fail or it may choose to ignore the termination request. If a guarantee
+    * of termination is required, use {@link #destroyForcibly()} instead. You can also call
+    * {@link #waitFor(long, TimeUnit)} after calling this method, to give the process an
+    * opportunity to terminate gracefully. If the timeout expires, you can then call
+    * {@link #destroyForcibly()} to ensure the process is terminated.<br>
+    * <br>
+    * When this method is called, the exit code returned by {@link #waitFor} or passed to the
+    * {@link NuProcessHandler#onExit} callback method is non-deterministic.
     */
    void destroy();
+   
+   /**
+    * Forcibly terminates the process. Whether this allows the process to terminate
+    * gracefully or not is OS-dependent, but unlike {@link #destroy()}, this method guarantees
+    * that the process will be terminated.<br>
+    * <br>
+    * Note that it may take the OS a moment to terminate the process, so {@link #isRunning()}
+    * may return true for a brief period after calling this method. You can use
+    * {@link #waitFor(long, TimeUnit)} if you want to wait until the process has actually
+    * been terminated.<br>
+    * <br>
+    * When this method is called, the exit code returned by {@link #waitFor} or passed to the
+    * {@link NuProcessHandler#onExit} callback method is non-deterministic.
+    */
+   void destroyForcibly();
 
    /**
     * Tests whether or not the process is still running or has exited.
