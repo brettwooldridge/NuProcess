@@ -17,6 +17,7 @@
 package com.zaxxer.nuprocess;
 
 import java.nio.ByteBuffer;
+import java.nio.charset.CharsetDecoder;
 
 /**
  * Executors of a {@link NuProcess} must provide an implementation of this class
@@ -75,6 +76,40 @@ public interface NuProcessHandler
    void onStart(NuProcess nuProcess);
 
    /**
+    * This method is invoked with any remaining bytes of stdout when
+    * the process exits, before {@link #onExit(int)} is called.
+    * <p>
+    * If {@link #shouldCompactBuffersAfterUse()} returns {@code true},
+    * use this method to consume any bytes left over after
+    * {@link #onStdout(ByteBuffer)} returns.
+    * <p>
+    * This is useful when you need to invoke {@link CharsetDecoder} to handle
+    * decoding any unused bytes at end-of-input, as well as writing any final
+    * characters to an output character buffer.
+    *
+    * @param buffer The stdout buffer containing bytes not consumed by
+    * {@link #onStdout(ByteBuffer)}.
+    */
+   void onPreExitStdout(ByteBuffer buffer);
+
+   /**
+    * This method is invoked with any remaining bytes of stderr when
+    * the process exits, before {@link #onExit(int)} is called.
+    * <p>
+    * If {@link #shouldCompactBuffersAfterUse()} returns {@code true},
+    * use this method to consume any bytes left over after
+    * {@link #onStderr(ByteBuffer)} returns.
+    * <p>
+    * This is useful when you need to invoke {@link CharsetDecoder} to handle
+    * decoding any unused bytes at end-of-input, as well as writing any final
+    * characters to an output character buffer.
+    *
+    * @param buffer The stderr buffer containing any bytes not consumed by
+    * {@link #onStderr(ByteBuffer)}.
+    */
+   void onPreExitStderr(ByteBuffer buffer);
+
+    /**
     * This method is invoked when the process exits.  This method is also invoked
     * immediately in the case of a failure to launch the child process.
     * <p>
@@ -95,11 +130,22 @@ public interface NuProcessHandler
      * this is your signal that EOF has been reached.
      * <p>
      * You do not own the {@link ByteBuffer} provided to you.
-     * You should not retain a reference to this buffer. <i>It is required that you
+     * You should not retain a reference to this buffer.
+     * <p>
+     * If {@link #shouldCompactBuffersAfterUse()}
+     * returns {@code false} (the default), <i>it is required that you
      * completely process the entire contents of the buffer when it is
-     * passed to you</i>, as it's contents will be completely overwritten
+     * passed to you</i>, as its contents will be completely overwritten
      * immediately upon receipt of more data without regard for position
      * or limit.
+     * <p>
+     * If {@link #shouldCompactBuffersAfterUse()} returns {@code true},
+     * you do <i>not</i> need to consume the entire buffer. In that
+     * case, you may set the buffer's {@code position} to a value less
+     * than its {@code limit}, in which case the buffer will be
+     * {@link ByteBuffer#compact() compacted} after returning. Any unused data will be
+     * kept at the start of the buffer and passed back to you as part of
+     * the next invocation of this method.
      * <p>
      * Exceptions thrown out from your method will be ignored, but your
      * method should handle all exceptions itself.
@@ -116,12 +162,20 @@ public interface NuProcessHandler
     * of EOF, the {@code buffer} parameter will be {@code null};
     * this is your signal that EOF has been reached.
     * <p>
-    * You do not own the {@link ByteBuffer} provided to you.
-    * You should not retain a reference to this buffer. <i>It is required that you
+    * If {@link #shouldCompactBuffersAfterUse()}
+    * returns {@code false} (the default), <i>it is required that you
     * completely process the entire contents of the buffer when it is
-    * passed to you</i>, as it's contents will be completely overwritten
+    * passed to you</i>, as its contents will be completely overwritten
     * immediately upon receipt of more data without regard for position
     * or limit.
+    * <p>
+    * If {@link #shouldCompactBuffersAfterUse()} returns {@code true},
+    * you do <i>not</i> need to consume the entire buffer. In that
+    * case, you may set the buffer's {@code position} to a value less
+    * than its {@code limit}, in which case the buffer will be
+    * {@link ByteBuffer#compact() compacted} after returning. Any unused data will be
+    * kept at the start of the buffer and passed back to you as part of
+    * the next invocation of this method.
     * <p>
     * Users wishing to merge stderr into stdout should simply delegate
     * this callback to {@link #onStdout(ByteBuffer)} when invoked, like so:
@@ -163,4 +217,16 @@ public interface NuProcessHandler
     * @return true if you have more data to write immediately, false otherwise
     */
    boolean onStdinReady(ByteBuffer buffer);
+
+   /**
+    * If this method returns {@code true}, then the buffers passed to
+    * {@link #onStdout(ByteBuffer)} and {@link #onStderr(ByteBuffer)} do
+    * not need to be fully consumed after use. Instead, any remaining data
+    * will be {@link ByteBuffer#compact() compacted} to the start of
+    * the buffer, ready for use on the next call to those methods.
+    *
+    * @return true if you want to compact buffers after use, false if you
+    * want to clear buffers after use
+    */
+   boolean shouldCompactBuffersAfterUse();
 }

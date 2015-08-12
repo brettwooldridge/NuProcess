@@ -62,8 +62,10 @@ public abstract class BasePosixProcess implements NuProcess
 
    // ******* Input/Output Buffers
    protected ByteBuffer outBuffer;
+   protected ByteBuffer errBuffer;
    protected ByteBuffer inBuffer;
    protected Pointer outBufferPointer;
+   protected Pointer errBufferPointer;
    protected Pointer inBufferPointer;
 
    // ******* Stdin/Stdout/Stderr pipe handles
@@ -82,6 +84,7 @@ public abstract class BasePosixProcess implements NuProcess
    private int writeOffset;
 
    private Pointer posix_spawn_file_actions;
+   private final boolean shouldCompactBuffersAfterUse;
 
    static {
       IS_SOFTEXIT_DETECTION = Boolean.valueOf(System.getProperty("com.zaxxer.nuprocess.softExitDetection", "true"));
@@ -117,6 +120,7 @@ public abstract class BasePosixProcess implements NuProcess
 
    protected BasePosixProcess(NuProcessHandler processListener) {
       this.processHandler = processListener;
+      this.shouldCompactBuffersAfterUse = processHandler.shouldCompactBuffersAfterUse();
       this.userWantsWrite = new AtomicBoolean();
       this.exitCode = new AtomicInteger();
       this.exitPending = new CountDownLatch(1);
@@ -357,6 +361,17 @@ public abstract class BasePosixProcess implements NuProcess
 
          isRunning = false;
          exitCode.set(statusCode);
+
+         if (outBuffer != null) {
+           outBuffer.flip();
+           processHandler.onPreExitStdout(outBuffer);
+         }
+
+         if (errBuffer != null) {
+           errBuffer.flip();
+           processHandler.onPreExitStderr(errBuffer);
+         }
+
          if (statusCode != Integer.MAX_VALUE - 1) {
             processHandler.onExit(statusCode);
          }
@@ -368,6 +383,7 @@ public abstract class BasePosixProcess implements NuProcess
     	 exitPending.countDown();
 
          Native.free(Pointer.nativeValue(outBufferPointer));
+         Native.free(Pointer.nativeValue(errBufferPointer));
          Native.free(Pointer.nativeValue(inBufferPointer));
 
          processHandler = null;
@@ -390,16 +406,24 @@ public abstract class BasePosixProcess implements NuProcess
             return;
          }
 
-         int read = LibC.read(stdout.get(), outBufferPointer, Math.min(availability, BUFFER_CAPACITY));
+         int read = LibC.read(
+             stdout.get(),
+             outBufferPointer.share(outBuffer.position()),
+             Math.min(availability, outBuffer.remaining()));
          if (read == -1) {
             outClosed = true;
             throw new RuntimeException("Unexpected eof");
             // EOF?
          }
 
+         outBuffer.limit(outBuffer.position() + read);
          outBuffer.position(0);
-         outBuffer.limit(read);
          processHandler.onStdout(outBuffer);
+         if (shouldCompactBuffersAfterUse) {
+           outBuffer.compact();
+         } else {
+           outBuffer.clear();
+         }
       }
       catch (Exception e) {
          // Don't let an exception thrown from the user's handler interrupt us
@@ -420,16 +444,24 @@ public abstract class BasePosixProcess implements NuProcess
             return;
          }
 
-         int read = LibC.read(stderr.get(), outBufferPointer, Math.min(availability, BUFFER_CAPACITY));
+         int read = LibC.read(
+             stderr.get(),
+             errBufferPointer.share(errBuffer.position()),
+             Math.min(availability, errBuffer.remaining()));
          if (read == -1) {
             // EOF?
             errClosed = true;
             throw new RuntimeException("Unexpected eof");
          }
 
-         outBuffer.position(0);
-         outBuffer.limit(read);
-         processHandler.onStderr(outBuffer);
+         errBuffer.limit(errBuffer.position() + read);
+         errBuffer.position(0);
+         processHandler.onStderr(errBuffer);
+         if (shouldCompactBuffersAfterUse) {
+           errBuffer.compact();
+         } else {
+           errBuffer.clear();
+         }
       }
       catch (Exception e) {
          // Don't let an exception thrown from the user's handler interrupt us
@@ -528,6 +560,10 @@ public abstract class BasePosixProcess implements NuProcess
       long peer = Native.malloc(BUFFER_CAPACITY);
       outBuffer = UnsafeHelper.wrapNativeMemory(peer, BUFFER_CAPACITY);
       outBufferPointer = new Pointer(peer);
+
+      peer = Native.malloc(BUFFER_CAPACITY);
+      errBuffer = UnsafeHelper.wrapNativeMemory(peer, BUFFER_CAPACITY);
+      errBufferPointer = new Pointer(peer);
 
       peer = Native.malloc(BUFFER_CAPACITY);
       inBuffer = UnsafeHelper.wrapNativeMemory(peer, BUFFER_CAPACITY);

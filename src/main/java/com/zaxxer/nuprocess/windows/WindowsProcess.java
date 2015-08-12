@@ -91,6 +91,8 @@ public final class WindowsProcess implements NuProcess
 
    private PROCESS_INFORMATION processInfo;
 
+   private final boolean shouldCompactBuffersAfterUse;
+
    static {
       namedPipeCounter = new AtomicInteger(100);
 
@@ -136,6 +138,7 @@ public final class WindowsProcess implements NuProcess
       this.outClosed = true;
       this.errClosed = true;
       this.inClosed = true;
+      this.shouldCompactBuffersAfterUse = processHandler.shouldCompactBuffersAfterUse();
    }
 
    // ************************************************************************
@@ -306,10 +309,14 @@ public final class WindowsProcess implements NuProcess
          }
 
          final ByteBuffer buffer = stdoutPipe.buffer;
+         buffer.limit(buffer.position() + transferred);
          buffer.position(0);
-         buffer.limit(transferred);
-
          processHandler.onStdout(buffer);
+         if (shouldCompactBuffersAfterUse) {
+           buffer.compact();
+         } else {
+           buffer.clear();
+         }
       }
       catch (Exception e) {
          // Don't let an exception thrown from the user's handler interrupt us
@@ -334,10 +341,14 @@ public final class WindowsProcess implements NuProcess
          }
 
          final ByteBuffer buffer = stderrPipe.buffer;
+         buffer.limit(buffer.position() + transferred);
          buffer.position(0);
-         buffer.limit(transferred);
-
          processHandler.onStderr(buffer);
+         if (shouldCompactBuffersAfterUse) {
+           buffer.compact();
+         } else {
+           buffer.clear();
+         }
       }
       catch (Exception e) {
          // Don't let an exception thrown from the user's handler interrupt us
@@ -415,6 +426,14 @@ public final class WindowsProcess implements NuProcess
       try {
     	 isRunning = false;
          exitCode.set(statusCode);
+         if (stdoutPipe.buffer != null) {
+           stdoutPipe.buffer.flip();
+           processHandler.onPreExitStdout(stdoutPipe.buffer);
+         }
+         if (stderrPipe.buffer != null) {
+           stderrPipe.buffer.flip();
+           processHandler.onPreExitStderr(stderrPipe.buffer);
+         }
          if (statusCode != Integer.MAX_VALUE - 1) {
             processHandler.onExit(statusCode);
          }
