@@ -27,9 +27,8 @@ public final class Kevent
 {
    private Pointer pointer;
 
-   public Kevent() {
-      long memory = Native.malloc(32);
-      pointer = new Pointer(memory);
+   public Kevent(Pointer pointer) {
+      this.pointer = pointer;
    }
 
    void free()
