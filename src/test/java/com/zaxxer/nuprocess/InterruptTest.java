@@ -88,14 +88,7 @@ public class InterruptTest
         {
             if (count.get() > 10000)
             {
-                if (forceKill)
-                {
-                    process.destroyForcibly();
-                }
-                else
-                {
-                    process.destroy();
-                }
+                process.destroy(forceKill);
                 break;
             }
             Thread.sleep(20);
@@ -168,7 +161,7 @@ public class InterruptTest
                         continue;
                     }
                     deadProcs.add(wp);
-                    wp.destroy();
+                    wp.destroy(false);
                 }
     
                 if (processes.isEmpty())
