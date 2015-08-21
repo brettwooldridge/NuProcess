@@ -157,7 +157,7 @@ public abstract class BasePosixProcess implements NuProcess
    public void destroy(boolean force)
    {
       if (isRunning) {
-    	  checkReturnCode(LibC.kill(pid, force ? LibC.SIGTERM : LibC.SIGKILL), "Sending signal failed");
+    	  checkReturnCode(LibC.kill(pid, force ? LibC.SIGKILL : LibC.SIGTERM), "Sending signal failed");
       }
    }
 
