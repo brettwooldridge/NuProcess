@@ -71,7 +71,7 @@ public class SshExample
 
         public void close()
         {
-            nuProcess.destroy();
+            nuProcess.destroy(false);
         }
 
         //Send key event

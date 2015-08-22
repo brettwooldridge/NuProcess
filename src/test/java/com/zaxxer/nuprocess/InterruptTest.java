@@ -31,7 +31,18 @@ public class InterruptTest
     }
 
     @Test
-    public void testInterrupt1() throws InterruptedException
+    public void testDestroy() throws InterruptedException
+    {
+        testDestroy(false);
+    }
+    
+    @Test
+    public void testDestroyForcibly() throws InterruptedException
+    {
+        testDestroy(true);
+    }
+    
+    private void testDestroy(boolean forceKill) throws InterruptedException
     {
         final Semaphore semaphore = new Semaphore(0);
         final AtomicInteger exitCode = new AtomicInteger();
@@ -77,15 +88,15 @@ public class InterruptTest
         {
             if (count.get() > 10000)
             {
-                process.destroy();
+                process.destroy(forceKill);
                 break;
             }
             Thread.sleep(20);
         }
 
       semaphore.acquireUninterruptibly();
-		int exit = process.waitFor(2, TimeUnit.SECONDS);
-		Assert.assertTrue("Process exit code did not match", exit != 0);
+      int exit = process.waitFor(2, TimeUnit.SECONDS);
+      Assert.assertNotEquals("Process exit code did not match", 0, exit);
     }
 
     @Test
@@ -150,7 +161,7 @@ public class InterruptTest
                         continue;
                     }
                     deadProcs.add(wp);
-                    wp.destroy();
+                    wp.destroy(false);
                 }
     
                 if (processes.isEmpty())
