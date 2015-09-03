@@ -40,7 +40,6 @@ import org.junit.Test;
 public class CatTest
 {
     private String command;
-    private Charset utf8Charset;
 
     @Before
     public void setup()
@@ -50,7 +49,6 @@ public class CatTest
         {
             command = "src\\test\\java\\com\\zaxxer\\nuprocess\\cat.exe";
         }
-        utf8Charset = Charset.forName("UTF-8");
     }
 
     @Test
@@ -114,7 +112,7 @@ public class CatTest
         String SHORT_UNICODE_TEXT = "Hello \uD83D\uDCA9 world";
         System.err.println("Starting test decodingShortUtf8Data()");
         Utf8DecodingListener processListener = new Utf8DecodingListener(semaphore, SHORT_UNICODE_TEXT);
-        NuProcessBuilder pb = new NuProcessBuilder(new NuProcessDecoder(processListener, utf8Charset), command);
+        NuProcessBuilder pb = new NuProcessBuilder(processListener, command);
         pb.start();
         semaphore.acquireUninterruptibly();
         Assert.assertEquals("Decoding mismatch", SHORT_UNICODE_TEXT, processListener.decodedStdout.toString());
@@ -135,7 +133,7 @@ public class CatTest
         }
         System.err.println("Starting test decodingLongUtf8Data()");
         Utf8DecodingListener processListener = new Utf8DecodingListener(semaphore, unicodeTextWhichDoesNotFitInBuffer.toString());
-        NuProcessBuilder pb = new NuProcessBuilder(new NuProcessDecoder(processListener, utf8Charset), command);
+        NuProcessBuilder pb = new NuProcessBuilder(processListener, command);
         pb.start();
         semaphore.acquireUninterruptibly();
         Assert.assertEquals("Decoding mismatch", unicodeTextWhichDoesNotFitInBuffer.toString(), processListener.decodedStdout.toString());
@@ -210,7 +208,7 @@ public class CatTest
             private NuProcess nuProcess;
             
             @Override
-            public void onStdout(ByteBuffer buffer) {
+            public void onStdout(ByteBuffer buffer, boolean closed) {
                 callbacks.add("stdout");
                 nuProcess.closeStdin();
             }
@@ -223,7 +221,7 @@ public class CatTest
             }
             
             @Override
-            public void onStderr(ByteBuffer buffer) {
+            public void onStderr(ByteBuffer buffer, boolean closed) {
                 callbacks.add("stderr");
             }
             
@@ -240,24 +238,9 @@ public class CatTest
             }
             
             @Override
-            public void onPreExitStdout(ByteBuffer buffer) {
-                callbacks.add("preexitstdout");
-            }
-
-            @Override
-            public void onPreExitStderr(ByteBuffer buffer) {
-                callbacks.add("preexitstderr");
-            }
-
-            @Override
             public void onExit(int exitCode) {
                 callbacks.add("exit");
                 latch.countDown();
-            }
-
-            @Override
-            public boolean shouldCompactBuffersAfterUse() {
-                return false;
             }
         };
         
@@ -266,8 +249,6 @@ public class CatTest
         
         Assert.assertEquals("onPreStart was not called first", 0, callbacks.indexOf("prestart"));
         Assert.assertFalse("onExit was called before onStdout", callbacks.indexOf("exit") < callbacks.lastIndexOf("stdout"));
-        Assert.assertFalse("onExit was called before onPreExitStdout", callbacks.indexOf("exit") < callbacks.lastIndexOf("preexitstderr"));
-        Assert.assertFalse("onExit was called before onPreExitStderr", callbacks.indexOf("exit") < callbacks.lastIndexOf("preexitstderr"));
     }
 
     private static class LottaProcessListener extends NuAbstractProcessHandler
@@ -315,9 +296,9 @@ public class CatTest
         }
 
         @Override
-        public void onStdout(ByteBuffer buffer)
+        public void onStdout(ByteBuffer buffer, boolean closed)
         {
-            if (buffer == null)
+            if (closed)
             {
                 return;
             }
@@ -355,7 +336,7 @@ public class CatTest
         }
     };
 
-    private static class Utf8DecodingListener extends NuAbstractProcessDecoderHandler
+    private static class Utf8DecodingListener extends NuAbstractProcessEncodingHandler
     {
         private final Semaphore semaphore;
         private final CharBuffer utf8Buffer;
@@ -368,6 +349,7 @@ public class CatTest
 
         Utf8DecodingListener(Semaphore semaphore, String utf8Text)
         {
+            super(Charset.forName("UTF-8"));
             this.semaphore = semaphore;
             this.utf8Buffer = CharBuffer.wrap(utf8Text);
             this.charsWritten = 0;
@@ -392,13 +374,8 @@ public class CatTest
         }
 
         @Override
-        public void onStdout(CharBuffer buffer, CoderResult coderResult)
+        public void onStdoutChars(CharBuffer buffer, boolean closed, CoderResult coderResult)
         {
-            if (buffer == null)
-            {
-                return;
-            }
-
             charsRead += buffer.remaining();
             decodedStdout.append(buffer);
             buffer.position(buffer.limit());
@@ -409,7 +386,7 @@ public class CatTest
         }
 
         @Override
-        public boolean onStdinReady(CharBuffer buffer)
+        public boolean onStdinCharsReady(CharBuffer buffer)
         {
           if (utf8Buffer.remaining() <= buffer.remaining()) {
             charsWritten += utf8Buffer.remaining();

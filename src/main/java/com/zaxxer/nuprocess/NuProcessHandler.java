@@ -76,40 +76,6 @@ public interface NuProcessHandler
    void onStart(NuProcess nuProcess);
 
    /**
-    * This method is invoked with any remaining bytes of stdout when
-    * the process exits, before {@link #onExit(int)} is called.
-    * <p>
-    * If {@link #shouldCompactBuffersAfterUse()} returns {@code true},
-    * use this method to consume any bytes left over after
-    * {@link #onStdout(ByteBuffer)} returns.
-    * <p>
-    * This is useful when you need to invoke {@link CharsetDecoder} to handle
-    * decoding any unused bytes at end-of-input, as well as writing any final
-    * characters to an output character buffer.
-    *
-    * @param buffer The stdout buffer containing bytes not consumed by
-    * {@link #onStdout(ByteBuffer)}.
-    */
-   void onPreExitStdout(ByteBuffer buffer);
-
-   /**
-    * This method is invoked with any remaining bytes of stderr when
-    * the process exits, before {@link #onExit(int)} is called.
-    * <p>
-    * If {@link #shouldCompactBuffersAfterUse()} returns {@code true},
-    * use this method to consume any bytes left over after
-    * {@link #onStderr(ByteBuffer)} returns.
-    * <p>
-    * This is useful when you need to invoke {@link CharsetDecoder} to handle
-    * decoding any unused bytes at end-of-input, as well as writing any final
-    * characters to an output character buffer.
-    *
-    * @param buffer The stderr buffer containing any bytes not consumed by
-    * {@link #onStderr(ByteBuffer)}.
-    */
-   void onPreExitStderr(ByteBuffer buffer);
-
-    /**
     * This method is invoked when the process exits.  This method is also invoked
     * immediately in the case of a failure to launch the child process.
     * <p>
@@ -124,80 +90,74 @@ public interface NuProcessHandler
    void onExit(int exitCode);
 
    /**
-     * This method is invoked when there is stdout data to process or an
-     * the end-of-file (EOF) condition has been reached.  In the case
-     * of EOF, the {@code buffer} parameter will be {@code null};
-     * this is your signal that EOF has been reached.
-     * <p>
-     * You do not own the {@link ByteBuffer} provided to you.
-     * You should not retain a reference to this buffer.
-     * <p>
-     * If {@link #shouldCompactBuffersAfterUse()}
-     * returns {@code false} (the default), <i>it is required that you
-     * completely process the entire contents of the buffer when it is
-     * passed to you</i>, as its contents will be completely overwritten
-     * immediately upon receipt of more data without regard for position
-     * or limit.
-     * <p>
-     * If {@link #shouldCompactBuffersAfterUse()} returns {@code true},
-     * you do <i>not</i> need to consume the entire buffer. In that
-     * case, you may set the buffer's {@code position} to a value less
-     * than its {@code limit}, in which case the buffer will be
-     * {@link ByteBuffer#compact() compacted} after returning. Any unused data will be
-     * kept at the start of the buffer and passed back to you as part of
-     * the next invocation of this method.
-     * <p>
-     * Exceptions thrown out from your method will be ignored, but your
-     * method should handle all exceptions itself.
-     *
-     * @param buffer a {@link ByteBuffer} containing received
-     *               stderr data, or {@code null} signifying that an EOF condition
-     *               has been reached
-     */
-   void onStdout(ByteBuffer buffer);
+    * This method is invoked when there is stdout data to process or an
+    * the end-of-file (EOF) condition has been reached.  In the case
+    * of EOF, the {@code closed} parameter will be {@code true};
+    * this is your signal that EOF has been reached.
+    * <p>
+    * You do not own the {@link ByteBuffer} provided to you.
+    * You should not retain a reference to this buffer.
+    * <p>
+    * Upon returning from this method, if any bytes are left in the
+    * buffer (i.e., {@code buffer.hasRemaining()} returns {@code true}),
+    * then the buffer will be {@link ByteBuffer#compact() compacted}
+    * after returning. Any unused data will be kept at the
+    * start of the buffer and passed back to you as part of the next
+    * invocation of this method (which might be when EOF is reached
+    * and {@code closed} is {@code true}).
+    * <p>
+    * Exceptions thrown out from your method will be ignored, but your
+    * method should handle all exceptions itself.
+    *
+    * @param buffer a {@link ByteBuffer} containing received
+    *               stdout data
+    * @param closed {@code true} if EOF has been reached
+    */
+   void onStdout(ByteBuffer buffer, boolean closed);
 
    /**
     * This method is invoked when there is stderr data to process or an
     * the end-of-file (EOF) condition has been reached.  In the case
-    * of EOF, the {@code buffer} parameter will be {@code null};
+    * of EOF, the {@code closed} parameter will be {@code true};
     * this is your signal that EOF has been reached.
     * <p>
-    * If {@link #shouldCompactBuffersAfterUse()}
-    * returns {@code false} (the default), <i>it is required that you
-    * completely process the entire contents of the buffer when it is
-    * passed to you</i>, as its contents will be completely overwritten
-    * immediately upon receipt of more data without regard for position
-    * or limit.
+    * You do not own the {@link ByteBuffer} provided to you.
+    * You should not retain a reference to this buffer.
     * <p>
-    * If {@link #shouldCompactBuffersAfterUse()} returns {@code true},
-    * you do <i>not</i> need to consume the entire buffer. In that
-    * case, you may set the buffer's {@code position} to a value less
-    * than its {@code limit}, in which case the buffer will be
-    * {@link ByteBuffer#compact() compacted} after returning. Any unused data will be
-    * kept at the start of the buffer and passed back to you as part of
-    * the next invocation of this method.
+    * Upon returning from this method, if any bytes are left in the
+    * buffer (i.e., {@code buffer.hasRemaining()} returns {@code true}),
+    * then the buffer will be {@link ByteBuffer#compact() compacted}
+    * after returning. Any unused data will be kept at the
+    * start of the buffer and passed back to you as part of the next
+    * invocation of this method (which might be when EOF is reached
+    * and {@code closed} is {@code true}).
     * <p>
     * Users wishing to merge stderr into stdout should simply delegate
-    * this callback to {@link #onStdout(ByteBuffer)} when invoked, like so:
+    * this callback to {@link #onStdout(ByteBuffer, boolean)} when invoked, like so:
     * <pre>
-    *    public void onStderr(ByteBuffer buffer) {
-    *       if (buffer != null) {
-    *          onStdout(buffer);
+    *    public void onStderr(ByteBuffer buffer, closed) {
+    *       if (!closed) {
+    *          onStdout(buffer, closed);
     *       }
     *    }
     * </pre>
-    * Notice that a null check is performed.  If you merge streams in
-    * this way, and you do not check for null here, then your {@link #onStdout(ByteBuffer)}
+    * <p>
+    * Notice that an EOF check is performed.  If you merge streams in
+    * this way, and you do not check for EOF here, then your
+    * {@link #onStdout(ByteBuffer, boolean)}
     * method will be called twice for an EOF condition; once when the
     * stdout stream closes, and once when the stderr stream closes.  If
-    * you check for null as above, your {@link #onStdout(ByteBuffer)} method would only
-    * be called once (for the close of stdout).
+    * you check for EOF as above, your {@link #onStdout(ByteBuffer, boolean)}
+    * method would only be called once (for the close of stdout).
+    * <p>
+    * Exceptions thrown out from your method will be ignored, but your
+    * method should handle all exceptions itself.
     * 
     * @param buffer a {@link ByteBuffer} containing received
-    *               stderr data, or {@code null} signifying that an EOF condition
-    *               has been reached
+    *               stderr data
+    * @param closed {@code true} if EOF has been reached
     */
-   void onStderr(ByteBuffer buffer);
+  void onStderr(ByteBuffer buffer, boolean closed);
 
    /**
     * This method is invoked after you have expressed a desire to write to stdin
@@ -217,16 +177,4 @@ public interface NuProcessHandler
     * @return true if you have more data to write immediately, false otherwise
     */
    boolean onStdinReady(ByteBuffer buffer);
-
-   /**
-    * If this method returns {@code true}, then the buffers passed to
-    * {@link #onStdout(ByteBuffer)} and {@link #onStderr(ByteBuffer)} do
-    * not need to be fully consumed after use. Instead, any remaining data
-    * will be {@link ByteBuffer#compact() compacted} to the start of
-    * the buffer, ready for use on the next call to those methods.
-    *
-    * @return true if you want to compact buffers after use, false if you
-    * want to clear buffers after use
-    */
-   boolean shouldCompactBuffersAfterUse();
 }

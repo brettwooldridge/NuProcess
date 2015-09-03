@@ -39,44 +39,25 @@ public abstract class NuAbstractProcessHandler implements NuProcessHandler
 
    /** {@inheritDoc} */
    @Override
-   public void onPreExitStdout(ByteBuffer buffer)
-   {
-   }
-
-   /** {@inheritDoc} */
-   @Override
-   public void onPreExitStderr(ByteBuffer buffer)
-   {
-   }
-
-   /** {@inheritDoc} */
-   @Override
    public void onExit(int statusCode)
    {
    }
 
    /** {@inheritDoc} */
    @Override
-   public void onStdout(ByteBuffer buffer)
+   public void onStdout(ByteBuffer buffer, boolean closed)
    {
    }
 
    /** {@inheritDoc} */
    @Override
-   public void onStderr(ByteBuffer buffer)
+   public void onStderr(ByteBuffer buffer, boolean closed)
    {
    }
 
    /** {@inheritDoc} */
    @Override
    public boolean onStdinReady(ByteBuffer buffer)
-   {
-      return false;
-   }
-
-   /** {@inheritDoc} */
-   @Override
-   public boolean shouldCompactBuffersAfterUse()
    {
       return false;
    }

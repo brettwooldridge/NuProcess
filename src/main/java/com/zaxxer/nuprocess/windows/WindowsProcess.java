@@ -91,8 +91,6 @@ public final class WindowsProcess implements NuProcess
 
    private PROCESS_INFORMATION processInfo;
 
-   private final boolean shouldCompactBuffersAfterUse;
-
    static {
       namedPipeCounter = new AtomicInteger(100);
 
@@ -138,7 +136,6 @@ public final class WindowsProcess implements NuProcess
       this.outClosed = true;
       this.errClosed = true;
       this.inClosed = true;
-      this.shouldCompactBuffersAfterUse = processHandler.shouldCompactBuffersAfterUse();
    }
 
    // ************************************************************************
@@ -301,7 +298,8 @@ public final class WindowsProcess implements NuProcess
       try {
          if (transferred < 0) {
             outClosed = true;
-            processHandler.onStdout(null);
+            stdoutPipe.buffer.flip();
+            processHandler.onStdout(stdoutPipe.buffer, true);
             return;
          }
          else if (transferred == 0) {
@@ -311,8 +309,8 @@ public final class WindowsProcess implements NuProcess
          final ByteBuffer buffer = stdoutPipe.buffer;
          buffer.limit(buffer.position() + transferred);
          buffer.position(0);
-         processHandler.onStdout(buffer);
-         if (shouldCompactBuffersAfterUse) {
+         processHandler.onStdout(buffer, false);
+         if (buffer.hasRemaining()) {
            buffer.compact();
          } else {
            buffer.clear();
@@ -333,7 +331,8 @@ public final class WindowsProcess implements NuProcess
       try {
          if (transferred < 0) {
             errClosed = true;
-            processHandler.onStderr(null);
+            stderrPipe.buffer.flip();
+            processHandler.onStderr(stderrPipe.buffer, true);
             return;
          }
          else if (transferred == 0) {
@@ -343,8 +342,8 @@ public final class WindowsProcess implements NuProcess
          final ByteBuffer buffer = stderrPipe.buffer;
          buffer.limit(buffer.position() + transferred);
          buffer.position(0);
-         processHandler.onStderr(buffer);
-         if (shouldCompactBuffersAfterUse) {
+         processHandler.onStderr(buffer, false);
+         if (buffer.hasRemaining()) {
            buffer.compact();
          } else {
            buffer.clear();
@@ -426,13 +425,13 @@ public final class WindowsProcess implements NuProcess
       try {
     	 isRunning = false;
          exitCode.set(statusCode);
-         if (stdoutPipe.buffer != null) {
+         if (stdoutPipe.buffer != null && !outClosed) {
            stdoutPipe.buffer.flip();
-           processHandler.onPreExitStdout(stdoutPipe.buffer);
+           processHandler.onStdout(stdoutPipe.buffer, true);
          }
-         if (stderrPipe.buffer != null) {
+         if (stderrPipe.buffer != null && !errClosed) {
            stderrPipe.buffer.flip();
-           processHandler.onPreExitStderr(stderrPipe.buffer);
+           processHandler.onStderr(stderrPipe.buffer, true);
          }
          if (statusCode != Integer.MAX_VALUE - 1) {
             processHandler.onExit(statusCode);

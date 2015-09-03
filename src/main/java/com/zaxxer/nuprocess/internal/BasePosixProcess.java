@@ -84,7 +84,6 @@ public abstract class BasePosixProcess implements NuProcess
    private int writeOffset;
 
    private Pointer posix_spawn_file_actions;
-   private final boolean shouldCompactBuffersAfterUse;
 
    static {
       IS_SOFTEXIT_DETECTION = Boolean.valueOf(System.getProperty("com.zaxxer.nuprocess.softExitDetection", "true"));
@@ -120,7 +119,6 @@ public abstract class BasePosixProcess implements NuProcess
 
    protected BasePosixProcess(NuProcessHandler processListener) {
       this.processHandler = processListener;
-      this.shouldCompactBuffersAfterUse = processHandler.shouldCompactBuffersAfterUse();
       this.userWantsWrite = new AtomicBoolean();
       this.exitCode = new AtomicInteger();
       this.exitPending = new CountDownLatch(1);
@@ -362,14 +360,14 @@ public abstract class BasePosixProcess implements NuProcess
          isRunning = false;
          exitCode.set(statusCode);
 
-         if (outBuffer != null) {
+         if (outBuffer != null && !outClosed) {
            outBuffer.flip();
-           processHandler.onPreExitStdout(outBuffer);
+           processHandler.onStdout(outBuffer, true);
          }
 
-         if (errBuffer != null) {
+         if (errBuffer != null && !errClosed) {
            errBuffer.flip();
-           processHandler.onPreExitStderr(errBuffer);
+           processHandler.onStderr(errBuffer, true);
          }
 
          if (statusCode != Integer.MAX_VALUE - 1) {
@@ -399,7 +397,8 @@ public abstract class BasePosixProcess implements NuProcess
       try {
          if (availability < 0) {
             outClosed = true;
-            processHandler.onStdout(null);
+            outBuffer.flip();
+            processHandler.onStdout(outBuffer, true);
             return;
          }
          else if (availability == 0) {
@@ -418,8 +417,8 @@ public abstract class BasePosixProcess implements NuProcess
 
          outBuffer.limit(outBuffer.position() + read);
          outBuffer.position(0);
-         processHandler.onStdout(outBuffer);
-         if (shouldCompactBuffersAfterUse) {
+         processHandler.onStdout(outBuffer, false);
+         if (outBuffer.hasRemaining()) {
            outBuffer.compact();
          } else {
            outBuffer.clear();
@@ -440,7 +439,8 @@ public abstract class BasePosixProcess implements NuProcess
       try {
          if (availability < 0) {
             errClosed = true;
-            processHandler.onStderr(null);
+            errBuffer.flip();
+            processHandler.onStderr(errBuffer, true);
             return;
          }
 
@@ -456,8 +456,8 @@ public abstract class BasePosixProcess implements NuProcess
 
          errBuffer.limit(errBuffer.position() + read);
          errBuffer.position(0);
-         processHandler.onStderr(errBuffer);
-         if (shouldCompactBuffersAfterUse) {
+         processHandler.onStderr(errBuffer, false);
+         if (errBuffer.hasRemaining()) {
            errBuffer.compact();
          } else {
            errBuffer.clear();
