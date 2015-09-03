@@ -47,7 +47,7 @@ public class NuKernel32
 
    public static native boolean CreateProcessW(WString lpApplicationName, char[] lpCommandLine, WinBase.SECURITY_ATTRIBUTES lpProcessAttributes,
                                                WinBase.SECURITY_ATTRIBUTES lpThreadAttributes, boolean bInheritHandles, DWORD dwCreationFlags,
-                                               Pointer lpEnvironment, String lpCurrentDirectory, WinBase.STARTUPINFO lpStartupInfo,
+                                               Pointer lpEnvironment, char[] lpCurrentDirectory, WinBase.STARTUPINFO lpStartupInfo,
                                                WinBase.PROCESS_INFORMATION lpProcessInformation);
 
    public static native boolean TerminateProcess(HANDLE hProcess, int exitCode);

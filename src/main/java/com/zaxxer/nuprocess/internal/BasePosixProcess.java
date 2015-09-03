@@ -25,13 +25,21 @@ import com.zaxxer.nuprocess.NuProcess;
 import com.zaxxer.nuprocess.NuProcessHandler;
 
 import java.nio.ByteBuffer;
+import java.nio.file.Path;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.Callable;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -46,6 +54,8 @@ public abstract class BasePosixProcess implements NuProcess
 
    protected static final IEventProcessor<? extends BasePosixProcess>[] processors;
    protected static int processorRoundRobin;
+
+   private static ExecutorService linuxCwdChangeableExecutorService;
 
    protected IEventProcessor<? super BasePosixProcess> myProcessor;
    protected volatile NuProcessHandler processHandler;
@@ -80,6 +90,28 @@ public abstract class BasePosixProcess implements NuProcess
    private int remainingWrite;
    private int writeOffset;
 
+   private Pointer posix_spawn_file_actions;
+
+   // Launches threads under which changes to cwd do not affect the cwd of the process.
+   public static class LinuxCwdChangeableThreadFactory implements ThreadFactory {
+      private final AtomicInteger threadCount = new AtomicInteger(0);
+
+      @Override
+      public Thread newThread(final Runnable r) {
+         Runnable unshareCwdThenSpawn = new Runnable() {
+            @Override
+            public void run() {
+              int rc = LinuxLibC.unshare(LinuxLibC.CLONE_FS);
+              checkReturnCode(rc, "unshare(CLONE_FS) failed");
+              r.run();
+            }
+         };
+         Thread newThread = Executors.defaultThreadFactory().newThread(unshareCwdThenSpawn);
+         newThread.setName(String.format("NuProcessLinuxCwdChangeable-%d", threadCount.incrementAndGet()));
+         return newThread;
+      }
+   }
+
    static {
       IS_SOFTEXIT_DETECTION = Boolean.valueOf(System.getProperty("com.zaxxer.nuprocess.softExitDetection", "true"));
 
@@ -109,6 +141,16 @@ public abstract class BasePosixProcess implements NuProcess
                }
             }
          }));
+      }
+
+      if (IS_LINUX) {
+         linuxCwdChangeableExecutorService = new ThreadPoolExecutor(
+             /* corePoolSize */ numThreads,
+             /* maximumPoolSize */ numThreads,
+             /* keepAliveTime */ 0L, TimeUnit.MILLISECONDS,
+             /* workQueue */ new LinkedBlockingQueue<Runnable>(),
+             /* threadFactory */ new LinuxCwdChangeableThreadFactory(),
+             /* handler */ new ThreadPoolExecutor.DiscardPolicy());
       }
    }
 
@@ -217,10 +259,10 @@ public abstract class BasePosixProcess implements NuProcess
    //                             Public methods
    // ************************************************************************
 
-   public NuProcess start(List<String> command, String[] environment)
+   public NuProcess start(List<String> command, String[] environment, Path cwd)
    {
       callPreStart();
-      
+
       String[] commands = command.toArray(new String[command.size()]);
 
       Pointer posix_spawn_file_actions = createPipes();
@@ -249,7 +291,19 @@ public abstract class BasePosixProcess implements NuProcess
          LibC.posix_spawnattr_setflags(posix_spawnattr, flags);
 
          IntByReference restrict_pid = new IntByReference();
-         rc = LibC.posix_spawnp(restrict_pid, commands[0], posix_spawn_file_actions, posix_spawnattr, new StringArray(commands), new StringArray(environment));
+         StringArray commandsArray = new StringArray(commands);
+         StringArray environmentArray = new StringArray(environment);
+         if (cwd != null) {
+             if (IS_MAC) {
+                 rc = spawnWithCwdSetViaPthreadChdir(restrict_pid, commands[0], posix_spawn_file_actions, posix_spawnattr, commandsArray, environmentArray, cwd);
+             } else if (IS_LINUX) {
+                 rc = spawnWithCwdSetViaLinuxCwdChangeableExecutorService(restrict_pid, commands[0], posix_spawn_file_actions, posix_spawnattr, commandsArray, environmentArray, cwd);
+             } else {
+                 throw new RuntimeException("Platform does not support per-thread cwd override");
+             }
+         } else {
+             rc = LibC.posix_spawnp(restrict_pid, commands[0], posix_spawn_file_actions, posix_spawnattr, commandsArray, environmentArray);
+         }
 
          pid = restrict_pid.getValue();
 
@@ -315,6 +369,62 @@ public abstract class BasePosixProcess implements NuProcess
       }
 
       return this;
+   }
+
+   private int spawnWithCwdSetViaPthreadChdir(
+      IntByReference restrict_pid,
+      String restrict_path,
+      Pointer file_actions,
+      Pointer /*const posix_spawnattr_t*/restrict_attrp,
+      StringArray /*String[]*/argv,
+      Pointer /*String[]*/envp,
+      Path cwd)
+   {
+     int cwdBufSize = 1024;
+     long peer = Native.malloc(cwdBufSize);
+     Pointer oldCwd = new Pointer(peer);
+     LibC.getcwd(oldCwd, cwdBufSize);
+     String newCwd = cwd.toAbsolutePath().toString();
+     int rc = LibC.SYSCALL.syscall(LibC.SYSCALL.SYS___pthread_chdir, newCwd);
+     checkReturnCode(rc, "syscall(SYS__pthread_chdir) failed to set current directory");
+
+     try {
+       return LibC.posix_spawnp(restrict_pid, restrict_path, file_actions, restrict_attrp, argv, envp);
+     } finally {
+       rc = LibC.SYSCALL.syscall(LibC.SYSCALL.SYS___pthread_chdir, oldCwd);
+       Native.free(Pointer.nativeValue(oldCwd));
+       checkReturnCode(rc, "syscall(SYS__pthread_chdir) failed to restore current directory");
+     }
+   }
+
+   private int spawnWithCwdSetViaLinuxCwdChangeableExecutorService(
+      final IntByReference restrict_pid,
+      final String restrict_path,
+      final Pointer file_actions,
+      final Pointer /*const posix_spawnattr_t*/restrict_attrp,
+      final StringArray /*String[]*/argv,
+      final Pointer /*String[]*/envp,
+      final Path cwd)
+   {
+     Future<Integer> setCwdThenSpawnFuture = linuxCwdChangeableExecutorService.submit(
+         new Callable<Integer>() {
+           @Override
+           public Integer call() {
+               // Set cwd in this thread, which has its cwd state disassociated from the rest of the process.
+               int rc = LibC.chdir(cwd.toAbsolutePath().toString());
+               checkReturnCode(rc, "chdir() failed");
+               // posix_spawnp() will inherit the cwd of this thread.
+               //
+               // We don't bother restoring cwd, since this thread will either be destroyed or re-used
+               // later by the same executor, which will then chdir anyway.
+               return LibC.posix_spawnp(restrict_pid, restrict_path, file_actions, restrict_attrp, argv, envp);
+           }
+         });
+     try {
+       return setCwdThenSpawnFuture.get();
+     } catch (Exception e) {
+       throw new RuntimeException(e);
+     }
    }
 
    public int getPid()
@@ -733,7 +843,7 @@ public abstract class BasePosixProcess implements NuProcess
       }
    }
 
-   private void checkReturnCode(int rc, String failureMessage)
+   private static void checkReturnCode(int rc, String failureMessage)
    {
       if (rc != 0) {
          throw new RuntimeException(failureMessage + ", return code: " + rc + ", last error: " + Native.getLastError());

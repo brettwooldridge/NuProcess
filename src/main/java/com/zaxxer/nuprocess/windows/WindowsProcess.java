@@ -16,6 +16,7 @@
 
 package com.zaxxer.nuprocess.windows;
 
+import java.nio.file.Path;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -194,7 +195,7 @@ public final class WindowsProcess implements NuProcess
    {
       return !pendingWrites.isEmpty();
    }
-   
+
    /** {@inheritDoc} */
    @Override
    public void destroy(boolean force)
@@ -220,10 +221,10 @@ public final class WindowsProcess implements NuProcess
    //                          Package-scoped methods
    // ************************************************************************
 
-   NuProcess start(List<String> commands, String[] environment)
+   NuProcess start(List<String> commands, String[] environment, Path cwd)
    {
       callPreStart();
-      
+
       try {
          createPipes();
 
@@ -242,8 +243,14 @@ public final class WindowsProcess implements NuProcess
          processInfo = new PROCESS_INFORMATION();
 
          DWORD dwCreationFlags = new DWORD(WinNT.CREATE_NO_WINDOW | WinNT.CREATE_UNICODE_ENVIRONMENT | WinNT.CREATE_SUSPENDED);
+         char[] cwdChars;
+         if (cwd != null) {
+           cwdChars = Native.toCharArray(cwd.toAbsolutePath().toString());
+         } else {
+           cwdChars = null;
+         }
          if (!NuKernel32.CreateProcessW(null, getCommandLine(commands), null /*lpProcessAttributes*/, null /*lpThreadAttributes*/, true /*bInheritHandles*/,
-                                        dwCreationFlags, env, null /*lpCurrentDirectory*/, startupInfo, processInfo)) {
+                                        dwCreationFlags, env, cwdChars, startupInfo, processInfo)) {
             int lastError = Native.getLastError();
             throw new RuntimeException("CreateProcessW() failed, error: " + lastError);
          }

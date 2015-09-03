@@ -17,8 +17,10 @@
 package com.zaxxer.nuprocess.internal;
 
 import com.sun.jna.Callback;
+import com.sun.jna.Library;
 import com.sun.jna.Native;
 import com.sun.jna.NativeLibrary;
+import com.sun.jna.Platform;
 import com.sun.jna.Pointer;
 import com.sun.jna.StringArray;
 import com.sun.jna.ptr.IntByReference;
@@ -75,6 +77,20 @@ public class LibC
                                          Pointer /*const posix_spawnattr_t*/restrict_attrp, StringArray /*String[]*/argv, Pointer /*String[]*/envp);
 
    public static native Pointer signal(int signal, Pointer func);
+
+   public static native int chdir(String path);
+
+   public static native String getcwd(Pointer buf, int size);
+
+   // from /usr/include/sys/syscall.h
+   // We can't use JNA direct mapping for syscall(), since it takes varargs.
+   public interface SyscallLibrary extends Library {
+      public static final int SYS___pthread_chdir = 348;
+      int syscall(int syscall_number, Object... args);
+   }
+
+   public static SyscallLibrary SYSCALL = (SyscallLibrary) Native.loadLibrary(
+      Platform.C_LIBRARY_NAME, SyscallLibrary.class);
 
    public static final int F_GETFL = 3;
    public static final int F_SETFL = 4;
