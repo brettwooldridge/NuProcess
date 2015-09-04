@@ -24,7 +24,6 @@ import com.sun.jna.ptr.IntByReference;
 import com.zaxxer.nuprocess.NuProcess;
 import com.zaxxer.nuprocess.NuProcessHandler;
 
-import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
 import java.util.HashSet;
 import java.util.List;

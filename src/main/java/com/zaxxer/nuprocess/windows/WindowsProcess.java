@@ -16,7 +16,6 @@
 
 package com.zaxxer.nuprocess.windows;
 
-import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
