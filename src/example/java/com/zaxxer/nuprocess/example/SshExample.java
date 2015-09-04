@@ -108,14 +108,8 @@ public class SshExample
         }
 
         @Override
-        public void onStdout(ByteBuffer buffer)
+        public void onStdout(ByteBuffer buffer, boolean closed)
         {
-            if (buffer == null)
-            {
-                disconnected.release();
-                return;
-            }
-
             int remaining = buffer.remaining();
             byte[] bytes = new byte[remaining];
             buffer.get(bytes);
@@ -123,18 +117,20 @@ public class SshExample
             writer.print(new String(bytes));
             writer.flush();
 
+            if (closed)
+            {
+                disconnected.release();
+            }
+
             // nuProcess.wantWrite();
             // We're done, so closing STDIN will cause the "cat" process to exit
             //nuProcess.closeStdin();
         }
 
         @Override
-        public void onStderr(ByteBuffer buffer)
+        public void onStderr(ByteBuffer buffer, boolean closed)
         {
-            if (buffer != null)
-            {
-                this.onStdout(buffer);
-            }
+            this.onStdout(buffer, false);
         }
     }
 }
