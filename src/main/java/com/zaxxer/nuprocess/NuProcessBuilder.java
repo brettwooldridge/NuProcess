@@ -212,14 +212,11 @@ public class NuProcessBuilder
     * Set the {@link Path} to which the current working directory (cwd) of the
     * subsequent launch of a {@link NuProcess} will be set when calling the {@link #start()} method.
     *
-    * @param cwd a {@link Path} to use for the process's current working directory
+    * @param cwd a {@link Path} to use for the process's current working directory, or {@code null}
+    *            to disable setting the cwd of subsequently launched proceses
     */
    public void setCwd(Path cwd)
    {
-      if (cwd == null) {
-         throw new IllegalArgumentException("A Path must be specified");
-      }
-
       this.cwd = cwd;
    }
 
