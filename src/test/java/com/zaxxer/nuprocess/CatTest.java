@@ -300,11 +300,6 @@ public class CatTest
         @Override
         public void onStdout(ByteBuffer buffer, boolean closed)
         {
-            if (closed)
-            {
-                return;
-            }
-
             size += buffer.remaining();
             if (size == (WRITES * bytes.length))
             {

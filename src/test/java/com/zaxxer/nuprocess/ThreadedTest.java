@@ -160,9 +160,6 @@ public class ThreadedTest
         @Override
         public void onStdout(ByteBuffer buffer, boolean closed)
         {
-            if (closed)
-                return;
-
             size += buffer.remaining();
 
             byte[] bytes = new byte[buffer.remaining()];
