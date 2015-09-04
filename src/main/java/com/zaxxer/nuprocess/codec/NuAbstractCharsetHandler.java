@@ -14,7 +14,10 @@
  * limitations under the License.
  */
 
-package com.zaxxer.nuprocess;
+package com.zaxxer.nuprocess.codec;
+
+import com.zaxxer.nuprocess.NuProcess;
+import com.zaxxer.nuprocess.NuProcessHandler;
 
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
@@ -39,12 +42,12 @@ import java.nio.charset.CoderResult;
  *
  * @author Ben Hamilton
  */
-public abstract class NuAbstractProcessEncodingHandler implements NuProcessHandler {
-  private final NuProcessEncoder stdinEncoder;
-  private final NuProcessDecoder stdoutDecoder;
-  private final NuProcessDecoder stderrDecoder;
+public abstract class NuAbstractCharsetHandler implements NuProcessHandler {
+  private final NuCharsetEncoder stdinEncoder;
+  private final NuCharsetDecoder stdoutDecoder;
+  private final NuCharsetDecoder stderrDecoder;
 
-  private class StdinEncoderHandler implements NuProcessEncoderHandler {
+  private class StdinEncoderHandler implements NuCharsetEncoderHandler {
     @Override
     public boolean onStdinReady(CharBuffer buffer) {
       return onStdinCharsReady(buffer);
@@ -56,14 +59,14 @@ public abstract class NuAbstractProcessEncodingHandler implements NuProcessHandl
     }
   }
 
-  private class StdoutDecoderHandler implements NuProcessDecoderHandler {
+  private class StdoutDecoderHandler implements NuCharsetDecoderHandler {
     @Override
     public void onDecode(CharBuffer buffer, boolean closed, CoderResult decoderResult) {
       onStdoutChars(buffer, closed, decoderResult);
     }
   }
 
-  private class StderrDecoderHandler implements NuProcessDecoderHandler {
+  private class StderrDecoderHandler implements NuCharsetDecoderHandler {
     @Override
     public void onDecode(CharBuffer buffer, boolean closed, CoderResult decoderResult) {
       onStderrChars(buffer, closed, decoderResult);
@@ -77,7 +80,7 @@ public abstract class NuAbstractProcessEncodingHandler implements NuProcessHandl
    * @param charset The {@link Charset} with which to encode and decode stdin, stdout,
    *                and stderr bytes
    */
-  protected NuAbstractProcessEncodingHandler(Charset charset) {
+  protected NuAbstractCharsetHandler(Charset charset) {
     this(charset.newEncoder(), charset.newDecoder(), charset.newDecoder());
   }
 
@@ -93,13 +96,10 @@ public abstract class NuAbstractProcessEncodingHandler implements NuProcessHandl
    * @param stdoutDecoder The {@link CharsetDecoder} with which to decode stdout bytes
    * @param stderrDecoder The {@link CharsetDecoder} with which to decode stderr bytes
    */
-  protected NuAbstractProcessEncodingHandler(
-      CharsetEncoder stdinEncoder,
-      CharsetDecoder stdoutDecoder,
-      CharsetDecoder stderrDecoder) {
-    this.stdinEncoder = new NuProcessEncoder(new StdinEncoderHandler(), stdinEncoder);
-    this.stdoutDecoder = new NuProcessDecoder(new StdoutDecoderHandler(), stdoutDecoder);
-    this.stderrDecoder = new NuProcessDecoder(new StderrDecoderHandler(), stderrDecoder);
+  protected NuAbstractCharsetHandler(CharsetEncoder stdinEncoder, CharsetDecoder stdoutDecoder, CharsetDecoder stderrDecoder) {
+    this.stdinEncoder = new NuCharsetEncoder(new StdinEncoderHandler(), stdinEncoder);
+    this.stdoutDecoder = new NuCharsetDecoder(new StdoutDecoderHandler(), stdoutDecoder);
+    this.stderrDecoder = new NuCharsetDecoder(new StderrDecoderHandler(), stderrDecoder);
   }
 
   /**

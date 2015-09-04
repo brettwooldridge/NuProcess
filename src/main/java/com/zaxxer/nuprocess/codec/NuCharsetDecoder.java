@@ -14,7 +14,10 @@
  * limitations under the License.
  */
 
-package com.zaxxer.nuprocess;
+package com.zaxxer.nuprocess.codec;
+
+import com.zaxxer.nuprocess.NuProcess;
+import com.zaxxer.nuprocess.NuProcessHandler;
 
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
@@ -27,25 +30,25 @@ import java.nio.charset.CoderResult;
  * {@link NuProcessHandler#onStderr(ByteBuffer, boolean)}
  * which handles decoding of stdout or stderr bytes to Java UTF-16 string data.
  *
- * Calls back into a {@link NuProcessDecoderHandler} with decoded stdout or
+ * Calls back into a {@link NuCharsetDecoderHandler} with decoded stdout or
  * stderr string data.
  *
  * This class is not intended to be subclassed.
  *
  * @author Ben Hamilton
  */
-public final class NuProcessDecoder {
-  private final NuProcessDecoderHandler handler;
+public final class NuCharsetDecoder {
+  private final NuCharsetDecoderHandler handler;
   private final CharsetDecoder decoder;
   private final CharBuffer charBuffer;
 
   /**
    * Creates a decoder which uses a single {@link Charset} to decode output data.
    *
-   * @param handler {@link NuProcessDecoderHandler} called back with decoded string data
+   * @param handler {@link NuCharsetDecoderHandler} called back with decoded string data
    * @param charset {@link Charset} used to decode output data
    */
-  public NuProcessDecoder(NuProcessDecoderHandler handler, Charset charset) {
+  public NuCharsetDecoder(NuCharsetDecoderHandler handler, Charset charset) {
     this(handler, charset.newDecoder());
   }
 
@@ -53,12 +56,12 @@ public final class NuProcessDecoder {
    * Creates a decoder which uses a {@link CharsetDecoder CharsetDecoders} to decode
    * output data.
    *
-   * @param handler {@link NuProcessDecoderHandler} called back with decoded string data
+   * @param handler {@link NuCharsetDecoderHandler} called back with decoded string data
    * @param decoder {@link CharsetDecoder} used to decode stdout bytes to string data
    */
-  public NuProcessDecoder(
-      NuProcessDecoderHandler handler,
-      CharsetDecoder decoder) {
+  public NuCharsetDecoder(
+          NuCharsetDecoderHandler handler,
+          CharsetDecoder decoder) {
     this.handler = handler;
     this.decoder = decoder;
     this.charBuffer = CharBuffer.allocate(NuProcess.BUFFER_CAPACITY);

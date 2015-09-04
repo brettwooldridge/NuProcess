@@ -16,6 +16,8 @@
 
 package com.zaxxer.nuprocess;
 
+import com.zaxxer.nuprocess.codec.NuAbstractCharsetHandler;
+
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
 import java.nio.BufferOverflowException;
@@ -336,7 +338,7 @@ public class CatTest
         }
     };
 
-    private static class Utf8DecodingListener extends NuAbstractProcessEncodingHandler
+    private static class Utf8DecodingListener extends NuAbstractCharsetHandler
     {
         private final Semaphore semaphore;
         private final CharBuffer utf8Buffer;

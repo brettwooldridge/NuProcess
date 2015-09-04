@@ -14,17 +14,19 @@
  * limitations under the License.
  */
 
-package com.zaxxer.nuprocess;
+package com.zaxxer.nuprocess.codec;
+
+import com.zaxxer.nuprocess.NuProcessHandler;
 
 import java.nio.CharBuffer;
 import java.nio.charset.CoderResult;
 
 /**
- * Callbacks invoked by {@link NuProcessDecoder} with decoded string data.
+ * Callbacks invoked by {@link NuCharsetDecoder} with decoded string data.
  *
  * @see NuProcessHandler
  */
-public interface NuProcessDecoderHandler {
+public interface NuCharsetDecoderHandler {
   /**
    * This method is invoked when there is decoded data to process or an
    * the end-of-file (EOF) condition has been reached.  In the case

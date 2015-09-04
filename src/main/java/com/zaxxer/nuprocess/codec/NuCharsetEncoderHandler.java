@@ -14,17 +14,20 @@
  * limitations under the License.
  */
 
-package com.zaxxer.nuprocess;
+package com.zaxxer.nuprocess.codec;
+
+import com.zaxxer.nuprocess.NuProcess;
+import com.zaxxer.nuprocess.NuProcessHandler;
 
 import java.nio.CharBuffer;
 import java.nio.charset.CoderResult;
 
 /**
- * Callbacks invoked by {@link NuProcessEncoder} with decoded string data.
+ * Callbacks invoked by {@link NuCharsetEncoder} with decoded string data.
  *
  * @see NuProcessHandler
  */
-public interface NuProcessEncoderHandler {
+public interface NuCharsetEncoderHandler {
   /**
    * This method is invoked after you have expressed a desire to write to stdin
    * by first calling {@link NuProcess#wantWrite()}.  When this method is invoked,

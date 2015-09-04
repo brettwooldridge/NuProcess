@@ -14,7 +14,10 @@
  * limitations under the License.
  */
 
-package com.zaxxer.nuprocess;
+package com.zaxxer.nuprocess.codec;
+
+import com.zaxxer.nuprocess.NuProcess;
+import com.zaxxer.nuprocess.NuProcessHandler;
 
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
@@ -26,7 +29,7 @@ import java.nio.charset.CoderResult;
  * Implementation of {@link NuProcessHandler#onStdinReady(ByteBuffer)}
  * which handles encoding of stdin bytes to Java UTF-16 string data.
  *
- * Calls back into a {@link NuProcessEncoderHandler} with a
+ * Calls back into a {@link NuCharsetEncoderHandler} with a
  * {@link CharBuffer} whose contents will be encoded with a specified
  * {@link Charset} or {@link CharsetEncoder} then passed to the
  * stdin of a process.
@@ -35,32 +38,30 @@ import java.nio.charset.CoderResult;
  *
  * @author Ben Hamilton
  */
-public final class NuProcessEncoder {
-  private final NuProcessEncoderHandler handler;
+public final class NuCharsetEncoder {
+  private final NuCharsetEncoderHandler handler;
   private final CharsetEncoder encoder;
   private final CharBuffer charBuffer;
 
   /**
    * Creates an encoder which uses a single {@link Charset} to encode input data.
    *
-   * @param handler {@link NuProcessEncoderHandler} called back with a string buffer
+   * @param handler {@link NuCharsetEncoderHandler} called back with a string buffer
    *                to be encoded and fed to stdin
    * @param charset {@link Charset} used to encode stdin data to bytes
    */
-  public NuProcessEncoder(NuProcessEncoderHandler handler, Charset charset) {
+  public NuCharsetEncoder(NuCharsetEncoderHandler handler, Charset charset) {
     this(handler, charset.newEncoder());
   }
 
   /**
    * Creates an encoder which uses a {@link CharsetEncoder} to encode input data.
    *
-   * @param handler {@link NuProcessEncoderHandler} called back with a string buffer
+   * @param handler {@link NuCharsetEncoderHandler} called back with a string buffer
    *                into which the caller writes string data to be written to stdin
    * @param encoder {@link CharsetEncoder} used to encode stdin string data to bytes
    */
-  public NuProcessEncoder(
-      NuProcessEncoderHandler handler,
-      CharsetEncoder encoder) {
+  public NuCharsetEncoder(NuCharsetEncoderHandler handler, CharsetEncoder encoder) {
     this.handler = handler;
     this.encoder = encoder;
     this.charBuffer = CharBuffer.allocate(NuProcess.BUFFER_CAPACITY);

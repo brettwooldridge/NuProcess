@@ -16,6 +16,7 @@
 
 package com.zaxxer.nuprocess.windows;
 
+import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -310,15 +311,17 @@ public final class WindowsProcess implements NuProcess
          buffer.limit(buffer.position() + transferred);
          buffer.position(0);
          processHandler.onStdout(buffer, false);
-         if (buffer.hasRemaining()) {
-           buffer.compact();
-         } else {
-           buffer.clear();
-         }
+         buffer.compact();
       }
       catch (Exception e) {
          // Don't let an exception thrown from the user's handler interrupt us
          e.printStackTrace();
+      }
+      if (!stdoutPipe.buffer.hasRemaining()) {
+         // The caller's onStdout() callback must set the buffer's position
+         // to indicate how many bytes were consumed, or else it will
+         // eventually run out of capacity.
+         throw new RuntimeException("stdout buffer has no bytes remaining");
       }
    }
 
@@ -343,15 +346,17 @@ public final class WindowsProcess implements NuProcess
          buffer.limit(buffer.position() + transferred);
          buffer.position(0);
          processHandler.onStderr(buffer, false);
-         if (buffer.hasRemaining()) {
-           buffer.compact();
-         } else {
-           buffer.clear();
-         }
+         buffer.compact();
       }
       catch (Exception e) {
          // Don't let an exception thrown from the user's handler interrupt us
          e.printStackTrace();
+      }
+      if (!stderrPipe.buffer.hasRemaining()) {
+         // The caller's onStdout() callback must set the buffer's position
+         // to indicate how many bytes were consumed, or else it will
+         // eventually run out of capacity.
+         throw new RuntimeException("stderr buffer has no bytes remaining");
       }
    }
 

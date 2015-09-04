@@ -16,11 +16,15 @@
 
 package com.zaxxer.nuprocess.internal;
 
-import static com.zaxxer.nuprocess.internal.LibC.WEXITSTATUS;
-import static com.zaxxer.nuprocess.internal.LibC.WIFEXITED;
-import static com.zaxxer.nuprocess.internal.LibC.WIFSIGNALED;
-import static com.zaxxer.nuprocess.internal.LibC.WTERMSIG;
+import com.sun.jna.Memory;
+import com.sun.jna.Native;
+import com.sun.jna.Pointer;
+import com.sun.jna.StringArray;
+import com.sun.jna.ptr.IntByReference;
+import com.zaxxer.nuprocess.NuProcess;
+import com.zaxxer.nuprocess.NuProcessHandler;
 
+import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
 import java.util.HashSet;
 import java.util.List;
@@ -32,13 +36,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import com.sun.jna.Memory;
-import com.sun.jna.Native;
-import com.sun.jna.Pointer;
-import com.sun.jna.StringArray;
-import com.sun.jna.ptr.IntByReference;
-import com.zaxxer.nuprocess.NuProcess;
-import com.zaxxer.nuprocess.NuProcessHandler;
+import static com.zaxxer.nuprocess.internal.LibC.*;
 
 public abstract class BasePosixProcess implements NuProcess
 {
@@ -418,15 +416,17 @@ public abstract class BasePosixProcess implements NuProcess
          outBuffer.limit(outBuffer.position() + read);
          outBuffer.position(0);
          processHandler.onStdout(outBuffer, false);
-         if (outBuffer.hasRemaining()) {
-           outBuffer.compact();
-         } else {
-           outBuffer.clear();
-         }
+         outBuffer.compact();
       }
       catch (Exception e) {
          // Don't let an exception thrown from the user's handler interrupt us
          e.printStackTrace(System.err);
+      }
+      if (!outBuffer.hasRemaining()) {
+         // The caller's onStdout() callback must set the buffer's position
+         // to indicate how many bytes were consumed, or else it will
+         // eventually run out of capacity.
+         throw new RuntimeException("stdout buffer has no bytes remaining");
       }
    }
 
@@ -457,15 +457,17 @@ public abstract class BasePosixProcess implements NuProcess
          errBuffer.limit(errBuffer.position() + read);
          errBuffer.position(0);
          processHandler.onStderr(errBuffer, false);
-         if (errBuffer.hasRemaining()) {
-           errBuffer.compact();
-         } else {
-           errBuffer.clear();
-         }
+         errBuffer.compact();
       }
       catch (Exception e) {
          // Don't let an exception thrown from the user's handler interrupt us
          e.printStackTrace(System.err);
+      }
+      if (!errBuffer.hasRemaining()) {
+         // The caller's onStderr() callback must set the buffer's position
+         // to indicate how many bytes were consumed, or else it will
+         // eventually run out of capacity.
+         throw new RuntimeException("stderr buffer has no bytes remaining");
       }
    }
 

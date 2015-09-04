@@ -17,7 +17,6 @@
 package com.zaxxer.nuprocess;
 
 import java.nio.ByteBuffer;
-import java.nio.charset.CharsetDecoder;
 
 /**
  * Executors of a {@link NuProcess} must provide an implementation of this class
