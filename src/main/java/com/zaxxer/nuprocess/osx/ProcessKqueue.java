@@ -27,6 +27,7 @@ import com.sun.jna.Pointer;
 import com.sun.jna.ptr.IntByReference;
 import com.zaxxer.nuprocess.internal.BaseEventProcessor;
 import com.zaxxer.nuprocess.internal.LibC;
+import com.zaxxer.nuprocess.osx.LibKevent.Kevent;
 import com.zaxxer.nuprocess.osx.LibKevent.TimeSpec;
 
 import static com.zaxxer.nuprocess.internal.LibC.*;
@@ -41,7 +42,7 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
    private static final int JAVA_PID;
 
    private volatile int kqueue;
-   private ThreadLocal<KeventArray> keventArrays;
+   private ThreadLocal<Kevent[]> keventArray;
    private BlockingQueue<OsxProcess> closeQueue;
    private BlockingQueue<OsxProcess> wantsWrite;
 
@@ -61,21 +62,17 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
 
       closeQueue = new ArrayBlockingQueue<OsxProcess>(512);
       wantsWrite = new ArrayBlockingQueue<OsxProcess>(512);
-
-      keventArrays = new ThreadLocal<KeventArray>() {
-         @Override
-         protected KeventArray initialValue() {
-            return new KeventArray(NUM_KEVENTS);
-         }
-        };
-
-      KeventArray keventArray = keventArrays.get();
+      keventArray = new ThreadLocal<Kevent[]>() {
+          @Override
+          protected Kevent[] initialValue() {
+              return (Kevent[]) new Kevent().toArray(NUM_KEVENTS);
+          }
+      };
 
       // Listen for self-generated signal to tell processor to wake-up and handling pending stdin requests
-      Kevent.EV_SET(
-          keventArray.get(0),
-          LibC.SIGUSR2, Kevent.EVFILT_SIGNAL, Kevent.EV_ADD | Kevent.EV_RECEIPT, 0, 0l, null);
-      registerEvents(keventArray, 1);
+      Kevent[] events = keventArray.get();
+      events[0].EV_SET(LibC.SIGUSR2, Kevent.EVFILT_SIGNAL, Kevent.EV_ADD | Kevent.EV_RECEIPT, 0, 0l, Pointer.NULL);
+      registerEvents(events, 1);
    }
 
    // ************************************************************************
@@ -90,55 +87,59 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
       }
 
       int pid = process.getPid();
-      Pointer pidPointer = new Pointer(pid);
+      Pointer pidPointer = Pointer.createConstant(pid);
 
       pidToProcessMap.put(pid, process);
 
-      KeventArray keventArray = keventArrays.get();
-
+      // We don't use keventArray.get() here since this is called from the user's thread, so allocating
+      // the thread-local events array which will never be re-used is pretty wasteful.
+      Kevent[] events = (Kevent[]) new Kevent().toArray(4);
       // Listen for process exit (one-shot event)
-      Kevent.EV_SET(
-          keventArray.get(0),
-          (long)process.getPid(),
+      events[0].EV_SET(
+          (long) pid,
           Kevent.EVFILT_PROC,
           Kevent.EV_ADD | Kevent.EV_RECEIPT | Kevent.EV_ONESHOT, Kevent.NOTE_EXIT | Kevent.NOTE_EXITSTATUS | Kevent.NOTE_REAP,
           0l,
           pidPointer);
-
       // Listen for stdout and stderr data availability (events deleted automatically when file descriptors closed)
-      Kevent.EV_SET(
-          keventArray.get(1),
+      events[1].EV_SET(
           process.getStdout().get(), Kevent.EVFILT_READ, Kevent.EV_ADD | Kevent.EV_RECEIPT, 0, 0l, pidPointer);
-      Kevent.EV_SET(
-          keventArray.get(2),
+      events[2].EV_SET(
           process.getStderr().get(), Kevent.EVFILT_READ, Kevent.EV_ADD | Kevent.EV_RECEIPT, 0, 0l, pidPointer);
-
       // Listen for stdin data availability (initially disabled until user wants read, deleted automatically when file descriptor closed)
-      Kevent.EV_SET(
-          keventArray.get(3),
+      events[3].EV_SET(
           process.getStdin().get(), Kevent.EVFILT_WRITE, Kevent.EV_ADD | Kevent.EV_DISABLE | Kevent.EV_RECEIPT, 0, 0l, pidPointer);
 
-      registerEvents(keventArray, 4);
+      registerEvents(events, 4);
    }
 
-   private void registerEvents(KeventArray keventArray, int numEvents)
+   private void registerEvents(Kevent[] keventArray, int numEvents)
    {
-      int ret = LibKevent.kevent(kqueue, keventArray.getPointer(), numEvents, keventArray.getPointer(), numEvents, null);
+      // When calling Structure.getPointer() to pass an argument to a
+      // native function, you are responsible to call write() beforehand
+      // to copy the fields of the structure to native memory (and read() afterwards).
+      for (int i = 0; i < numEvents; i++) {
+         keventArray[i].write();
+      }
+      int ret = LibKevent.kevent(kqueue, keventArray[0].getPointer(), numEvents, keventArray[0].getPointer(), numEvents, null);
+      for (int i = 0; i < numEvents; i++) {
+         keventArray[i].read();
+      }
       if (ret != numEvents) {
-        throw new RuntimeException(String.format("Error %d registering events (ret=%d)", Native.getLastError(), ret));
+         throw new RuntimeException(String.format("Error %d registering events (ret=%d)", Native.getLastError(), ret));
       } else {
-        // On success, each returned event will have 0 in the 'data' field.
-        // On failure, at least one returned event will have a non-0 value in the 'data' field.
-        StringBuilder err = new StringBuilder();
-        for (int i = 0; i < ret; i++) {
-          int error = (int) keventArray.get(i).getData();
-          if (error != 0) {
-            err.append(String.format("kevent %d: error %d\n", i, error));
-          }
-        }
-        if (err.length() > 0) {
-          throw new RuntimeException(err.toString());
-        }
+         // On success, each returned event will have 0 in the 'data' field.
+         // On failure, at least one returned event will have a non-0 value in the 'data' field.
+         StringBuilder err = new StringBuilder();
+         for (int i = 0; i < ret; i++) {
+            int error = keventArray[i].data.intValue();
+            if (error != 0) {
+               err.append(String.format("kevent %d: error %d\n", i, error));
+            }
+         }
+         if (err.length() > 0) {
+            throw new RuntimeException(err.toString());
+         }
       }
    }
 
@@ -168,8 +169,8 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
    @Override
    public boolean process()
    {
-      KeventArray keventArray = keventArrays.get();
-      int nev = LibKevent.kevent(kqueue, null, 0, keventArray.getPointer(), NUM_KEVENTS, timeSpec);
+      Kevent[] kevents = keventArray.get();
+      int nev = LibKevent.kevent(kqueue, null, 0, kevents[0].getPointer(), NUM_KEVENTS, timeSpec);
       if (nev == -1) {
          throw new RuntimeException("Error waiting for kevent");
       }
@@ -178,17 +179,27 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
          return false;
       }
 
+      // When calling Structure.getPointer() to pass an argument to a
+      // native function, you are responsible to call read() afterwards to
+      // populate the fields of the structure(s).
       for (int i = 0; i < nev; i++) {
-        processEvent(keventArray.get(i));
+        kevents[i].read();
+        processEvent(kevents[i]);
       }
       return true;
    }
 
+   @Override
+   protected void cleanup()
+   {
+      keventArray.remove();
+   }
+
    private void processEvent(Kevent kevent)
    {
-      int ident = (int) kevent.getIdent();
-      int filter = kevent.getFilter();
-      int udata = (int) Pointer.nativeValue(kevent.getUserData());
+      int ident = kevent.ident.intValue();
+      int filter = (int) kevent.filter;
+      int udata = (int) (0xFFFFFFFF & Pointer.nativeValue(kevent.udata));
 
       if (filter == Kevent.EVFILT_SIGNAL) {
          checkStdinCloses();
@@ -206,23 +217,23 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
 
       if (filter == Kevent.EVFILT_READ) // stdout/stderr data available to read
       {
-         int available = (int) kevent.getData();
+         int available = kevent.data.intValue();
          if (ident == osxProcess.getStdout().get()) {
             osxProcess.readStdout(available);
-            if ((kevent.getFlags() & Kevent.EV_EOF) != 0) {
+            if ((kevent.flags & Kevent.EV_EOF) != 0) {
                osxProcess.readStdout(-1);
             }
          }
          else if (ident == osxProcess.getStderr().get()) {
             osxProcess.readStderr(available);
-            if ((kevent.getFlags() & Kevent.EV_EOF) != 0) {
+            if ((kevent.flags & Kevent.EV_EOF) != 0) {
                osxProcess.readStderr(-1);
             }
          }
       }
       else if (filter == Kevent.EVFILT_WRITE && ident == osxProcess.getStdin().get()) // Room in stdin pipe available to write
       {
-         int available = (int) kevent.getData();
+         int available = kevent.data.intValue();
          boolean userWantsMore;
          if (available > 0) {
             userWantsMore = osxProcess.writeStdin(available);
@@ -231,20 +242,16 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
          }
          if (!userWantsMore) {
             // No more stdin for now. Disable the event.
-            KeventArray keventArray = keventArrays.get();
-            Kevent disableEvent = keventArray.get(0);
-            int pid = osxProcess.getPid();
-            Pointer pidPointer = new Pointer(pid);
-            Kevent.EV_SET(
-               disableEvent,
-               osxProcess.getStdin().get(), Kevent.EVFILT_WRITE, Kevent.EV_DISABLE | Kevent.EV_RECEIPT, 0, 0l, pidPointer);
-            registerEvents(keventArray, 1);
+            Kevent[] events = keventArray.get();
+            events[0].EV_SET(
+                osxProcess.getStdin().get(), Kevent.EVFILT_WRITE, Kevent.EV_DISABLE | Kevent.EV_RECEIPT, 0, 0l, Pointer.createConstant(osxProcess.getPid()));
+            registerEvents(events, 1);
          }
       }
-      else if ((kevent.getFilterFlags() & Kevent.NOTE_EXIT) != 0) // process has exited System.gc()
+      else if ((kevent.fflags & Kevent.NOTE_EXIT) != 0) // process has exited System.gc()
       {
          cleanupProcess(osxProcess);
-         int status = (int) kevent.getData();
+         int status = kevent.data.intValue();
          if (WIFEXITED(status)) {
             status = WEXITSTATUS(status);
             if (status == 127) {
@@ -270,6 +277,7 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
    private void checkStdinCloses()
    {
      List<OsxProcess> processes = new ArrayList<OsxProcess>();
+     // drainTo() is known to be atomic for ArrayBlockingQueue
      closeQueue.drainTo(processes);
      for (OsxProcess process : processes) {
         process.stdinClose();
@@ -279,20 +287,17 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
    private void checkWaitWrites()
    {
       List<OsxProcess> processes = new ArrayList<OsxProcess>();
+     // drainTo() is known to be atomic for ArrayBlockingQueue
       wantsWrite.drainTo(processes, NUM_KEVENTS);
       if (!processes.isEmpty()) {
          // Enable stdin-ready notifications for each process which wants it.
-         KeventArray keventArray = keventArrays.get();
+         Kevent[] kevents = keventArray.get();
          for (int i = 0; i < processes.size(); i++) {
             OsxProcess process = processes.get(i);
-            Kevent kevent = keventArray.get(i);
-            int pid = process.getPid();
-            Pointer pidPointer = new Pointer(pid);
-            Kevent.EV_SET(
-                kevent,
-                process.getStdin().get(), Kevent.EVFILT_WRITE, Kevent.EV_ENABLE | Kevent.EV_RECEIPT, 0, 0l, pidPointer);
+            kevents[i].EV_SET(
+                process.getStdin().get(), Kevent.EVFILT_WRITE, Kevent.EV_ENABLE | Kevent.EV_RECEIPT, 0, 0l, Pointer.createConstant(process.getPid()));
          }
-         registerEvents(keventArray, processes.size());
+         registerEvents(kevents, processes.size());
       }
    }
 
