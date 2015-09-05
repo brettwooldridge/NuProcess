@@ -34,6 +34,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.Future;
@@ -55,7 +56,7 @@ public abstract class BasePosixProcess implements NuProcess
    protected static final IEventProcessor<? extends BasePosixProcess>[] processors;
    protected static int processorRoundRobin;
 
-   private static ExecutorService linuxCwdChangeableExecutorService;
+   private static ExecutorService linuxCwdExecutorService;
 
    protected IEventProcessor<? super BasePosixProcess> myProcessor;
    protected volatile NuProcessHandler processHandler;
@@ -93,7 +94,7 @@ public abstract class BasePosixProcess implements NuProcess
    private Pointer posix_spawn_file_actions;
 
    // Launches threads under which changes to cwd do not affect the cwd of the process.
-   public static class LinuxCwdChangeableThreadFactory implements ThreadFactory {
+   public static class LinuxCwdThreadFactory implements ThreadFactory {
       private final AtomicInteger threadCount = new AtomicInteger(0);
 
       @Override
@@ -101,7 +102,11 @@ public abstract class BasePosixProcess implements NuProcess
          Runnable unshareCwdThenSpawn = new Runnable() {
             @Override
             public void run() {
+              // This makes a copy of the process's chroot, cwd, and umask and
+              // allows the thread to change any of those in a way that doesn't
+              // affect the rest of the process.
               int rc = LinuxLibC.unshare(LinuxLibC.CLONE_FS);
+              // If this throws, then it bubbles up to whomever called ExecutorService.submit().
               checkReturnCode(rc, "unshare(CLONE_FS) failed");
               r.run();
             }
@@ -144,12 +149,12 @@ public abstract class BasePosixProcess implements NuProcess
       }
 
       if (IS_LINUX) {
-         linuxCwdChangeableExecutorService = new ThreadPoolExecutor(
+         linuxCwdExecutorService = new ThreadPoolExecutor(
              /* corePoolSize */ numThreads,
              /* maximumPoolSize */ numThreads,
              /* keepAliveTime */ 0L, TimeUnit.MILLISECONDS,
              /* workQueue */ new LinkedBlockingQueue<Runnable>(),
-             /* threadFactory */ new LinuxCwdChangeableThreadFactory(),
+             /* threadFactory */ new LinuxCwdThreadFactory(),
              /* handler */ new ThreadPoolExecutor.DiscardPolicy());
       }
    }
@@ -295,9 +300,9 @@ public abstract class BasePosixProcess implements NuProcess
          StringArray environmentArray = new StringArray(environment);
          if (cwd != null) {
              if (IS_MAC) {
-                 rc = spawnWithCwdSetViaPthreadChdir(restrict_pid, commands[0], posix_spawn_file_actions, posix_spawnattr, commandsArray, environmentArray, cwd);
+                 rc = spawnOsxWithCwd(restrict_pid, commands[0], posix_spawn_file_actions, posix_spawnattr, commandsArray, environmentArray, cwd);
              } else if (IS_LINUX) {
-                 rc = spawnWithCwdSetViaLinuxCwdChangeableExecutorService(restrict_pid, commands[0], posix_spawn_file_actions, posix_spawnattr, commandsArray, environmentArray, cwd);
+                 rc = spawnLinuxWithCwd(restrict_pid, commands[0], posix_spawn_file_actions, posix_spawnattr, commandsArray, environmentArray, cwd);
              } else {
                  throw new RuntimeException("Platform does not support per-thread cwd override");
              }
@@ -371,7 +376,7 @@ public abstract class BasePosixProcess implements NuProcess
       return this;
    }
 
-   private int spawnWithCwdSetViaPthreadChdir(
+   private int spawnOsxWithCwd(
       IntByReference restrict_pid,
       String restrict_path,
       Pointer file_actions,
@@ -397,7 +402,7 @@ public abstract class BasePosixProcess implements NuProcess
      }
    }
 
-   private int spawnWithCwdSetViaLinuxCwdChangeableExecutorService(
+   private int spawnLinuxWithCwd(
       final IntByReference restrict_pid,
       final String restrict_path,
       final Pointer file_actions,
@@ -406,12 +411,14 @@ public abstract class BasePosixProcess implements NuProcess
       final Pointer /*String[]*/envp,
       final Path cwd)
    {
-     Future<Integer> setCwdThenSpawnFuture = linuxCwdChangeableExecutorService.submit(
+     Future<Integer> setCwdThenSpawnFuture = linuxCwdExecutorService.submit(
          new Callable<Integer>() {
            @Override
            public Integer call() {
                // Set cwd in this thread, which has its cwd state disassociated from the rest of the process.
                int rc = LibC.chdir(cwd.toAbsolutePath().toString());
+               // If this throws, it'll be wrapped in an ExecutionException and re-thrown on the thread
+               // which calls Future.get().
                checkReturnCode(rc, "chdir() failed");
                // posix_spawnp() will inherit the cwd of this thread.
                //
@@ -422,7 +429,14 @@ public abstract class BasePosixProcess implements NuProcess
          });
      try {
        return setCwdThenSpawnFuture.get();
-     } catch (Exception e) {
+     } catch (ExecutionException e) {
+       Throwable cause = e.getCause();
+       if (cause instanceof RuntimeException) {
+         throw (RuntimeException) cause;
+       } else {
+         throw new RuntimeException(cause);
+       }
+     } catch (InterruptedException e) {
        throw new RuntimeException(e);
      }
    }
