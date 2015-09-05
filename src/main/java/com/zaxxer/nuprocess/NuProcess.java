@@ -40,7 +40,7 @@ public interface NuProcess
    /**
     * Waits for the process to exit in a blocking fashion.  See {@link NuProcessHandler#onExit}
     * for the non-blocking method process exit notification and exit code retrieval.  If the
-    * process is terminated by the {@link #destroy()} method, the exit code is non-deterministic.
+    * process is terminated by the {@link #destroy(boolean)} method, the exit code is non-deterministic.
     *  
     * @param timeout a timeout value, 0 indicates an infinite wait
     * @param timeUnit the unit of time indicator for the timeout value
@@ -111,8 +111,10 @@ public interface NuProcess
     * after calling this method. You can use {@link #waitFor(long, TimeUnit)} if you want to
     * wait until the process has actually been terminated.<br>
     * <br>
-    * When this method is called, the exit code returned by {@link #waitFor} or passed to the
-    * {@link NuProcessHandler#onExit} callback method is non-deterministic.
+    * When this method is called with <i>force</i>, the exit code returned by {@link #waitFor}
+    * or passed to the {@link NuProcessHandler#onExit} callback method is non-deterministic.
+    *
+    * @param force if <code>true</code> is passed, the process will be forcibly killed
     */
    void destroy(boolean force);
 

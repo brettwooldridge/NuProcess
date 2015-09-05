@@ -5,7 +5,7 @@
 
     <groupId>com.zaxxer</groupId>
     <artifactId>nuprocess</artifactId>
-    <version>0.9.8-SNAPSHOT</version>
+    <version>1.0.0-SNAPSHOT</version>
     <packaging>bundle</packaging>
 
     <name>NuProcess</name>
@@ -35,6 +35,15 @@
         <developer>
             <name>Brett Wooldridge</name>
             <email>brett.wooldridge@gmail.com</email>
+        </developer>
+        <developer>
+            <name>Ben Hamilton</name>
+        </developer>
+        <developer>
+            <name>Rich DiCroce</name>
+        </developer>
+        <developer>
+        	<name>Chris Cladden</name>
         </developer>
     </developers>
 
