@@ -72,7 +72,7 @@ public class CatTest
 
             Semaphore[] semaphores = new Semaphore[100];
             LottaProcessListener[] listeners = new LottaProcessListener[100];
-
+    
             for (int i = 0; i < semaphores.length; i++)
             {
                 semaphores[i] = new Semaphore(0);
@@ -81,12 +81,12 @@ public class CatTest
                 pb.start();
                 // System.err.printf("  starting process: %d\n", i + 1);
             }
-
+    
             for (Semaphore sem : semaphores)
             {
                 sem.acquire();
             }
-
+            
             for (LottaProcessListener listen : listeners)
             {
                 Assert.assertTrue("Adler32 mismatch between written and read", listen.checkAdlers());
@@ -104,12 +104,12 @@ public class CatTest
         for (int i = 0; i < 100; i++)
         {
             Semaphore semaphore = new Semaphore(0);
-
+    
             LottaProcessListener processListener = new LottaProcessListener(semaphore);
             NuProcessBuilder pb = new NuProcessBuilder(processListener, command);
             pb.start();
             semaphore.acquireUninterruptibly();
-
+    
             Assert.assertTrue("Adler32 mismatch between written and read", processListener.checkAdlers());
         }
 
@@ -175,7 +175,7 @@ public class CatTest
         int syncExitCode = nuProcess.waitFor(5, TimeUnit.SECONDS);
         boolean countedDown = exitLatch.await(5, TimeUnit.SECONDS);
         Assert.assertTrue("Async exit latch was not triggered", countedDown);
-
+        
         int expectedExitCode = System.getProperty("os.name").toLowerCase().contains("win") ? -1 : 1;
         Assert.assertEquals("Exit code (synchronous) did not match expectation", expectedExitCode, syncExitCode);
         Assert.assertEquals("Exit code (asynchronous) did not match expectation", expectedExitCode, asyncExitCode.get());
@@ -208,56 +208,56 @@ public class CatTest
 
         System.err.println("Completed test noExecutableFound()");
     }
-
+    
     @Test
     public void callbackOrder() throws InterruptedException
     {
         final List<String> callbacks = new CopyOnWriteArrayList<String>();
         final CountDownLatch latch = new CountDownLatch(1);
-
+        
         NuProcessHandler handler = new NuProcessHandler() {
             private NuProcess nuProcess;
-
+            
             @Override
             public void onStdout(ByteBuffer buffer, boolean closed) {
                 callbacks.add("stdout");
                 nuProcess.closeStdin();
             }
-
+            
             @Override
             public boolean onStdinReady(ByteBuffer buffer) {
                 callbacks.add("stdin");
                 buffer.put("foobar".getBytes()).flip();
                 return false;
             }
-
+            
             @Override
             public void onStderr(ByteBuffer buffer, boolean closed) {
                 callbacks.add("stderr");
             }
-
+            
             @Override
             public void onStart(NuProcess nuProcess) {
                 callbacks.add("start");
                 this.nuProcess = nuProcess;
                 nuProcess.wantWrite();
             }
-
+            
             @Override
             public void onPreStart(NuProcess nuProcess) {
                 callbacks.add("prestart");
             }
-
+            
             @Override
             public void onExit(int exitCode) {
                 callbacks.add("exit");
                 latch.countDown();
             }
         };
-
+        
         Assert.assertNotNull("process is null", new NuProcessBuilder(handler, command).start());
         latch.await();
-
+        
         Assert.assertEquals("onPreStart was not called first", 0, callbacks.indexOf("prestart"));
         Assert.assertFalse("onExit was called before onStdout", callbacks.indexOf("exit") < callbacks.lastIndexOf("stdout"));
     }
@@ -302,7 +302,7 @@ public class CatTest
         private Adler32 readAdler32;
         private Adler32 writeAdler32;
         private byte[] bytes;
-
+        
 
         LottaProcessListener(Semaphore semaphore)
         {
