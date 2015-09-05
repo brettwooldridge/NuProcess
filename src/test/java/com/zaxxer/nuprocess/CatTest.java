@@ -16,7 +16,13 @@
 
 package com.zaxxer.nuprocess;
 
+import com.zaxxer.nuprocess.codec.NuAbstractCharsetHandler;
+
 import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
+import java.nio.BufferOverflowException;
+import java.nio.charset.Charset;
+import java.nio.charset.CoderResult;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
@@ -102,6 +108,43 @@ public class CatTest
     }
 
     @Test
+    public void decodingShortUtf8Data() throws Exception
+    {
+        Semaphore semaphore = new Semaphore(0);
+        String SHORT_UNICODE_TEXT = "Hello \uD83D\uDCA9 world";
+        System.err.println("Starting test decodingShortUtf8Data()");
+        Utf8DecodingListener processListener = new Utf8DecodingListener(semaphore, SHORT_UNICODE_TEXT);
+        NuProcessBuilder pb = new NuProcessBuilder(processListener, command);
+        pb.start();
+        semaphore.acquireUninterruptibly();
+        Assert.assertEquals("Decoding mismatch", SHORT_UNICODE_TEXT, processListener.decodedStdout.toString());
+        Assert.assertEquals("Exit code mismatch", 0, processListener.exitCode);
+        Assert.assertFalse("Decoder stdin should not overflow", processListener.stdinOverflow);
+        System.err.println("Completed test decodingShortUtf8Data()");
+    }
+
+    @Test
+    public void decodingLongUtf8Data() throws Exception
+    {
+        Semaphore semaphore = new Semaphore(0);
+        // We use 3 bytes to make sure at least one UTF-8 boundary goes across two byte buffers.
+        String THREE_BYTE_UTF_8 = "\u2764";
+        StringBuilder unicodeTextWhichDoesNotFitInBuffer = new StringBuilder();
+        for (int i = 0; i < NuProcess.BUFFER_CAPACITY + 1; i++) {
+          unicodeTextWhichDoesNotFitInBuffer.append(THREE_BYTE_UTF_8);
+        }
+        System.err.println("Starting test decodingLongUtf8Data()");
+        Utf8DecodingListener processListener = new Utf8DecodingListener(semaphore, unicodeTextWhichDoesNotFitInBuffer.toString());
+        NuProcessBuilder pb = new NuProcessBuilder(processListener, command);
+        pb.start();
+        semaphore.acquireUninterruptibly();
+        Assert.assertEquals("Decoding mismatch", unicodeTextWhichDoesNotFitInBuffer.toString(), processListener.decodedStdout.toString());
+        Assert.assertEquals("Exit code mismatch", 0, processListener.exitCode);
+        Assert.assertTrue("Decoder stdin should overflow", processListener.stdinOverflow);
+        System.err.println("Completed test decodingLongUtf8Data()");
+    }
+
+    @Test
     public void badExit() throws InterruptedException
     {
         System.err.println("Starting test badExit()");
@@ -167,7 +210,7 @@ public class CatTest
             private NuProcess nuProcess;
             
             @Override
-            public void onStdout(ByteBuffer buffer) {
+            public void onStdout(ByteBuffer buffer, boolean closed) {
                 callbacks.add("stdout");
                 nuProcess.closeStdin();
             }
@@ -180,7 +223,7 @@ public class CatTest
             }
             
             @Override
-            public void onStderr(ByteBuffer buffer) {
+            public void onStderr(ByteBuffer buffer, boolean closed) {
                 callbacks.add("stderr");
             }
             
@@ -255,13 +298,8 @@ public class CatTest
         }
 
         @Override
-        public void onStdout(ByteBuffer buffer)
+        public void onStdout(ByteBuffer buffer, boolean closed)
         {
-            if (buffer == null)
-            {
-                return;
-            }
-
             size += buffer.remaining();
             if (size == (WRITES * bytes.length))
             {
@@ -292,6 +330,74 @@ public class CatTest
         boolean checkAdlers()
         {
             return readAdler32.getValue() == writeAdler32.getValue();
+        }
+    };
+
+    private static class Utf8DecodingListener extends NuAbstractCharsetHandler
+    {
+        private final Semaphore semaphore;
+        private final CharBuffer utf8Buffer;
+        private int charsWritten;
+        private int charsRead;
+        private NuProcess nuProcess;
+        public StringBuilder decodedStdout;
+        public boolean stdinOverflow;
+        public int exitCode;
+
+        Utf8DecodingListener(Semaphore semaphore, String utf8Text)
+        {
+            super(Charset.forName("UTF-8"));
+            this.semaphore = semaphore;
+            this.utf8Buffer = CharBuffer.wrap(utf8Text);
+            this.charsWritten = 0;
+            this.charsRead = 0;
+            this.decodedStdout = new StringBuilder();
+            this.stdinOverflow = false;
+            this.exitCode = -1;
+        }
+
+        @Override
+        public void onStart(NuProcess nuProcess)
+        {
+            this.nuProcess = nuProcess;
+            nuProcess.wantWrite();
+        }
+
+        @Override
+        public void onExit(int statusCode)
+        {
+            exitCode = statusCode;
+            semaphore.release();
+        }
+
+        @Override
+        public void onStdoutChars(CharBuffer buffer, boolean closed, CoderResult coderResult)
+        {
+            charsRead += buffer.remaining();
+            decodedStdout.append(buffer);
+            buffer.position(buffer.limit());
+
+            if (charsRead == charsWritten) {
+              nuProcess.closeStdin();
+            }
+        }
+
+        @Override
+        public boolean onStdinCharsReady(CharBuffer buffer)
+        {
+          if (utf8Buffer.remaining() <= buffer.remaining()) {
+            charsWritten += utf8Buffer.remaining();
+            buffer.put(utf8Buffer);
+            buffer.flip();
+            return false;
+          } else {
+            charsWritten += buffer.remaining();
+            buffer.put(utf8Buffer.subSequence(0, buffer.remaining()));
+            buffer.flip();
+            utf8Buffer.position(utf8Buffer.position() + buffer.remaining());
+            stdinOverflow = true;
+            return true;
+          }
         }
     };
 }

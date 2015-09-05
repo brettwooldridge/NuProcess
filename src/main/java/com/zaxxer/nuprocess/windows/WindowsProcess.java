@@ -298,7 +298,8 @@ public final class WindowsProcess implements NuProcess
       try {
          if (transferred < 0) {
             outClosed = true;
-            processHandler.onStdout(null);
+            stdoutPipe.buffer.flip();
+            processHandler.onStdout(stdoutPipe.buffer, true);
             return;
          }
          else if (transferred == 0) {
@@ -306,14 +307,20 @@ public final class WindowsProcess implements NuProcess
          }
 
          final ByteBuffer buffer = stdoutPipe.buffer;
+         buffer.limit(buffer.position() + transferred);
          buffer.position(0);
-         buffer.limit(transferred);
-
-         processHandler.onStdout(buffer);
+         processHandler.onStdout(buffer, false);
+         buffer.compact();
       }
       catch (Exception e) {
          // Don't let an exception thrown from the user's handler interrupt us
          e.printStackTrace();
+      }
+      if (!stdoutPipe.buffer.hasRemaining()) {
+         // The caller's onStdout() callback must set the buffer's position
+         // to indicate how many bytes were consumed, or else it will
+         // eventually run out of capacity.
+         throw new RuntimeException("stdout buffer has no bytes remaining");
       }
    }
 
@@ -326,7 +333,8 @@ public final class WindowsProcess implements NuProcess
       try {
          if (transferred < 0) {
             errClosed = true;
-            processHandler.onStderr(null);
+            stderrPipe.buffer.flip();
+            processHandler.onStderr(stderrPipe.buffer, true);
             return;
          }
          else if (transferred == 0) {
@@ -334,14 +342,20 @@ public final class WindowsProcess implements NuProcess
          }
 
          final ByteBuffer buffer = stderrPipe.buffer;
+         buffer.limit(buffer.position() + transferred);
          buffer.position(0);
-         buffer.limit(transferred);
-
-         processHandler.onStderr(buffer);
+         processHandler.onStderr(buffer, false);
+         buffer.compact();
       }
       catch (Exception e) {
          // Don't let an exception thrown from the user's handler interrupt us
          e.printStackTrace();
+      }
+      if (!stderrPipe.buffer.hasRemaining()) {
+         // The caller's onStdout() callback must set the buffer's position
+         // to indicate how many bytes were consumed, or else it will
+         // eventually run out of capacity.
+         throw new RuntimeException("stderr buffer has no bytes remaining");
       }
    }
 
@@ -415,6 +429,14 @@ public final class WindowsProcess implements NuProcess
       try {
     	 isRunning = false;
          exitCode.set(statusCode);
+         if (stdoutPipe.buffer != null && !outClosed) {
+           stdoutPipe.buffer.flip();
+           processHandler.onStdout(stdoutPipe.buffer, true);
+         }
+         if (stderrPipe.buffer != null && !errClosed) {
+           stderrPipe.buffer.flip();
+           processHandler.onStderr(stderrPipe.buffer, true);
+         }
          if (statusCode != Integer.MAX_VALUE - 1) {
             processHandler.onExit(statusCode);
          }

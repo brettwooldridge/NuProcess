@@ -69,12 +69,10 @@ public class DirectWrite
         NuProcessHandler processListener = new NuAbstractProcessHandler()
         {
             @Override
-            public void onStdout(ByteBuffer buffer)
+            public void onStdout(ByteBuffer buffer, boolean closed)
             {
-                if (buffer != null)
-                {
-                    count.addAndGet(buffer.remaining());
-                }
+                count.addAndGet(buffer.remaining());
+                buffer.position(buffer.limit());
             }
         };
 
@@ -101,12 +99,10 @@ public class DirectWrite
         NuProcessHandler processListener = new NuAbstractProcessHandler()
         {
             @Override
-            public void onStdout(ByteBuffer buffer)
+            public void onStdout(ByteBuffer buffer, boolean closed)
             {
-                if (buffer != null)
-                {
-                    count.addAndGet(buffer.remaining());
-                }
+                count.addAndGet(buffer.remaining());
+                buffer.position(buffer.limit());
             }
         };
 
@@ -146,13 +142,8 @@ public class DirectWrite
         }
 
         @Override
-        public void onStdout(ByteBuffer buffer)
+        public void onStdout(ByteBuffer buffer, boolean closed)
         {
-            if (buffer == null)
-            {
-                return;
-            }
-
             byte[] chars = new byte[buffer.remaining()];
             buffer.get(chars);
             result = new String(chars);
@@ -187,13 +178,8 @@ public class DirectWrite
         }
 
         @Override
-        public void onStdout(ByteBuffer buffer)
+        public void onStdout(ByteBuffer buffer, boolean closed)
         {
-            if (buffer == null)
-            {
-                return;
-            }
-
             while (buffer.hasRemaining())
             {
                 checksum2 += buffer.get();

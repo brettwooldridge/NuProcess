@@ -128,20 +128,15 @@ public class NuSchool
         }
 
         @Override
-        public void onStdout(ByteBuffer buffer)
+        public void onStdout(ByteBuffer buffer, boolean closed)
         {
-            if (buffer == null)
-            {
-                return;
-            }
-
             size += buffer.remaining();
 
             byte[] bytes = new byte[buffer.remaining()];
             buffer.get(bytes);
             readAdler32.update(bytes);
-            
-            if (size == LIMIT)
+
+            if (size == LIMIT || closed)
             {
                 nuProcess.closeStdin();
             }

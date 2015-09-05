@@ -70,7 +70,7 @@ public interface NuProcess
     * result is the accumulation of unwritten ByteBuffers in the Java process and possibly an
     * eventual out of memory condition.  Using a Direct ByteBuffer will provide performance
     * improvements.  Note that NuProcess will not flip the buffer for you; after writing your
-    * data into the {@code buffer} you must flip the buffer before calling this method.
+    * data into the {@code buffer} you must flip the buffer before returning from this method.
     *
     * @param buffer the {@link ByteBuffer} to write to the STDIN stream of the process
     */

@@ -89,61 +89,74 @@ public interface NuProcessHandler
    void onExit(int exitCode);
 
    /**
-     * This method is invoked when there is stdout data to process or an
-     * the end-of-file (EOF) condition has been reached.  In the case
-     * of EOF, the {@code buffer} parameter will be {@code null};
-     * this is your signal that EOF has been reached.
-     * <p>
-     * You do not own the {@link ByteBuffer} provided to you.
-     * You should not retain a reference to this buffer. <i>It is required that you
-     * completely process the entire contents of the buffer when it is
-     * passed to you</i>, as it's contents will be completely overwritten
-     * immediately upon receipt of more data without regard for position
-     * or limit.
-     * <p>
-     * Exceptions thrown out from your method will be ignored, but your
-     * method should handle all exceptions itself.
-     *
-     * @param buffer a {@link ByteBuffer} containing received
-     *               stderr data, or {@code null} signifying that an EOF condition
-     *               has been reached
-     */
-   void onStdout(ByteBuffer buffer);
+    * This method is invoked when there is stdout data to process or an
+    * the end-of-file (EOF) condition has been reached.  In the case
+    * of EOF, the {@code closed} parameter will be {@code true};
+    * this is your signal that EOF has been reached.
+    * <p>
+    * You do not own the {@link ByteBuffer} provided to you.
+    * You should not retain a reference to this buffer.
+    * <p>
+    * Upon returning from this method, if any bytes are left in the
+    * buffer (i.e., {@code buffer.hasRemaining()} returns {@code true}),
+    * then the buffer will be {@link ByteBuffer#compact() compacted}
+    * after returning. Any unused data will be kept at the
+    * start of the buffer and passed back to you as part of the next
+    * invocation of this method (which might be when EOF is reached
+    * and {@code closed} is {@code true}).
+    * <p>
+    * Exceptions thrown out from your method will be ignored, but your
+    * method should handle all exceptions itself.
+    *
+    * @param buffer a {@link ByteBuffer} containing received
+    *               stdout data
+    * @param closed {@code true} if EOF has been reached
+    */
+   void onStdout(ByteBuffer buffer, boolean closed);
 
    /**
     * This method is invoked when there is stderr data to process or an
     * the end-of-file (EOF) condition has been reached.  In the case
-    * of EOF, the {@code buffer} parameter will be {@code null};
+    * of EOF, the {@code closed} parameter will be {@code true};
     * this is your signal that EOF has been reached.
     * <p>
     * You do not own the {@link ByteBuffer} provided to you.
-    * You should not retain a reference to this buffer. <i>It is required that you
-    * completely process the entire contents of the buffer when it is
-    * passed to you</i>, as it's contents will be completely overwritten
-    * immediately upon receipt of more data without regard for position
-    * or limit.
+    * You should not retain a reference to this buffer.
+    * <p>
+    * Upon returning from this method, if any bytes are left in the
+    * buffer (i.e., {@code buffer.hasRemaining()} returns {@code true}),
+    * then the buffer will be {@link ByteBuffer#compact() compacted}
+    * after returning. Any unused data will be kept at the
+    * start of the buffer and passed back to you as part of the next
+    * invocation of this method (which might be when EOF is reached
+    * and {@code closed} is {@code true}).
     * <p>
     * Users wishing to merge stderr into stdout should simply delegate
-    * this callback to {@link #onStdout(ByteBuffer)} when invoked, like so:
+    * this callback to {@link #onStdout(ByteBuffer, boolean)} when invoked, like so:
     * <pre>
-    *    public void onStderr(ByteBuffer buffer) {
-    *       if (buffer != null) {
-    *          onStdout(buffer);
+    *    public void onStderr(ByteBuffer buffer, closed) {
+    *       if (!closed) {
+    *          onStdout(buffer, closed);
     *       }
     *    }
     * </pre>
-    * Notice that a null check is performed.  If you merge streams in
-    * this way, and you do not check for null here, then your {@link #onStdout(ByteBuffer)}
+    * <p>
+    * Notice that an EOF check is performed.  If you merge streams in
+    * this way, and you do not check for EOF here, then your
+    * {@link #onStdout(ByteBuffer, boolean)}
     * method will be called twice for an EOF condition; once when the
     * stdout stream closes, and once when the stderr stream closes.  If
-    * you check for null as above, your {@link #onStdout(ByteBuffer)} method would only
-    * be called once (for the close of stdout).
+    * you check for EOF as above, your {@link #onStdout(ByteBuffer, boolean)}
+    * method would only be called once (for the close of stdout).
+    * <p>
+    * Exceptions thrown out from your method will be ignored, but your
+    * method should handle all exceptions itself.
     * 
     * @param buffer a {@link ByteBuffer} containing received
-    *               stderr data, or {@code null} signifying that an EOF condition
-    *               has been reached
+    *               stderr data
+    * @param closed {@code true} if EOF has been reached
     */
-   void onStderr(ByteBuffer buffer);
+  void onStderr(ByteBuffer buffer, boolean closed);
 
    /**
     * This method is invoked after you have expressed a desire to write to stdin

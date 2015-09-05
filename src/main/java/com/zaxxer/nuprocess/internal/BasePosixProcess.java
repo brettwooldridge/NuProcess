@@ -16,10 +16,13 @@
 
 package com.zaxxer.nuprocess.internal;
 
-import static com.zaxxer.nuprocess.internal.LibC.WEXITSTATUS;
-import static com.zaxxer.nuprocess.internal.LibC.WIFEXITED;
-import static com.zaxxer.nuprocess.internal.LibC.WIFSIGNALED;
-import static com.zaxxer.nuprocess.internal.LibC.WTERMSIG;
+import com.sun.jna.Memory;
+import com.sun.jna.Native;
+import com.sun.jna.Pointer;
+import com.sun.jna.StringArray;
+import com.sun.jna.ptr.IntByReference;
+import com.zaxxer.nuprocess.NuProcess;
+import com.zaxxer.nuprocess.NuProcessHandler;
 
 import java.nio.ByteBuffer;
 import java.util.HashSet;
@@ -32,13 +35,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import com.sun.jna.Memory;
-import com.sun.jna.Native;
-import com.sun.jna.Pointer;
-import com.sun.jna.StringArray;
-import com.sun.jna.ptr.IntByReference;
-import com.zaxxer.nuprocess.NuProcess;
-import com.zaxxer.nuprocess.NuProcessHandler;
+import static com.zaxxer.nuprocess.internal.LibC.*;
 
 public abstract class BasePosixProcess implements NuProcess
 {
@@ -62,8 +59,10 @@ public abstract class BasePosixProcess implements NuProcess
 
    // ******* Input/Output Buffers
    protected ByteBuffer outBuffer;
+   protected ByteBuffer errBuffer;
    protected ByteBuffer inBuffer;
    protected Pointer outBufferPointer;
+   protected Pointer errBufferPointer;
    protected Pointer inBufferPointer;
 
    // ******* Stdin/Stdout/Stderr pipe handles
@@ -357,6 +356,17 @@ public abstract class BasePosixProcess implements NuProcess
 
          isRunning = false;
          exitCode.set(statusCode);
+
+         if (outBuffer != null && !outClosed) {
+           outBuffer.flip();
+           processHandler.onStdout(outBuffer, true);
+         }
+
+         if (errBuffer != null && !errClosed) {
+           errBuffer.flip();
+           processHandler.onStderr(errBuffer, true);
+         }
+
          if (statusCode != Integer.MAX_VALUE - 1) {
             processHandler.onExit(statusCode);
          }
@@ -368,6 +378,7 @@ public abstract class BasePosixProcess implements NuProcess
     	 exitPending.countDown();
 
          Native.free(Pointer.nativeValue(outBufferPointer));
+         Native.free(Pointer.nativeValue(errBufferPointer));
          Native.free(Pointer.nativeValue(inBufferPointer));
 
          processHandler = null;
@@ -383,27 +394,38 @@ public abstract class BasePosixProcess implements NuProcess
       try {
          if (availability < 0) {
             outClosed = true;
-            processHandler.onStdout(null);
+            outBuffer.flip();
+            processHandler.onStdout(outBuffer, true);
             return;
          }
          else if (availability == 0) {
             return;
          }
 
-         int read = LibC.read(stdout.get(), outBufferPointer, Math.min(availability, BUFFER_CAPACITY));
+         int read = LibC.read(
+             stdout.get(),
+             outBufferPointer.share(outBuffer.position()),
+             Math.min(availability, outBuffer.remaining()));
          if (read == -1) {
             outClosed = true;
             throw new RuntimeException("Unexpected eof");
             // EOF?
          }
 
+         outBuffer.limit(outBuffer.position() + read);
          outBuffer.position(0);
-         outBuffer.limit(read);
-         processHandler.onStdout(outBuffer);
+         processHandler.onStdout(outBuffer, false);
+         outBuffer.compact();
       }
       catch (Exception e) {
          // Don't let an exception thrown from the user's handler interrupt us
          e.printStackTrace(System.err);
+      }
+      if (!outBuffer.hasRemaining()) {
+         // The caller's onStdout() callback must set the buffer's position
+         // to indicate how many bytes were consumed, or else it will
+         // eventually run out of capacity.
+         throw new RuntimeException("stdout buffer has no bytes remaining");
       }
    }
 
@@ -416,24 +438,35 @@ public abstract class BasePosixProcess implements NuProcess
       try {
          if (availability < 0) {
             errClosed = true;
-            processHandler.onStderr(null);
+            errBuffer.flip();
+            processHandler.onStderr(errBuffer, true);
             return;
          }
 
-         int read = LibC.read(stderr.get(), outBufferPointer, Math.min(availability, BUFFER_CAPACITY));
+         int read = LibC.read(
+             stderr.get(),
+             errBufferPointer.share(errBuffer.position()),
+             Math.min(availability, errBuffer.remaining()));
          if (read == -1) {
             // EOF?
             errClosed = true;
             throw new RuntimeException("Unexpected eof");
          }
 
-         outBuffer.position(0);
-         outBuffer.limit(read);
-         processHandler.onStderr(outBuffer);
+         errBuffer.limit(errBuffer.position() + read);
+         errBuffer.position(0);
+         processHandler.onStderr(errBuffer, false);
+         errBuffer.compact();
       }
       catch (Exception e) {
          // Don't let an exception thrown from the user's handler interrupt us
          e.printStackTrace(System.err);
+      }
+      if (!errBuffer.hasRemaining()) {
+         // The caller's onStderr() callback must set the buffer's position
+         // to indicate how many bytes were consumed, or else it will
+         // eventually run out of capacity.
+         throw new RuntimeException("stderr buffer has no bytes remaining");
       }
    }
 
@@ -528,6 +561,10 @@ public abstract class BasePosixProcess implements NuProcess
       long peer = Native.malloc(BUFFER_CAPACITY);
       outBuffer = UnsafeHelper.wrapNativeMemory(peer, BUFFER_CAPACITY);
       outBufferPointer = new Pointer(peer);
+
+      peer = Native.malloc(BUFFER_CAPACITY);
+      errBuffer = UnsafeHelper.wrapNativeMemory(peer, BUFFER_CAPACITY);
+      errBufferPointer = new Pointer(peer);
 
       peer = Native.malloc(BUFFER_CAPACITY);
       inBuffer = UnsafeHelper.wrapNativeMemory(peer, BUFFER_CAPACITY);

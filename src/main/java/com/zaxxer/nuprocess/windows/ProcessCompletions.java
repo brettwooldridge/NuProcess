@@ -237,7 +237,12 @@ public final class ProcessCompletions implements Runnable
 
    private void queueRead(final WindowsProcess process, final WindowsProcess.PipeBundle pipe, final int stdX)
    {
-      if (NuKernel32.ReadFile(pipe.pipeHandle, pipe.bufferPointer, NuProcess.BUFFER_CAPACITY, null, pipe.overlapped) == 0) {
+      // The caller must call position() on the buffer to indicate how many bytes
+      // were read from stdout / stderr.
+      if (!pipe.buffer.hasRemaining()) {
+         throw new RuntimeException("stdout / stderr buffer has no bytes remaining");
+      }
+      if (NuKernel32.ReadFile(pipe.pipeHandle, pipe.bufferPointer.share(pipe.buffer.position()), pipe.buffer.remaining(), null, pipe.overlapped) == 0) {
          int lastError = Native.getLastError();
          switch (lastError) {
          case WinNT.ERROR_SUCCESS:

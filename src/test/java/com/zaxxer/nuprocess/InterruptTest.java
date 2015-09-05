@@ -64,14 +64,10 @@ public class InterruptTest
             }
 
             @Override
-            public void onStdout(ByteBuffer buffer)
+            public void onStdout(ByteBuffer buffer, boolean closed)
             {
-                if (buffer == null)
-                {
-                    return;
-                }
-
                 count.addAndGet(buffer.remaining());
+                buffer.position(buffer.limit());
             }
 
             @Override
@@ -112,12 +108,9 @@ public class InterruptTest
             }
 
             @Override
-            public void onStdout(ByteBuffer buffer)
+            public void onStdout(ByteBuffer buffer, boolean closed)
             {
-                if (buffer == null)
-                {
-                    return;
-                }
+                buffer.position(buffer.limit());
             }
 
             @Override
