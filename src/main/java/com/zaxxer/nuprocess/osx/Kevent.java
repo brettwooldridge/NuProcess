@@ -31,11 +31,6 @@ public final class Kevent
       this.pointer = pointer;
    }
 
-   void free()
-   {
-      Native.free(Pointer.nativeValue(pointer));
-   }
-
    void clear()
    {
       pointer.clear(32);
