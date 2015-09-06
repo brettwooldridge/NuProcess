@@ -71,6 +71,8 @@ public abstract class BaseEventProcessor<T extends BasePosixProcess> implements 
       catch (Exception e) {
          // TODO: how to handle this error?
          isRunning.set(false);
+      } finally {
+         cleanup();
       }
    }
 
@@ -102,4 +104,10 @@ public abstract class BaseEventProcessor<T extends BasePosixProcess> implements 
          LibC.waitpid(process.getPid(), exitCode, LibC.WNOHANG);
       }
    }
+
+   /**
+    * Invoked when the event processor is cleaning up. Override this
+    * to clean up any resources allocated by your event processor.
+    */
+   protected void cleanup() { }
 }
