@@ -37,8 +37,10 @@ import static com.zaxxer.nuprocess.internal.LibC.*;
  */
 final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
 {
+   // If we return false from process() even once while no processes
+   // are registered, we'll shut down the event processor thread.
+   private static final int LINGER_ITERATIONS = 0;
    private static final int NUM_KEVENTS = 64;
-   private static final TimeSpec timeSpec;
    private static final int JAVA_PID;
 
    private volatile int kqueue;
@@ -48,13 +50,10 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
 
    static {
       JAVA_PID = LibC.getpid();
-
-      timeSpec = new TimeSpec();
-      timeSpec.tv_sec = 0;
-      timeSpec.tv_nsec = TimeUnit.MILLISECONDS.toNanos(DEADPOOL_POLL_INTERVAL);
    }
 
    ProcessKqueue() {
+      super(LINGER_ITERATIONS);
       kqueue = LibKevent.kqueue();
       if (kqueue < 0) {
          throw new RuntimeException("Unable to create kqueue");
@@ -169,8 +168,26 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
    @Override
    public boolean process()
    {
+      TimeSpec timeout;
+      if (pidToProcessMap.isEmpty()) {
+         // No processes registered. Wait up to LINGER_TIME_MS for a process to show up
+         // and signal one of its registered events.
+         //
+         // We know at least one event is registered on the kqueue (EVFILT_SIGNAL),
+         // so kevent() will block. (If no events are registered, kevent() will not block
+         // even if you pass it a timeout, unlike select()).
+         timeout = new TimeSpec();
+         // kevent() will return EINVAL if tv_nsec represents a value > 1 second,
+         // so split the linger time over tv_sec and tv_nsec.
+         timeout.tv_sec = LINGER_TIME_MS / 1000;
+         timeout.tv_nsec = TimeUnit.MILLISECONDS.toNanos(LINGER_TIME_MS % 1000);
+      } else {
+         // At least one process is registered. There's no need to have a timeout.
+         timeout = null;
+      }
+
       Kevent[] kevents = keventArray.get();
-      int nev = LibKevent.kevent(kqueue, null, 0, kevents[0].getPointer(), NUM_KEVENTS, timeSpec);
+      int nev = LibKevent.kevent(kqueue, null, 0, kevents[0].getPointer(), NUM_KEVENTS, timeout);
       if (nev == -1) {
          throw new RuntimeException("Error waiting for kevent");
       }
@@ -305,6 +322,7 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
    {
       LibC.waitpid(osxProcess.getPid(), new IntByReference(), LibC.WNOHANG);
 
+      // If this is the last process in the map, this thread will cleanly shut down.
       pidToProcessMap.remove(osxProcess.getPid());
    }
 }
