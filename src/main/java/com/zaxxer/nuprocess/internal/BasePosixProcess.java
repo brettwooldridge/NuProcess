@@ -149,13 +149,16 @@ public abstract class BasePosixProcess implements NuProcess
       }
 
       if (IS_LINUX) {
-         linuxCwdExecutorService = new ThreadPoolExecutor(
+         ThreadPoolExecutor executor = new ThreadPoolExecutor(
              /* corePoolSize */ numThreads,
              /* maximumPoolSize */ numThreads,
-             /* keepAliveTime */ 0L, TimeUnit.MILLISECONDS,
+             /* keepAliveTime */ BaseEventProcessor.LINGER_TIME_MS, TimeUnit.MILLISECONDS,
              /* workQueue */ new LinkedBlockingQueue<Runnable>(),
              /* threadFactory */ new LinuxCwdThreadFactory(),
              /* handler */ new ThreadPoolExecutor.DiscardPolicy());
+         // Allow going back down to 0 threads after LINGER_TIME_MS.
+         executor.allowCoreThreadTimeOut(true);
+         linuxCwdExecutorService = executor;
       }
    }
 
