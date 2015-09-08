@@ -65,11 +65,10 @@ class ProcessHandler extends NuAbstractProcessHandler {
    }
 
    @Override
-   public void onStdout(ByteBuffer buffer) {
-      if (buffer == null)
-         return;
-
+   public void onStdout(ByteBuffer buffer, boolean closed) {
       byte[] bytes = new byte[buffer.remaining()];
+      // You must update buffer.position() before returning (either implicitly,
+      // like this, or explicitly) to indicate how many bytes your handler has consumed.
       buffer.get(bytes);
       System.out.println(new String(bytes));
 
@@ -106,10 +105,7 @@ class ProcessHandler extends NuAbstractProcessHandler {
    }
    
    @Override
-   public void onStdout(ByteBuffer buffer) {
-      if (buffer == null)
-         return;
-
+   public void onStdout(ByteBuffer buffer, boolean closed) {
       byte[] bytes = new byte[buffer.remaining()];
       buffer.get(bytes);
       System.out.println(new String(bytes));
