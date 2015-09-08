@@ -28,7 +28,6 @@ import com.sun.jna.ptr.IntByReference;
 import com.zaxxer.nuprocess.internal.BaseEventProcessor;
 import com.zaxxer.nuprocess.internal.LibC;
 import com.zaxxer.nuprocess.osx.LibKevent.Kevent;
-import com.zaxxer.nuprocess.osx.LibKevent.TimeSpec;
 
 import static com.zaxxer.nuprocess.internal.LibC.*;
 
@@ -38,7 +37,6 @@ import static com.zaxxer.nuprocess.internal.LibC.*;
 final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
 {
    private static final int NUM_KEVENTS = 64;
-   private static final TimeSpec timeSpec;
    private static final int JAVA_PID;
 
    private volatile int kqueue;
@@ -48,10 +46,6 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
 
    static {
       JAVA_PID = LibC.getpid();
-
-      timeSpec = new TimeSpec();
-      timeSpec.tv_sec = 0;
-      timeSpec.tv_nsec = TimeUnit.MILLISECONDS.toNanos(DEADPOOL_POLL_INTERVAL);
    }
 
    ProcessKqueue() {
@@ -170,7 +164,7 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
    public boolean process()
    {
       Kevent[] kevents = keventArray.get();
-      int nev = LibKevent.kevent(kqueue, null, 0, kevents[0].getPointer(), NUM_KEVENTS, timeSpec);
+      int nev = LibKevent.kevent(kqueue, null, 0, kevents[0].getPointer(), NUM_KEVENTS, null);
       if (nev == -1) {
          throw new RuntimeException("Error waiting for kevent");
       }
