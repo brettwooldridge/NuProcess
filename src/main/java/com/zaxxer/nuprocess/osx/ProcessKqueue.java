@@ -44,7 +44,9 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
    private static final int JAVA_PID;
 
    private volatile int kqueue;
-   private ThreadLocal<Kevent[]> keventArray;
+
+   // Re-used in process() to avoid repeatedly allocating and destroying array of events.
+   private Kevent[] processEvents;
    private BlockingQueue<OsxProcess> closeQueue;
    private BlockingQueue<OsxProcess> wantsWrite;
 
@@ -61,17 +63,11 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
 
       closeQueue = new ArrayBlockingQueue<OsxProcess>(512);
       wantsWrite = new ArrayBlockingQueue<OsxProcess>(512);
-      keventArray = new ThreadLocal<Kevent[]>() {
-          @Override
-          protected Kevent[] initialValue() {
-              return (Kevent[]) new Kevent().toArray(NUM_KEVENTS);
-          }
-      };
+      processEvents = (Kevent[]) new Kevent().toArray(NUM_KEVENTS);
 
       // Listen for self-generated signal to tell processor to wake-up and handling pending stdin requests
-      Kevent[] events = keventArray.get();
-      events[0].EV_SET(LibC.SIGUSR2, Kevent.EVFILT_SIGNAL, Kevent.EV_ADD | Kevent.EV_RECEIPT, 0, 0l, Pointer.NULL);
-      registerEvents(events, 1);
+      processEvents[0].EV_SET(LibC.SIGUSR2, Kevent.EVFILT_SIGNAL, Kevent.EV_ADD | Kevent.EV_RECEIPT, 0, 0l, Pointer.NULL);
+      registerEvents(processEvents, 1);
    }
 
    // ************************************************************************
@@ -90,8 +86,8 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
 
       pidToProcessMap.put(pid, process);
 
-      // We don't use keventArray.get() here since this is called from the user's thread, so allocating
-      // the thread-local events array which will never be re-used is pretty wasteful.
+      // We don't use the processEvents array here, since this method is not
+      // called on the event processor thread.
       Kevent[] events = (Kevent[]) new Kevent().toArray(4);
       // Listen for process exit (one-shot event)
       events[0].EV_SET(
@@ -186,8 +182,7 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
          timeout = null;
       }
 
-      Kevent[] kevents = keventArray.get();
-      int nev = LibKevent.kevent(kqueue, null, 0, kevents[0].getPointer(), NUM_KEVENTS, timeout);
+      int nev = LibKevent.kevent(kqueue, null, 0, processEvents[0].getPointer(), processEvents.length, timeout);
       if (nev == -1) {
          throw new RuntimeException("Error waiting for kevent");
       }
@@ -200,16 +195,10 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
       // native function, you are responsible to call read() afterwards to
       // populate the fields of the structure(s).
       for (int i = 0; i < nev; i++) {
-        kevents[i].read();
-        processEvent(kevents[i]);
+        processEvents[i].read();
+        processEvent(processEvents[i]);
       }
       return true;
-   }
-
-   @Override
-   protected void cleanup()
-   {
-      keventArray.remove();
    }
 
    private void processEvent(Kevent kevent)
@@ -259,7 +248,9 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
          }
          if (!userWantsMore) {
             // No more stdin for now. Disable the event.
-            Kevent[] events = keventArray.get();
+            // We could use processEvents here and overwrite just the first entry, but this probably doesn't happen
+            // enough to warrant that optimization.
+            Kevent[] events = (Kevent[]) new Kevent().toArray(1);
             events[0].EV_SET(
                 osxProcess.getStdin().get(), Kevent.EVFILT_WRITE, Kevent.EV_DISABLE | Kevent.EV_RECEIPT, 0, 0l, Pointer.createConstant(osxProcess.getPid()));
             registerEvents(events, 1);
@@ -304,11 +295,13 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
    private void checkWaitWrites()
    {
       List<OsxProcess> processes = new ArrayList<OsxProcess>();
-     // drainTo() is known to be atomic for ArrayBlockingQueue
+      // drainTo() is known to be atomic for ArrayBlockingQueue
       wantsWrite.drainTo(processes, NUM_KEVENTS);
       if (!processes.isEmpty()) {
          // Enable stdin-ready notifications for each process which wants it.
-         Kevent[] kevents = keventArray.get();
+         // We don't use the processEvents array here, since this is invoked from process()
+         // and we would be overwriting the contents of that array while it's being processed.
+         Kevent[] kevents = (Kevent[]) new Kevent().toArray(processes.size());
          for (int i = 0; i < processes.size(); i++) {
             OsxProcess process = processes.get(i);
             kevents[i].EV_SET(
