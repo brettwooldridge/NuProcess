@@ -44,7 +44,7 @@ public abstract class BasePosixProcess implements NuProcess
    private static final boolean LINUX_USE_VFORK = Boolean.parseBoolean(System.getProperty("com.zaxxer.nuprocess.linuxUseVfork", "true"));
    private static final boolean IS_SOFTEXIT_DETECTION;
 
-   protected static IEventProcessor<? extends BasePosixProcess>[] processors;
+   protected static final IEventProcessor<? extends BasePosixProcess>[] processors;
    protected static int processorRoundRobin;
 
    protected IEventProcessor<? super BasePosixProcess> myProcessor;
@@ -80,12 +80,10 @@ public abstract class BasePosixProcess implements NuProcess
    private int remainingWrite;
    private int writeOffset;
 
-   private Pointer posix_spawn_file_actions;
-
    static {
       IS_SOFTEXIT_DETECTION = Boolean.valueOf(System.getProperty("com.zaxxer.nuprocess.softExitDetection", "true"));
 
-      int numThreads = 1;
+      int numThreads;
       String threads = System.getProperty("com.zaxxer.nuprocess.threads", "auto");
       if ("auto".equals(threads)) {
          numThreads = Math.max(1, Runtime.getRuntime().availableProcessors() / 2);
@@ -104,9 +102,9 @@ public abstract class BasePosixProcess implements NuProcess
             @Override
             public void run()
             {
-               for (int i = 0; i < processors.length; i++) {
-                  if (processors[i] != null) {
-                     processors[i].shutdown();
+               for (IEventProcessor<? extends BasePosixProcess> processor : processors) {
+                  if (processor != null) {
+                     processor.shutdown();
                   }
                }
             }
@@ -223,11 +221,11 @@ public abstract class BasePosixProcess implements NuProcess
    {
       callPreStart();
       
-      String[] commands = command.toArray(new String[0]);
+      String[] commands = command.toArray(new String[command.size()]);
 
       Pointer posix_spawn_file_actions = createPipes();
 
-      Pointer posix_spawnattr = null;
+      Pointer posix_spawnattr;
       if (IS_LINUX) {
          long peer = Native.malloc(340);
          posix_spawnattr = new Pointer(peer);
@@ -254,6 +252,8 @@ public abstract class BasePosixProcess implements NuProcess
          rc = LibC.posix_spawnp(restrict_pid, commands[0], posix_spawn_file_actions, posix_spawnattr, new StringArray(commands), new StringArray(environment));
 
          pid = restrict_pid.getValue();
+
+         initializeBuffers();
 
          // This is necessary on Linux because spawn failures are not reflected in the rc, and this will reap
          // any zombies due to launch failure
@@ -398,9 +398,6 @@ public abstract class BasePosixProcess implements NuProcess
             processHandler.onStdout(outBuffer, true);
             return;
          }
-         else if (availability == 0) {
-            return;
-         }
 
          int read = LibC.read(
              stdout.get(),
@@ -478,7 +475,7 @@ public abstract class BasePosixProcess implements NuProcess
       }
 
       if (remainingWrite > 0) {
-         int wrote = 0;
+         int wrote;
          do {
             wrote = LibC.write(fd, inBufferPointer.share(writeOffset), Math.min(remainingWrite, availability));
             if (wrote < 0) {
@@ -552,9 +549,13 @@ public abstract class BasePosixProcess implements NuProcess
 
    private void afterStart()
    {
+      isRunning = true;
+   }
+
+   private void initializeBuffers()
+   {
       outClosed = false;
       errClosed = false;
-      isRunning = true;
 
       pendingWrites = new ConcurrentLinkedQueue<ByteBuffer>();
 
@@ -574,7 +575,7 @@ public abstract class BasePosixProcess implements NuProcess
    @SuppressWarnings("unchecked")
    private void registerProcess()
    {
-      int mySlot = 0;
+      int mySlot;
       synchronized (processors) {
          mySlot = processorRoundRobin;
          processorRoundRobin = (processorRoundRobin + 1) % processors.length;
@@ -629,13 +630,13 @@ public abstract class BasePosixProcess implements NuProcess
 
    private Pointer createPipes()
    {
-      int rc = 0;
+      int rc;
 
       int[] in = new int[2];
       int[] out = new int[2];
       int[] err = new int[2];
 
-      posix_spawn_file_actions = null;
+      Pointer posix_spawn_file_actions;
       if (IS_LINUX) {
          long peer = Native.malloc(80);
          posix_spawn_file_actions = new Pointer(peer);
