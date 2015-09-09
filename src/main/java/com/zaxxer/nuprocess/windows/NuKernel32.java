@@ -24,15 +24,17 @@ import com.sun.jna.NativeLibrary;
 import com.sun.jna.Pointer;
 import com.sun.jna.Structure;
 import com.sun.jna.WString;
-import com.sun.jna.platform.win32.BaseTSD.ULONG_PTR;
-import com.sun.jna.platform.win32.BaseTSD.ULONG_PTRByReference;
-import com.sun.jna.platform.win32.WinBase;
-import com.sun.jna.platform.win32.WinBase.SECURITY_ATTRIBUTES;
-import com.sun.jna.platform.win32.WinDef.DWORD;
-import com.sun.jna.platform.win32.WinNT.HANDLE;
 import com.sun.jna.ptr.IntByReference;
 import com.sun.jna.ptr.PointerByReference;
 import com.sun.jna.win32.W32APIOptions;
+
+import com.zaxxer.nuprocess.windows.NuWinNT.DWORD;
+import com.zaxxer.nuprocess.windows.NuWinNT.HANDLE;
+import com.zaxxer.nuprocess.windows.NuWinNT.SECURITY_ATTRIBUTES;
+import com.zaxxer.nuprocess.windows.NuWinNT.PROCESS_INFORMATION;
+import com.zaxxer.nuprocess.windows.NuWinNT.STARTUPINFO;
+import com.zaxxer.nuprocess.windows.NuWinNT.ULONG_PTRByReference;
+import com.zaxxer.nuprocess.windows.NuWinNT.ULONG_PTR;
 
 public class NuKernel32
 {
@@ -45,17 +47,17 @@ public class NuKernel32
 
    public static native HANDLE CreateIoCompletionPort(HANDLE fileHandle, HANDLE existingCompletionPort, ULONG_PTR completionKey, int numberOfThreads);
 
-   public static native boolean CreateProcessW(WString lpApplicationName, char[] lpCommandLine, WinBase.SECURITY_ATTRIBUTES lpProcessAttributes,
-                                               WinBase.SECURITY_ATTRIBUTES lpThreadAttributes, boolean bInheritHandles, DWORD dwCreationFlags,
-                                               Pointer lpEnvironment, char[] lpCurrentDirectory, WinBase.STARTUPINFO lpStartupInfo,
-                                               WinBase.PROCESS_INFORMATION lpProcessInformation);
+   public static native boolean CreateProcessW(WString lpApplicationName, char[] lpCommandLine, SECURITY_ATTRIBUTES lpProcessAttributes,
+                                               SECURITY_ATTRIBUTES lpThreadAttributes, boolean bInheritHandles, DWORD dwCreationFlags,
+                                               Pointer lpEnvironment, char[] lpCurrentDirectory, STARTUPINFO lpStartupInfo,
+                                               PROCESS_INFORMATION lpProcessInformation);
 
    public static native boolean TerminateProcess(HANDLE hProcess, int exitCode);
 
-   public static native HANDLE CreateFile(WString lpFileName, int dwDesiredAccess, int dwShareMode, WinBase.SECURITY_ATTRIBUTES lpSecurityAttributes,
+   public static native HANDLE CreateFile(WString lpFileName, int dwDesiredAccess, int dwShareMode, SECURITY_ATTRIBUTES lpSecurityAttributes,
                                           int dwCreationDisposition, int dwFlagsAndAttributes, HANDLE hTemplateFile);
 
-   public static native HANDLE CreateEvent(WinBase.SECURITY_ATTRIBUTES lpEventAttributes, boolean bManualReset, boolean bInitialState, String lpName);
+   public static native HANDLE CreateEvent(SECURITY_ATTRIBUTES lpEventAttributes, boolean bManualReset, boolean bInitialState, String lpName);
 
    public static native int WaitForSingleObject(HANDLE hHandle, int dwMilliseconds);
 
@@ -83,7 +85,7 @@ public class NuKernel32
                                       NuKernel32.OVERLAPPED lpOverlapped);
 
    /**
-    * The OVERLAPPED structure contains information used in 
+    * The OVERLAPPED structure contains information used in
     * asynchronous (or overlapped) input and output (I/O).
     */
    public static class OVERLAPPED extends Structure

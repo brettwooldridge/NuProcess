@@ -36,17 +36,15 @@ import com.sun.jna.Memory;
 import com.sun.jna.Native;
 import com.sun.jna.Pointer;
 import com.sun.jna.WString;
-import com.sun.jna.platform.win32.WinBase;
-import com.sun.jna.platform.win32.WinBase.PROCESS_INFORMATION;
-import com.sun.jna.platform.win32.WinBase.SECURITY_ATTRIBUTES;
-import com.sun.jna.platform.win32.WinBase.STARTUPINFO;
-import com.sun.jna.platform.win32.WinDef.DWORD;
-import com.sun.jna.platform.win32.WinNT;
-import com.sun.jna.platform.win32.WinNT.HANDLE;
 import com.zaxxer.nuprocess.NuProcess;
 import com.zaxxer.nuprocess.NuProcessHandler;
 import com.zaxxer.nuprocess.internal.UnsafeHelper;
 import com.zaxxer.nuprocess.windows.NuKernel32.OVERLAPPED;
+import com.zaxxer.nuprocess.windows.NuWinNT.DWORD;
+import com.zaxxer.nuprocess.windows.NuWinNT.HANDLE;
+import com.zaxxer.nuprocess.windows.NuWinNT.PROCESS_INFORMATION;
+import com.zaxxer.nuprocess.windows.NuWinNT.SECURITY_ATTRIBUTES;
+import com.zaxxer.nuprocess.windows.NuWinNT.STARTUPINFO;
 
 /**
  * @author Brett Wooldridge
@@ -161,7 +159,7 @@ public final class WindowsProcess implements NuProcess
    @Override
    public void wantWrite()
    {
-      if (hStdinWidow != null && !WinBase.INVALID_HANDLE_VALUE.getPointer().equals(hStdinWidow.getPointer())) {
+      if (hStdinWidow != null && !NuWinNT.INVALID_HANDLE_VALUE.getPointer().equals(hStdinWidow.getPointer())) {
          userWantsWrite.set(true);
          myProcessor.wantWrite(this);
       }
@@ -171,7 +169,7 @@ public final class WindowsProcess implements NuProcess
    @Override
    public synchronized void writeStdin(ByteBuffer buffer)
    {
-      if (hStdinWidow != null && !WinBase.INVALID_HANDLE_VALUE.getPointer().equals(hStdinWidow.getPointer())) {
+      if (hStdinWidow != null && !NuWinNT.INVALID_HANDLE_VALUE.getPointer().equals(hStdinWidow.getPointer())) {
          pendingWrites.add(buffer);
          if (!writePending) {
             myProcessor.wantWrite(this);
@@ -238,11 +236,11 @@ public final class WindowsProcess implements NuProcess
          startupInfo.hStdInput = hStdinWidow;
          startupInfo.hStdError = hStderrWidow;
          startupInfo.hStdOutput = hStdoutWidow;
-         startupInfo.dwFlags = WinNT.STARTF_USESTDHANDLES;
+         startupInfo.dwFlags = NuWinNT.STARTF_USESTDHANDLES;
 
          processInfo = new PROCESS_INFORMATION();
 
-         DWORD dwCreationFlags = new DWORD(WinNT.CREATE_NO_WINDOW | WinNT.CREATE_UNICODE_ENVIRONMENT | WinNT.CREATE_SUSPENDED);
+         DWORD dwCreationFlags = new DWORD(NuWinNT.CREATE_NO_WINDOW | NuWinNT.CREATE_UNICODE_ENVIRONMENT | NuWinNT.CREATE_SUSPENDED);
          char[] cwdChars = (cwd != null) ? Native.toCharArray(cwd.toAbsolutePath().toString()) : null;
          if (!NuKernel32.CreateProcessW(null, getCommandLine(commands), null /*lpProcessAttributes*/, null /*lpThreadAttributes*/, true /*bInheritHandles*/,
                                         dwCreationFlags, env, cwdChars, startupInfo, processInfo)) {
@@ -518,8 +516,8 @@ public final class WindowsProcess implements NuProcess
                                                  0 /*nDefaultTimeOut*/, sattr);
       checkHandleValidity(hStdoutWidow);
 
-      HANDLE stdoutHandle = NuKernel32.CreateFile(pipeName, WinNT.GENERIC_READ, WinNT.FILE_SHARE_READ, null, WinNT.OPEN_EXISTING, WinNT.FILE_ATTRIBUTE_NORMAL
-            | WinNT.FILE_FLAG_OVERLAPPED, null /*hTemplateFile*/);
+      HANDLE stdoutHandle = NuKernel32.CreateFile(pipeName, NuWinNT.GENERIC_READ, NuWinNT.FILE_SHARE_READ, null, NuWinNT.OPEN_EXISTING, NuWinNT.FILE_ATTRIBUTE_NORMAL
+            | NuWinNT.FILE_FLAG_OVERLAPPED, null /*hTemplateFile*/);
       checkHandleValidity(stdoutHandle);
       stdoutPipe = new PipeBundle(stdoutHandle, ioCompletionKey);
       checkPipeConnected(NuKernel32.ConnectNamedPipe(hStdoutWidow, null));
@@ -531,8 +529,8 @@ public final class WindowsProcess implements NuProcess
                                                  0 /*nDefaultTimeOut*/, sattr);
       checkHandleValidity(hStderrWidow);
 
-      HANDLE stderrHandle = NuKernel32.CreateFile(pipeName, WinNT.GENERIC_READ, WinNT.FILE_SHARE_READ, null, WinNT.OPEN_EXISTING, WinNT.FILE_ATTRIBUTE_NORMAL
-            | WinNT.FILE_FLAG_OVERLAPPED, null /*hTemplateFile*/);
+      HANDLE stderrHandle = NuKernel32.CreateFile(pipeName, NuWinNT.GENERIC_READ, NuWinNT.FILE_SHARE_READ, null, NuWinNT.OPEN_EXISTING, NuWinNT.FILE_ATTRIBUTE_NORMAL
+            | NuWinNT.FILE_FLAG_OVERLAPPED, null /*hTemplateFile*/);
       checkHandleValidity(stderrHandle);
       stderrPipe = new PipeBundle(stderrHandle, ioCompletionKey);
       checkPipeConnected(NuKernel32.ConnectNamedPipe(hStderrWidow, null));
@@ -544,8 +542,8 @@ public final class WindowsProcess implements NuProcess
                                                 0 /*nDefaultTimeOut*/, sattr);
       checkHandleValidity(hStdinWidow);
 
-      HANDLE stdinHandle = NuKernel32.CreateFile(pipeName, WinNT.GENERIC_WRITE, WinNT.FILE_SHARE_WRITE, null, WinNT.OPEN_EXISTING, WinNT.FILE_ATTRIBUTE_NORMAL
-            | WinNT.FILE_FLAG_OVERLAPPED, null /*hTemplateFile*/);
+      HANDLE stdinHandle = NuKernel32.CreateFile(pipeName, NuWinNT.GENERIC_WRITE, NuWinNT.FILE_SHARE_WRITE, null, NuWinNT.OPEN_EXISTING, NuWinNT.FILE_ATTRIBUTE_NORMAL
+            | NuWinNT.FILE_FLAG_OVERLAPPED, null /*hTemplateFile*/);
       checkHandleValidity(stdinHandle);
       stdinPipe = new PipeBundle(stdinHandle, ioCompletionKey);
       checkPipeConnected(NuKernel32.ConnectNamedPipe(hStdinWidow, null));
@@ -661,7 +659,7 @@ public final class WindowsProcess implements NuProcess
 
    private void checkHandleValidity(HANDLE handle)
    {
-      if (WinBase.INVALID_HANDLE_VALUE.getPointer().equals(handle)) {
+      if (NuWinNT.INVALID_HANDLE_VALUE.getPointer().equals(handle)) {
          throw new RuntimeException("Unable to create pipe, error " + Native.getLastError());
       }
    }
@@ -669,7 +667,7 @@ public final class WindowsProcess implements NuProcess
    private void checkPipeConnected(int status)
    {
       int lastError;
-      if (status == 0 && ((lastError = Native.getLastError()) != WinNT.ERROR_PIPE_CONNECTED)) {
+      if (status == 0 && ((lastError = Native.getLastError()) != NuWinNT.ERROR_PIPE_CONNECTED)) {
          throw new RuntimeException("Unable to connect pipe, error: " + lastError);
       }
    }
