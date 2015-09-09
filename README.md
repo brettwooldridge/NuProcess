@@ -23,7 +23,7 @@ Java process and the spawned processes:
         <scope>compile</scope>
     </dependency>
 
-**Note: Version 1.0.0 contains breaking API changes from 0.9.7.**
+:point_right: **Note: Version 1.0.0 contains breaking API changes from 0.9.7.**
 
 #### It's mostly about the memory
 Speed-wise, there is not a significant difference between NuProcess and the standard Java Process class, even when running
