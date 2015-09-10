@@ -16,6 +16,8 @@
 
 package com.zaxxer.nuprocess.linux;
 
+import java.nio.file.Path;
+
 import java.util.List;
 
 import com.zaxxer.nuprocess.NuProcess;
@@ -31,11 +33,11 @@ public class LinProcessFactory implements NuProcessFactory
 {
    /** {@inheritDoc} */
    @Override
-   public NuProcess createProcess(List<String> commands, String[] env, NuProcessHandler processListener)
+   public NuProcess createProcess(List<String> commands, String[] env, NuProcessHandler processListener, Path cwd)
    {
       LinuxProcess process = new LinuxProcess(processListener);
       synchronized (LinProcessFactory.class) {
-         process.start(commands, env);
+         process.start(commands, env, cwd);
       }
       return process;
    }

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 Brett Wooldridge
+ * Copyright (C) 2015 Ben Hamilton
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -14,19 +14,20 @@
  * limitations under the License.
  */
 
-package com.zaxxer.nuprocess;
+package com.zaxxer.nuprocess.internal;
 
-import java.util.List;
+import com.sun.jna.Native;
+import com.sun.jna.Platform;
 
-import java.nio.file.Path;
-
-/**
- * <b>This is an internal class.</b>  Instances of this interface create and start processes
- * in a platform-specific fashion.  
- *
- * @author Brett Wooldridge
- */
-public interface NuProcessFactory
+public class LinuxLibC
 {
-   NuProcess createProcess(List<String> commands, String[] env, NuProcessHandler processListener, Path cwd);
+   static {
+      Native.register(Platform.C_LIBRARY_NAME);
+   }
+
+   // from /usr/include/sched.h
+   public static native int unshare(int flags);
+
+   // from /usr/include/bits/sched.h
+   public static final int CLONE_FS = 0x00000200; /* Share or unshare cwd between threads / processes */
 }

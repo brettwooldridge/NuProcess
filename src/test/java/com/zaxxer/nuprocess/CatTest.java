@@ -18,11 +18,15 @@ package com.zaxxer.nuprocess;
 
 import com.zaxxer.nuprocess.codec.NuAbstractCharsetHandler;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
 import java.nio.BufferOverflowException;
 import java.nio.charset.Charset;
 import java.nio.charset.CoderResult;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.Files;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
@@ -33,7 +37,9 @@ import java.util.zip.Adler32;
 
 import org.junit.Assert;
 import org.junit.Before;
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
 
 /**
  * @author Brett Wooldridge
@@ -42,6 +48,9 @@ import org.junit.Test;
 public class CatTest
 {
     private String command;
+
+    @Rule
+    public TemporaryFolder tmp = new TemporaryFolder();
 
     @Before
     public void setup()
@@ -251,6 +260,34 @@ public class CatTest
         
         Assert.assertEquals("onPreStart was not called first", 0, callbacks.indexOf("prestart"));
         Assert.assertFalse("onExit was called before onStdout", callbacks.indexOf("exit") < callbacks.lastIndexOf("stdout"));
+    }
+
+    @Test
+    public void changeCwd() throws InterruptedException, IOException
+    {
+        Path javaCwd = Paths.get(System.getProperty("user.dir"));
+        Path tmpPath = tmp.getRoot().toPath();
+        System.err.println("Starting test changeCwd() (java cwd=" + javaCwd + ", tmp=" + tmpPath + ")");
+        Assert.assertNotEquals(
+            "java cwd should not be tmp path before process",
+            javaCwd.toRealPath(),
+            tmpPath.toRealPath());
+        String message = "Hello cwd-aware world\n";
+        Files.write(tmpPath.resolve("foo.txt"), message.getBytes(Charset.forName("UTF-8")));
+        final Semaphore semaphore = new Semaphore(0);
+        Utf8DecodingListener processListener = new Utf8DecodingListener(semaphore, "");
+        NuProcessBuilder pb = new NuProcessBuilder(processListener, command, "foo.txt");
+        pb.setCwd(tmpPath);
+        pb.start();
+        semaphore.acquireUninterruptibly();
+        Assert.assertEquals("Output mismatch", message, processListener.decodedStdout.toString());
+        Assert.assertEquals("Exit code mismatch", 0, processListener.exitCode);
+        javaCwd = Paths.get(System.getProperty("user.dir"));
+        Assert.assertNotEquals(
+            "java cwd should not be tmp path after process",
+            javaCwd.toRealPath(),
+            tmpPath.toRealPath());
+        System.err.println("Completed test changeCwd()");
     }
 
     private static class LottaProcessListener extends NuAbstractProcessHandler

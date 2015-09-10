@@ -16,6 +16,7 @@
 
 package com.zaxxer.nuprocess;
 
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -52,6 +53,7 @@ public class NuProcessBuilder
 
    private final List<String> command;
    private final TreeMap<String, String> environment;
+   private Path cwd;
    private NuProcessHandler processListener;
 
    static {
@@ -207,6 +209,18 @@ public class NuProcessBuilder
    }
 
    /**
+    * Set the {@link Path} to which the current working directory (cwd) of the
+    * subsequent launch of a {@link NuProcess} will be set when calling the {@link #start()} method.
+    *
+    * @param cwd a {@link Path} to use for the process's current working directory, or {@code null}
+    *            to disable setting the cwd of subsequently launched proceses
+    */
+   public void setCwd(Path cwd)
+   {
+      this.cwd = cwd;
+   }
+
+   /**
     * Spawn the child process with the configured commands, environment, and {@link NuProcessHandler}.
     *
     * @return a {@link NuProcess} instance or {@code null} if there is an immediately detectable launch failure
@@ -223,6 +237,6 @@ public class NuProcessBuilder
          env[i++] = entrySet.getKey() + "=" + entrySet.getValue();
       }
 
-      return factory.createProcess(command, env, processListener);
+      return factory.createProcess(command, env, processListener, cwd);
    }
 }
