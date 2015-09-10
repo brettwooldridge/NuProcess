@@ -29,22 +29,9 @@ import java.nio.file.Path;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.Callable;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.CyclicBarrier;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.Executors;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-
-import static com.zaxxer.nuprocess.internal.LibC.*;
 
 public abstract class BasePosixProcess implements NuProcess
 {
@@ -90,8 +77,6 @@ public abstract class BasePosixProcess implements NuProcess
    private ConcurrentLinkedQueue<ByteBuffer> pendingWrites;
    private int remainingWrite;
    private int writeOffset;
-
-   private Pointer posix_spawn_file_actions;
 
    // Launches threads under which changes to cwd do not affect the cwd of the process.
    public static class LinuxCwdThreadFactory implements ThreadFactory {
@@ -313,36 +298,9 @@ public abstract class BasePosixProcess implements NuProcess
              rc = LibC.posix_spawnp(restrict_pid, commands[0], posix_spawn_file_actions, posix_spawnattr, commandsArray, environmentArray);
          }
 
-         pid = restrict_pid.getValue();
-
-         initializeBuffers();
-
-         // This is necessary on Linux because spawn failures are not reflected in the rc, and this will reap
-         // any zombies due to launch failure
-         if (IS_LINUX) {
-            IntByReference ret = new IntByReference();
-            rc = LibC.waitpid(pid, ret, LibC.WNOHANG);
-
-            if (rc != 0) {
-               int status = ret.getValue();
-               if (WIFEXITED(status)) {
-                  status = WEXITSTATUS(status);
-                  if (status == 127) {
-                     onExit(Integer.MIN_VALUE);
-                  }
-                  else {
-                     onExit(status);
-                  }
-               }
-               else if (WIFSIGNALED(status)) {
-                  onExit(WTERMSIG(status));
-               }
-
-               return null;
-            }
-         }
-
          checkReturnCode(rc, "Invocation of posix_spawn() failed");
+
+         pid = restrict_pid.getValue();
 
          afterStart();
 
@@ -393,13 +351,13 @@ public abstract class BasePosixProcess implements NuProcess
      Pointer oldCwd = new Pointer(peer);
      LibC.getcwd(oldCwd, cwdBufSize);
      String newCwd = cwd.toAbsolutePath().toString();
-     int rc = LibC.SYSCALL.syscall(LibC.SYSCALL.SYS___pthread_chdir, newCwd);
+     int rc = LibC.SYSCALL.syscall(LibC.SyscallLibrary.SYS___pthread_chdir, newCwd);
      checkReturnCode(rc, "syscall(SYS__pthread_chdir) failed to set current directory");
 
      try {
        return LibC.posix_spawnp(restrict_pid, restrict_path, file_actions, restrict_attrp, argv, envp);
      } finally {
-       rc = LibC.SYSCALL.syscall(LibC.SYSCALL.SYS___pthread_chdir, oldCwd);
+       rc = LibC.SYSCALL.syscall(LibC.SyscallLibrary.SYS___pthread_chdir, oldCwd);
        Native.free(Pointer.nativeValue(oldCwd));
        checkReturnCode(rc, "syscall(SYS__pthread_chdir) failed to restore current directory");
      }
@@ -676,13 +634,9 @@ public abstract class BasePosixProcess implements NuProcess
 
    private void afterStart()
    {
-      isRunning = true;
-   }
-
-   private void initializeBuffers()
-   {
       outClosed = false;
       errClosed = false;
+      isRunning = true;
 
       pendingWrites = new ConcurrentLinkedQueue<ByteBuffer>();
 
