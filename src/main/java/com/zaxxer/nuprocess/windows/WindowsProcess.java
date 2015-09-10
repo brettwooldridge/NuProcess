@@ -434,11 +434,11 @@ public final class WindowsProcess implements NuProcess
       try {
     	 isRunning = false;
          exitCode.set(statusCode);
-         if (stdoutPipe.buffer != null && !outClosed) {
+         if (stdoutPipe != null && stdoutPipe.buffer != null && !outClosed) {
            stdoutPipe.buffer.flip();
            processHandler.onStdout(stdoutPipe.buffer, true);
          }
-         if (stderrPipe.buffer != null && !errClosed) {
+         if (stderrPipe != null && stderrPipe.buffer != null && !errClosed) {
            stderrPipe.buffer.flip();
            processHandler.onStderr(stderrPipe.buffer, true);
          }
@@ -453,18 +453,26 @@ public final class WindowsProcess implements NuProcess
       finally {
     	 exitPending.countDown();
 
-         if (!inClosed) {
-            NuKernel32.CloseHandle(stdinPipe.pipeHandle);
+         if (stdinPipe != null) {
+            if (!inClosed) {
+              NuKernel32.CloseHandle(stdinPipe.pipeHandle);
+            }
+            Native.free(Pointer.nativeValue(stdinPipe.bufferPointer));
          }
 
-         NuKernel32.CloseHandle(stdoutPipe.pipeHandle);
-         NuKernel32.CloseHandle(stderrPipe.pipeHandle);
-         NuKernel32.CloseHandle(processInfo.hThread);
-         NuKernel32.CloseHandle(processInfo.hProcess);
+         if (stdoutPipe != null) {
+            NuKernel32.CloseHandle(stdoutPipe.pipeHandle);
+            Native.free(Pointer.nativeValue(stdoutPipe.bufferPointer));
+         }
+         if (stderrPipe != null) {
+            NuKernel32.CloseHandle(stderrPipe.pipeHandle);
+            Native.free(Pointer.nativeValue(stderrPipe.bufferPointer));
+         }
 
-         Native.free(Pointer.nativeValue(stdoutPipe.bufferPointer));
-         Native.free(Pointer.nativeValue(stderrPipe.bufferPointer));
-         Native.free(Pointer.nativeValue(stdinPipe.bufferPointer));
+         if (processInfo != null) {
+            NuKernel32.CloseHandle(processInfo.hThread);
+            NuKernel32.CloseHandle(processInfo.hProcess);
+         }
 
          stderrPipe = null;
          stdoutPipe = null;
