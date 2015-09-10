@@ -29,14 +29,13 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import com.sun.jna.Native;
-import com.sun.jna.platform.win32.BaseTSD.ULONG_PTR;
-import com.sun.jna.platform.win32.BaseTSD.ULONG_PTRByReference;
-import com.sun.jna.platform.win32.WinNT;
-import com.sun.jna.platform.win32.WinNT.HANDLE;
 import com.sun.jna.ptr.IntByReference;
 import com.sun.jna.ptr.PointerByReference;
 import com.zaxxer.nuprocess.NuProcess;
 import com.zaxxer.nuprocess.windows.WindowsProcess.PipeBundle;
+import com.zaxxer.nuprocess.windows.NuWinNT.HANDLE;
+import com.zaxxer.nuprocess.windows.NuWinNT.ULONG_PTR;
+import com.zaxxer.nuprocess.windows.NuWinNT.ULONG_PTRByReference;
 
 public final class ProcessCompletions implements Runnable
 {
@@ -230,7 +229,7 @@ public final class ProcessCompletions implements Runnable
       }
 
       if (NuKernel32.WriteFile(stdinPipe.pipeHandle, stdinPipe.bufferPointer, 0, null, stdinPipe.overlapped) == 0
-            && Native.getLastError() != WinNT.ERROR_IO_PENDING) {
+            && Native.getLastError() != NuWinNT.ERROR_IO_PENDING) {
          process.stdinClose();
       }
    }
@@ -245,11 +244,11 @@ public final class ProcessCompletions implements Runnable
       if (NuKernel32.ReadFile(pipe.pipeHandle, pipe.bufferPointer.share(pipe.buffer.position()), pipe.buffer.remaining(), null, pipe.overlapped) == 0) {
          int lastError = Native.getLastError();
          switch (lastError) {
-         case WinNT.ERROR_SUCCESS:
-         case WinNT.ERROR_IO_PENDING:
+         case NuWinNT.ERROR_SUCCESS:
+         case NuWinNT.ERROR_IO_PENDING:
             break;
-         case WinNT.ERROR_BROKEN_PIPE:
-         case WinNT.ERROR_PIPE_NOT_CONNECTED:
+         case NuWinNT.ERROR_BROKEN_PIPE:
+         case NuWinNT.ERROR_PIPE_NOT_CONNECTED:
             if (stdX == STDOUT) {
                process.readStdout(-1 /*closed*/);
             }
@@ -306,7 +305,7 @@ public final class ProcessCompletions implements Runnable
       Iterator<WindowsProcess> iterator = deadPool.iterator();
       while (iterator.hasNext()) {
          WindowsProcess process = iterator.next();
-         if (NuKernel32.GetExitCodeProcess(process.getPid(), exitCode) && exitCode.getValue() != WinNT.STILL_ACTIVE) {
+         if (NuKernel32.GetExitCodeProcess(process.getPid(), exitCode) && exitCode.getValue() != NuWinNT.STILL_ACTIVE) {
             iterator.remove();
             process.onExit(exitCode.getValue());
          }
@@ -320,7 +319,7 @@ public final class ProcessCompletions implements Runnable
       completionKeyToProcessMap.remove(process.getStderrPipe().ioCompletionKey);
 
       IntByReference exitCode = new IntByReference();
-      if (NuKernel32.GetExitCodeProcess(process.getPid(), exitCode) && exitCode.getValue() != WinNT.STILL_ACTIVE) {
+      if (NuKernel32.GetExitCodeProcess(process.getPid(), exitCode) && exitCode.getValue() != NuWinNT.STILL_ACTIVE) {
          process.onExit(exitCode.getValue());
       }
       else {
@@ -330,7 +329,7 @@ public final class ProcessCompletions implements Runnable
 
    private void initCompletionPort()
    {
-      ioCompletionPort = NuKernel32.CreateIoCompletionPort(WinNT.INVALID_HANDLE_VALUE, null, new ULONG_PTR(0), WindowsProcess.PROCESSOR_THREADS);
+      ioCompletionPort = NuKernel32.CreateIoCompletionPort(NuWinNT.INVALID_HANDLE_VALUE, null, new ULONG_PTR(0), WindowsProcess.PROCESSOR_THREADS);
       if (ioCompletionPort == null) {
          throw new RuntimeException("CreateIoCompletionPort() failed, error code: " + Native.getLastError());
       }
