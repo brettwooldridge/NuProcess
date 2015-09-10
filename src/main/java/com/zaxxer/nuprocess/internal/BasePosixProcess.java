@@ -63,6 +63,7 @@ public abstract class BasePosixProcess implements NuProcess
 
    protected volatile int pid;
    protected volatile boolean isRunning;
+   public final AtomicBoolean cleanlyExitedBeforeProcess;
    protected AtomicInteger exitCode;
    protected CountDownLatch exitPending;
 
@@ -165,6 +166,7 @@ public abstract class BasePosixProcess implements NuProcess
    protected BasePosixProcess(NuProcessHandler processListener) {
       this.processHandler = processListener;
       this.userWantsWrite = new AtomicBoolean();
+      this.cleanlyExitedBeforeProcess = new AtomicBoolean();
       this.exitCode = new AtomicInteger();
       this.exitPending = new CountDownLatch(1);
       this.stdin = new AtomicInteger(-1);
@@ -321,10 +323,15 @@ public abstract class BasePosixProcess implements NuProcess
          // any zombies due to launch failure
          if (IS_LINUX) {
             IntByReference ret = new IntByReference();
-            rc = LibC.waitpid(pid, ret, LibC.WNOHANG);
+            int waitpidRc = LibC.waitpid(pid, ret, LibC.WNOHANG);
+            int status = ret.getValue();
+            boolean cleanExit = waitpidRc == pid && WIFEXITED(status) && WEXITSTATUS(status) == 0;
 
-            if (rc != 0) {
-               int status = ret.getValue();
+            if (cleanExit) {
+               // If the process already exited cleanly, make sure we run epoll to dispatch any stdout/stderr sent
+               // before we tear everything down.
+               cleanlyExitedBeforeProcess.set(true);
+            } else if (waitpidRc != 0) {
                if (WIFEXITED(status)) {
                   status = WEXITSTATUS(status);
                   if (status == 127) {
