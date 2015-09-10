@@ -614,31 +614,14 @@ public final class WindowsProcess implements NuProcess
    private char[] getCommandLine(List<String> commands)
    {
       StringBuilder sb = new StringBuilder();
-      if (commands.get(0).contains(" ") && !commands.get(0).startsWith("\"") && !commands.get(0).endsWith("\"")) {
-         commands.set(0, "\"" + commands.get(0).replaceAll("\\\"", "\\\"") + "\"");
+      for (String command : commands) {
+         // It's OK to apply CreateProcess escaping to even the first item in the commands
+         // list (the path to execute). Since Windows paths cannot contain double-quotes
+         // (really!), the logic in WindowsCreateProcessEscape.quote() will either do nothing
+         // or simply add double-quotes around the path.
+         WindowsCreateProcessEscape.quote(sb, command);
       }
-
-      Iterator<String> iterator = commands.iterator();
-      sb.append(iterator.next()).append(' '); // skip the executable itself
-      while (iterator.hasNext()) {
-         String s = iterator.next();
-         if (s.contains(" ")) {
-            sb.append('"').append(s).append('"');
-         }
-         else {
-            sb.append(s);
-         }
-
-         sb.append(' ');
-      }
-
-      if (sb.length() > 0) {
-         sb.setLength(sb.length() - 1);
-      }
-
-      sb.append((char) 0);
-
-      return sb.toString().toCharArray();
+      return Native.toCharArray(sb.toString());
    }
 
    private char[] getEnvironment(String[] environment)
