@@ -227,6 +227,11 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
       //        linuxProcess.close(linuxProcess.getStdout());
       //        linuxProcess.close(linuxProcess.getStderr());
 
+      if (linuxProcess.cleanlyExitedBeforeProcess.get()) {
+         linuxProcess.onExit(0);
+         return;
+      }
+
       IntByReference ret = new IntByReference();
       int rc = LibC.waitpid(linuxProcess.getPid(), ret, LibC.WNOHANG);
 
