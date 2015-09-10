@@ -25,6 +25,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
@@ -62,6 +63,7 @@ public final class WindowsProcess implements NuProcess
    private static final ProcessCompletions[] processors;
    private static int processorRoundRobin;
 
+   private static final String namedPipePathPrefix;
    private static final AtomicInteger namedPipeCounter;
 
    private volatile ProcessCompletions myProcessor;
@@ -93,6 +95,7 @@ public final class WindowsProcess implements NuProcess
    private PROCESS_INFORMATION processInfo;
 
    static {
+      namedPipePathPrefix = "\\\\.\\pipe\\NuProcess-" + UUID.randomUUID().toString() + "-";
       namedPipeCounter = new AtomicInteger(100);
 
       IS_SOFTEXIT_DETECTION = Boolean.valueOf(System.getProperty("com.zaxxer.nuprocess.softExitDetection", "true"));
@@ -513,7 +516,7 @@ public final class WindowsProcess implements NuProcess
 
       // ################ STDOUT PIPE ################
       long ioCompletionKey = namedPipeCounter.getAndIncrement();
-      WString pipeName = new WString("\\\\.\\pipe\\NuProcess" + ioCompletionKey);
+      WString pipeName = new WString(namedPipePathPrefix + ioCompletionKey);
       hStdoutWidow = NuKernel32.CreateNamedPipeW(pipeName, NuKernel32.PIPE_ACCESS_INBOUND, 0 /*dwPipeMode*/, 1 /*nMaxInstances*/, BUFFER_SIZE, BUFFER_SIZE,
                                                  0 /*nDefaultTimeOut*/, sattr);
       checkHandleValidity(hStdoutWidow);
@@ -526,7 +529,7 @@ public final class WindowsProcess implements NuProcess
 
       // ################ STDERR PIPE ################
       ioCompletionKey = namedPipeCounter.getAndIncrement();
-      pipeName = new WString("\\\\.\\pipe\\NuProcess" + ioCompletionKey);
+      pipeName = new WString(namedPipePathPrefix + ioCompletionKey);
       hStderrWidow = NuKernel32.CreateNamedPipeW(pipeName, NuKernel32.PIPE_ACCESS_INBOUND, 0 /*dwPipeMode*/, 1 /*nMaxInstances*/, BUFFER_SIZE, BUFFER_SIZE,
                                                  0 /*nDefaultTimeOut*/, sattr);
       checkHandleValidity(hStderrWidow);
@@ -539,7 +542,7 @@ public final class WindowsProcess implements NuProcess
 
       // ################ STDIN PIPE ################
       ioCompletionKey = namedPipeCounter.getAndIncrement();
-      pipeName = new WString("\\\\.\\pipe\\NuProcess" + ioCompletionKey);
+      pipeName = new WString(namedPipePathPrefix + ioCompletionKey);
       hStdinWidow = NuKernel32.CreateNamedPipeW(pipeName, NuKernel32.PIPE_ACCESS_OUTBOUND, 0 /*dwPipeMode*/, 1 /*nMaxInstances*/, BUFFER_SIZE, BUFFER_SIZE,
                                                 0 /*nDefaultTimeOut*/, sattr);
       checkHandleValidity(hStdinWidow);
