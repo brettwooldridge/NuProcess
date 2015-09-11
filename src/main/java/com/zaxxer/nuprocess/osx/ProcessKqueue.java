@@ -54,7 +54,8 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
       JAVA_PID = LibC.getpid();
    }
 
-   ProcessKqueue() {
+   ProcessKqueue()
+   {
       super(LINGER_ITERATIONS);
       kqueue = LibKevent.kqueue();
       if (kqueue < 0) {
@@ -90,20 +91,13 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
       // called on the event processor thread.
       Kevent[] events = (Kevent[]) new Kevent().toArray(4);
       // Listen for process exit (one-shot event)
-      events[0].EV_SET(
-          (long) pid,
-          Kevent.EVFILT_PROC,
-          Kevent.EV_ADD | Kevent.EV_RECEIPT | Kevent.EV_ONESHOT, Kevent.NOTE_EXIT | Kevent.NOTE_EXITSTATUS | Kevent.NOTE_REAP,
-          0l,
-          pidPointer);
+      events[0].EV_SET((long) pid, Kevent.EVFILT_PROC, Kevent.EV_ADD | Kevent.EV_RECEIPT | Kevent.EV_ONESHOT,
+                       Kevent.NOTE_EXIT | Kevent.NOTE_EXITSTATUS | Kevent.NOTE_REAP, 0l, pidPointer);
       // Listen for stdout and stderr data availability (events deleted automatically when file descriptors closed)
-      events[1].EV_SET(
-          process.getStdout().get(), Kevent.EVFILT_READ, Kevent.EV_ADD | Kevent.EV_RECEIPT, 0, 0l, pidPointer);
-      events[2].EV_SET(
-          process.getStderr().get(), Kevent.EVFILT_READ, Kevent.EV_ADD | Kevent.EV_RECEIPT, 0, 0l, pidPointer);
+      events[1].EV_SET(process.getStdout().get(), Kevent.EVFILT_READ, Kevent.EV_ADD | Kevent.EV_RECEIPT, 0, 0l, pidPointer);
+      events[2].EV_SET(process.getStderr().get(), Kevent.EVFILT_READ, Kevent.EV_ADD | Kevent.EV_RECEIPT, 0, 0l, pidPointer);
       // Listen for stdin data availability (initially disabled until user wants read, deleted automatically when file descriptor closed)
-      events[3].EV_SET(
-          process.getStdin().get(), Kevent.EVFILT_WRITE, Kevent.EV_ADD | Kevent.EV_DISABLE | Kevent.EV_RECEIPT, 0, 0l, pidPointer);
+      events[3].EV_SET(process.getStdin().get(), Kevent.EVFILT_WRITE, Kevent.EV_ADD | Kevent.EV_DISABLE | Kevent.EV_RECEIPT, 0, 0l, pidPointer);
 
       registerEvents(events, 4);
    }
@@ -122,7 +116,8 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
       }
       if (ret != numEvents) {
          throw new RuntimeException(String.format("Error %d registering events (ret=%d)", Native.getLastError(), ret));
-      } else {
+      }
+      else {
          // On success, each returned event will have 0 in the 'data' field.
          // On failure, at least one returned event will have a non-0 value in the 'data' field.
          StringBuilder err = new StringBuilder();
@@ -177,7 +172,8 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
          // so split the linger time over tv_sec and tv_nsec.
          timeout.tv_sec = LINGER_TIME_MS / 1000;
          timeout.tv_nsec = TimeUnit.MILLISECONDS.toNanos(LINGER_TIME_MS % 1000);
-      } else {
+      }
+      else {
          // At least one process is registered. There's no need to have a timeout.
          timeout = null;
       }
@@ -195,8 +191,8 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
       // native function, you are responsible to call read() afterwards to
       // populate the fields of the structure(s).
       for (int i = 0; i < nev; i++) {
-        processEvents[i].read();
-        processEvent(processEvents[i]);
+         processEvents[i].read();
+         processEvent(processEvents[i]);
       }
       return true;
    }
@@ -243,7 +239,8 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
          boolean userWantsMore;
          if (available > 0) {
             userWantsMore = osxProcess.writeStdin(available);
-         } else {
+         }
+         else {
             userWantsMore = true;
          }
          if (!userWantsMore) {
@@ -251,8 +248,8 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
             // We could use processEvents here and overwrite just the first entry, but this probably doesn't happen
             // enough to warrant that optimization.
             Kevent[] events = (Kevent[]) new Kevent().toArray(1);
-            events[0].EV_SET(
-                osxProcess.getStdin().get(), Kevent.EVFILT_WRITE, Kevent.EV_DISABLE | Kevent.EV_RECEIPT, 0, 0l, Pointer.createConstant(osxProcess.getPid()));
+            events[0].EV_SET(osxProcess.getStdin().get(), Kevent.EVFILT_WRITE, Kevent.EV_DISABLE | Kevent.EV_RECEIPT, 0, 0l,
+                             Pointer.createConstant(osxProcess.getPid()));
             registerEvents(events, 1);
          }
       }
@@ -284,12 +281,12 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
 
    private void checkStdinCloses()
    {
-     List<OsxProcess> processes = new ArrayList<OsxProcess>();
-     // drainTo() is known to be atomic for ArrayBlockingQueue
-     closeQueue.drainTo(processes);
-     for (OsxProcess process : processes) {
-        process.stdinClose();
-     }
+      List<OsxProcess> processes = new ArrayList<OsxProcess>();
+      // drainTo() is known to be atomic for ArrayBlockingQueue
+      closeQueue.drainTo(processes);
+      for (OsxProcess process : processes) {
+         process.stdinClose();
+      }
    }
 
    private void checkWaitWrites()
@@ -304,8 +301,8 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
          Kevent[] kevents = (Kevent[]) new Kevent().toArray(processes.size());
          for (int i = 0; i < processes.size(); i++) {
             OsxProcess process = processes.get(i);
-            kevents[i].EV_SET(
-                process.getStdin().get(), Kevent.EVFILT_WRITE, Kevent.EV_ENABLE | Kevent.EV_RECEIPT, 0, 0l, Pointer.createConstant(process.getPid()));
+            kevents[i].EV_SET(process.getStdin().get(), Kevent.EVFILT_WRITE, Kevent.EV_ENABLE | Kevent.EV_RECEIPT, 0, 0l,
+                              Pointer.createConstant(process.getPid()));
          }
          registerEvents(kevents, processes.size());
       }

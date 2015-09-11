@@ -26,8 +26,9 @@ import java.nio.charset.CoderResult;
  *
  * @see NuProcessHandler
  */
-public interface NuCharsetDecoderHandler {
-  /**
+public interface NuCharsetDecoderHandler
+{
+   /**
    * This method is invoked when there is decoded data to process or an
    * the end-of-file (EOF) condition has been reached.  In the case
    * of EOF, the {@code closed} parameter will be {@code true};
@@ -53,5 +54,5 @@ public interface NuCharsetDecoderHandler {
    * @param decoderResult a {@link CoderResult} signifying whether
    *                      an error was encountered decoding stdout bytes
    */
-  void onDecode(CharBuffer buffer, boolean closed, CoderResult decoderResult);
+   void onDecode(CharBuffer buffer, boolean closed, CoderResult decoderResult);
 }

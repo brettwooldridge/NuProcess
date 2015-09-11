@@ -48,9 +48,8 @@ public class NuKernel32
    public static native HANDLE CreateIoCompletionPort(HANDLE fileHandle, HANDLE existingCompletionPort, ULONG_PTR completionKey, int numberOfThreads);
 
    public static native boolean CreateProcessW(WString lpApplicationName, char[] lpCommandLine, SECURITY_ATTRIBUTES lpProcessAttributes,
-                                               SECURITY_ATTRIBUTES lpThreadAttributes, boolean bInheritHandles, DWORD dwCreationFlags,
-                                               Pointer lpEnvironment, char[] lpCurrentDirectory, STARTUPINFO lpStartupInfo,
-                                               PROCESS_INFORMATION lpProcessInformation);
+                                               SECURITY_ATTRIBUTES lpThreadAttributes, boolean bInheritHandles, DWORD dwCreationFlags, Pointer lpEnvironment,
+                                               char[] lpCurrentDirectory, STARTUPINFO lpStartupInfo, PROCESS_INFORMATION lpProcessInformation);
 
    public static native boolean TerminateProcess(HANDLE hProcess, int exitCode);
 
@@ -96,11 +95,13 @@ public class NuKernel32
       public int OffsetHigh;
       public HANDLE hEvent;
 
-      public OVERLAPPED() {
+      public OVERLAPPED()
+      {
          super();
       }
 
-      public OVERLAPPED(Pointer p) {
+      public OVERLAPPED(Pointer p)
+      {
          super(p);
       }
 

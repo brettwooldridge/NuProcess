@@ -34,7 +34,8 @@ public class LinuxProcess extends BasePosixProcess
       }
    }
 
-   public LinuxProcess(NuProcessHandler processListener) {
+   public LinuxProcess(NuProcessHandler processListener)
+   {
       super(processListener);
    }
 }

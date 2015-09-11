@@ -34,7 +34,8 @@ public class OsxProcess extends BasePosixProcess
       LibC.signal(LibC.SIGUSR2, LibC.SIG_IGN);
    }
 
-   public OsxProcess(NuProcessHandler processListener) {
+   public OsxProcess(NuProcessHandler processListener)
+   {
       super(processListener);
    }
 

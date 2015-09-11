@@ -29,168 +29,161 @@ import org.junit.Test;
  */
 public class DirectWrite
 {
-    private String command;
+   private String command;
 
-    @Before
-    public void setup()
-    {
-        command = "/bin/cat";
-        if (System.getProperty("os.name").toLowerCase().contains("win"))
-        {
-            command = "src\\test\\java\\com\\zaxxer\\nuprocess\\cat.exe";
-        }
-    }
+   @Before
+   public void setup()
+   {
+      command = "/bin/cat";
+      if (System.getProperty("os.name").toLowerCase().contains("win")) {
+         command = "src\\test\\java\\com\\zaxxer\\nuprocess\\cat.exe";
+      }
+   }
 
-    @Test
-    public void testDirectWrite() throws InterruptedException
-    {
-        ProcessHandler1 processListener = new ProcessHandler1();
-        NuProcessBuilder pb = new NuProcessBuilder(processListener, command);
-        NuProcess nuProcess = pb.start();
-        nuProcess.waitFor(0, TimeUnit.SECONDS);
-        Assert.assertEquals("Results did not match", "This is a test", processListener.result);
-    }
+   @Test
+   public void testDirectWrite() throws InterruptedException
+   {
+      ProcessHandler1 processListener = new ProcessHandler1();
+      NuProcessBuilder pb = new NuProcessBuilder(processListener, command);
+      NuProcess nuProcess = pb.start();
+      nuProcess.waitFor(0, TimeUnit.SECONDS);
+      Assert.assertEquals("Results did not match", "This is a test", processListener.result);
+   }
 
-    @Test
-    public void testDirectWriteBig() throws InterruptedException
-    {
-        ProcessHandler2 processListener = new ProcessHandler2();
-        NuProcessBuilder pb = new NuProcessBuilder(processListener, command);
-        NuProcess nuProcess = pb.start();
-        nuProcess.waitFor(0, TimeUnit.SECONDS);
-        Assert.assertEquals("Checksums did not match", processListener.checksum, processListener.checksum2);
-    }
+   @Test
+   public void testDirectWriteBig() throws InterruptedException
+   {
+      ProcessHandler2 processListener = new ProcessHandler2();
+      NuProcessBuilder pb = new NuProcessBuilder(processListener, command);
+      NuProcess nuProcess = pb.start();
+      nuProcess.waitFor(0, TimeUnit.SECONDS);
+      Assert.assertEquals("Checksums did not match", processListener.checksum, processListener.checksum2);
+   }
 
-    @Test
-    public void testFewWrites() throws InterruptedException
-    {
-        final AtomicInteger count = new AtomicInteger();
+   @Test
+   public void testFewWrites() throws InterruptedException
+   {
+      final AtomicInteger count = new AtomicInteger();
 
-        NuProcessHandler processListener = new NuAbstractProcessHandler()
-        {
-            @Override
-            public void onStdout(ByteBuffer buffer, boolean closed)
-            {
-                count.addAndGet(buffer.remaining());
-                buffer.position(buffer.limit());
-            }
-        };
+      NuProcessHandler processListener = new NuAbstractProcessHandler() {
+         @Override
+         public void onStdout(ByteBuffer buffer, boolean closed)
+         {
+            count.addAndGet(buffer.remaining());
+            buffer.position(buffer.limit());
+         }
+      };
 
-        NuProcessBuilder pb = new NuProcessBuilder(processListener, command);
-        NuProcess nuProcess = pb.start();
+      NuProcessBuilder pb = new NuProcessBuilder(processListener, command);
+      NuProcess nuProcess = pb.start();
 
-        ByteBuffer buffer = ByteBuffer.allocate(64);
-        buffer.put("This is a test".getBytes());
-        buffer.flip();
-        nuProcess.writeStdin(buffer);
+      ByteBuffer buffer = ByteBuffer.allocate(64);
+      buffer.put("This is a test".getBytes());
+      buffer.flip();
+      nuProcess.writeStdin(buffer);
 
-        Thread.sleep(500);
-        
-        nuProcess.closeStdin();
-        nuProcess.waitFor(0, TimeUnit.SECONDS);
-        Assert.assertEquals("Count did not match", 14, count.get());
-    }
+      Thread.sleep(500);
 
-    @Test
-    public void testManyWrites() throws InterruptedException
-    {
-        final AtomicInteger count = new AtomicInteger();
+      nuProcess.closeStdin();
+      nuProcess.waitFor(0, TimeUnit.SECONDS);
+      Assert.assertEquals("Count did not match", 14, count.get());
+   }
 
-        NuProcessHandler processListener = new NuAbstractProcessHandler()
-        {
-            @Override
-            public void onStdout(ByteBuffer buffer, boolean closed)
-            {
-                count.addAndGet(buffer.remaining());
-                buffer.position(buffer.limit());
-            }
-        };
+   @Test
+   public void testManyWrites() throws InterruptedException
+   {
+      final AtomicInteger count = new AtomicInteger();
 
-        NuProcessBuilder pb = new NuProcessBuilder(processListener, command);
-        NuProcess nuProcess = pb.start();
-        for (int i = 0; i < 1000; i++)
-        {
-            ByteBuffer buffer = ByteBuffer.allocate(64);
-            buffer.put("This is a test".getBytes());
-            buffer.flip();
-            nuProcess.writeStdin(buffer);
-        }
+      NuProcessHandler processListener = new NuAbstractProcessHandler() {
+         @Override
+         public void onStdout(ByteBuffer buffer, boolean closed)
+         {
+            count.addAndGet(buffer.remaining());
+            buffer.position(buffer.limit());
+         }
+      };
 
-        Thread.sleep(500);
-        
-        nuProcess.closeStdin();
-        nuProcess.waitFor(0, TimeUnit.SECONDS);
-        Assert.assertEquals("Count did not match", 14000, count.get());
-    }
+      NuProcessBuilder pb = new NuProcessBuilder(processListener, command);
+      NuProcess nuProcess = pb.start();
+      for (int i = 0; i < 1000; i++) {
+         ByteBuffer buffer = ByteBuffer.allocate(64);
+         buffer.put("This is a test".getBytes());
+         buffer.flip();
+         nuProcess.writeStdin(buffer);
+      }
 
-    private static class ProcessHandler1 extends NuAbstractProcessHandler
-    {
-        private NuProcess nuProcess;
-        String result;
+      Thread.sleep(500);
 
-        @Override
-        public void onStart(NuProcess nuProcess)
-        {
-            this.nuProcess = nuProcess;
+      nuProcess.closeStdin();
+      nuProcess.waitFor(0, TimeUnit.SECONDS);
+      Assert.assertEquals("Count did not match", 14000, count.get());
+   }
 
-            ByteBuffer buffer = ByteBuffer.allocate(256);
-            buffer.put("This is a test".getBytes());
-            buffer.flip();
+   private static class ProcessHandler1 extends NuAbstractProcessHandler
+   {
+      private NuProcess nuProcess;
+      String result;
 
-            System.out.println("Writing: This is a test");
-            nuProcess.writeStdin(buffer);
-        }
+      @Override
+      public void onStart(NuProcess nuProcess)
+      {
+         this.nuProcess = nuProcess;
 
-        @Override
-        public void onStdout(ByteBuffer buffer, boolean closed)
-        {
-            byte[] chars = new byte[buffer.remaining()];
-            buffer.get(chars);
-            result = new String(chars);
-            System.out.println("Read: " + result);
+         ByteBuffer buffer = ByteBuffer.allocate(256);
+         buffer.put("This is a test".getBytes());
+         buffer.flip();
+
+         System.out.println("Writing: This is a test");
+         nuProcess.writeStdin(buffer);
+      }
+
+      @Override
+      public void onStdout(ByteBuffer buffer, boolean closed)
+      {
+         byte[] chars = new byte[buffer.remaining()];
+         buffer.get(chars);
+         result = new String(chars);
+         System.out.println("Read: " + result);
+         nuProcess.closeStdin();
+      }
+   }
+
+   private static class ProcessHandler2 extends NuAbstractProcessHandler
+   {
+      private NuProcess nuProcess;
+      int checksum;
+      int checksum2;
+
+      @Override
+      public void onStart(NuProcess nuProcess)
+      {
+         this.nuProcess = nuProcess;
+
+         ByteBuffer buffer = ByteBuffer.allocate(1024 * 128);
+         for (int i = 0; i < buffer.capacity(); i++) {
+            byte b = (byte) (i % 256);
+            buffer.put(b);
+            checksum += b;
+         }
+
+         buffer.flip();
+
+         System.out.println("Writing: 128K of data, waiting for checksum " + checksum);
+         nuProcess.writeStdin(buffer);
+      }
+
+      @Override
+      public void onStdout(ByteBuffer buffer, boolean closed)
+      {
+         while (buffer.hasRemaining()) {
+            checksum2 += buffer.get();
+         }
+
+         System.out.println("Reading.  Current checksum " + checksum2);
+         if (checksum2 == checksum) {
+            System.out.println("Checksums matched, exiting.");
             nuProcess.closeStdin();
-        }
-    }
-
-    private static class ProcessHandler2 extends NuAbstractProcessHandler
-    {
-        private NuProcess nuProcess;
-        int checksum;
-        int checksum2;
-
-        @Override
-        public void onStart(NuProcess nuProcess)
-        {
-            this.nuProcess = nuProcess;
-
-            ByteBuffer buffer = ByteBuffer.allocate(1024 * 128);
-            for (int i = 0; i < buffer.capacity(); i++)
-            {
-                byte b = (byte) (i % 256);
-                buffer.put(b);
-                checksum += b;
-            }
-
-            buffer.flip();
-
-            System.out.println("Writing: 128K of data, waiting for checksum " + checksum);
-            nuProcess.writeStdin(buffer);
-        }
-
-        @Override
-        public void onStdout(ByteBuffer buffer, boolean closed)
-        {
-            while (buffer.hasRemaining())
-            {
-                checksum2 += buffer.get();
-            }
-
-            System.out.println("Reading.  Current checksum " + checksum2);
-            if (checksum2 == checksum)
-            {
-                System.out.println("Checksums matched, exiting.");
-                nuProcess.closeStdin();
-            }
-        }
-    }
+         }
+      }
+   }
 }

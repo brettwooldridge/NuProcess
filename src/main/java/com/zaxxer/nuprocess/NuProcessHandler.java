@@ -156,7 +156,7 @@ public interface NuProcessHandler
     *               stderr data
     * @param closed {@code true} if EOF has been reached
     */
-  void onStderr(ByteBuffer buffer, boolean closed);
+   void onStderr(ByteBuffer buffer, boolean closed);
 
    /**
     * This method is invoked after you have expressed a desire to write to stdin

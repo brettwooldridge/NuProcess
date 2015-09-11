@@ -38,7 +38,7 @@ public class LibEpoll
    public static native int epoll_wait(int epfd, EpollEvent events, int maxevents, int timeout);
 
    public static final int SIGPIPE = 13;
-   
+
    /* from /usr/include/sys/epoll.h */
    public static final int EPOLL_CTL_ADD = 1; /* Add a file decriptor to the interface.  */
    public static final int EPOLL_CTL_DEL = 2; /* Change file decriptor epoll_event structure.  */

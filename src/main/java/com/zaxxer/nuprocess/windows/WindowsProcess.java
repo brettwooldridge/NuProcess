@@ -16,13 +16,12 @@
 
 package com.zaxxer.nuprocess.windows;
 
-import java.nio.file.Path;
 import java.nio.ByteBuffer;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -129,7 +128,8 @@ public final class WindowsProcess implements NuProcess
       }
    }
 
-   public WindowsProcess(NuProcessHandler processListener) {
+   public WindowsProcess(NuProcessHandler processListener)
+   {
       this.processHandler = processListener;
 
       this.userWantsWrite = new AtomicBoolean();
@@ -430,15 +430,15 @@ public final class WindowsProcess implements NuProcess
       }
 
       try {
-    	 isRunning = false;
+         isRunning = false;
          exitCode.set(statusCode);
          if (stdoutPipe != null && stdoutPipe.buffer != null && !outClosed) {
-           stdoutPipe.buffer.flip();
-           processHandler.onStdout(stdoutPipe.buffer, true);
+            stdoutPipe.buffer.flip();
+            processHandler.onStdout(stdoutPipe.buffer, true);
          }
          if (stderrPipe != null && stderrPipe.buffer != null && !errClosed) {
-           stderrPipe.buffer.flip();
-           processHandler.onStderr(stderrPipe.buffer, true);
+            stderrPipe.buffer.flip();
+            processHandler.onStderr(stderrPipe.buffer, true);
          }
          if (statusCode != Integer.MAX_VALUE - 1) {
             processHandler.onExit(statusCode);
@@ -449,11 +449,11 @@ public final class WindowsProcess implements NuProcess
          e.printStackTrace();
       }
       finally {
-    	 exitPending.countDown();
+         exitPending.countDown();
 
          if (stdinPipe != null) {
             if (!inClosed) {
-              NuKernel32.CloseHandle(stdinPipe.pipeHandle);
+               NuKernel32.CloseHandle(stdinPipe.pipeHandle);
             }
             Native.free(Pointer.nativeValue(stdinPipe.bufferPointer));
          }
@@ -498,7 +498,7 @@ public final class WindowsProcess implements NuProcess
          processHandler.onPreStart(this);
       }
       catch (Exception e) {
-    	// Don't let an exception thrown from the user's handler interrupt us
+         // Don't let an exception thrown from the user's handler interrupt us
       }
    }
 
@@ -527,8 +527,8 @@ public final class WindowsProcess implements NuProcess
                                                  0 /*nDefaultTimeOut*/, sattr);
       checkHandleValidity(hStdoutWidow);
 
-      HANDLE stdoutHandle = NuKernel32.CreateFile(pipeName, NuWinNT.GENERIC_READ, NuWinNT.FILE_SHARE_READ, null, NuWinNT.OPEN_EXISTING, NuWinNT.FILE_ATTRIBUTE_NORMAL
-            | NuWinNT.FILE_FLAG_OVERLAPPED, null /*hTemplateFile*/);
+      HANDLE stdoutHandle = NuKernel32.CreateFile(pipeName, NuWinNT.GENERIC_READ, NuWinNT.FILE_SHARE_READ, null, NuWinNT.OPEN_EXISTING,
+                                                  NuWinNT.FILE_ATTRIBUTE_NORMAL | NuWinNT.FILE_FLAG_OVERLAPPED, null /*hTemplateFile*/);
       checkHandleValidity(stdoutHandle);
       stdoutPipe = new PipeBundle(stdoutHandle, ioCompletionKey);
       checkPipeConnected(NuKernel32.ConnectNamedPipe(hStdoutWidow, null));
@@ -540,8 +540,8 @@ public final class WindowsProcess implements NuProcess
                                                  0 /*nDefaultTimeOut*/, sattr);
       checkHandleValidity(hStderrWidow);
 
-      HANDLE stderrHandle = NuKernel32.CreateFile(pipeName, NuWinNT.GENERIC_READ, NuWinNT.FILE_SHARE_READ, null, NuWinNT.OPEN_EXISTING, NuWinNT.FILE_ATTRIBUTE_NORMAL
-            | NuWinNT.FILE_FLAG_OVERLAPPED, null /*hTemplateFile*/);
+      HANDLE stderrHandle = NuKernel32.CreateFile(pipeName, NuWinNT.GENERIC_READ, NuWinNT.FILE_SHARE_READ, null, NuWinNT.OPEN_EXISTING,
+                                                  NuWinNT.FILE_ATTRIBUTE_NORMAL | NuWinNT.FILE_FLAG_OVERLAPPED, null /*hTemplateFile*/);
       checkHandleValidity(stderrHandle);
       stderrPipe = new PipeBundle(stderrHandle, ioCompletionKey);
       checkPipeConnected(NuKernel32.ConnectNamedPipe(hStderrWidow, null));
@@ -553,8 +553,8 @@ public final class WindowsProcess implements NuProcess
                                                 0 /*nDefaultTimeOut*/, sattr);
       checkHandleValidity(hStdinWidow);
 
-      HANDLE stdinHandle = NuKernel32.CreateFile(pipeName, NuWinNT.GENERIC_WRITE, NuWinNT.FILE_SHARE_WRITE, null, NuWinNT.OPEN_EXISTING, NuWinNT.FILE_ATTRIBUTE_NORMAL
-            | NuWinNT.FILE_FLAG_OVERLAPPED, null /*hTemplateFile*/);
+      HANDLE stdinHandle = NuKernel32.CreateFile(pipeName, NuWinNT.GENERIC_WRITE, NuWinNT.FILE_SHARE_WRITE, null, NuWinNT.OPEN_EXISTING,
+                                                 NuWinNT.FILE_ATTRIBUTE_NORMAL | NuWinNT.FILE_FLAG_OVERLAPPED, null /*hTemplateFile*/);
       checkHandleValidity(stdinHandle);
       stdinPipe = new PipeBundle(stdinHandle, ioCompletionKey);
       checkPipeConnected(NuKernel32.ConnectNamedPipe(hStdinWidow, null));
@@ -709,7 +709,8 @@ public final class WindowsProcess implements NuProcess
       Pointer bufferPointer;
       boolean registered;
 
-      PipeBundle(HANDLE pipeHandle, long ioCompletionKey) {
+      PipeBundle(HANDLE pipeHandle, long ioCompletionKey)
+      {
          this.pipeHandle = pipeHandle;
          this.ioCompletionKey = ioCompletionKey;
          this.overlapped = new OVERLAPPED();

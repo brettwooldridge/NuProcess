@@ -93,7 +93,8 @@ public class NuProcessBuilder
     * @param commands a {@link List} of commands
     * @param environment The environment for the process
     */
-   public NuProcessBuilder(List<String> commands, Map<String, String> environment) {
+   public NuProcessBuilder(List<String> commands, Map<String, String> environment)
+   {
       if (commands == null || commands.isEmpty()) {
          throw new IllegalArgumentException("List of commands may not be null or empty");
       }
@@ -109,7 +110,8 @@ public class NuProcessBuilder
     *
     * @param commands a {@link List} of commands
     */
-   public NuProcessBuilder(List<String> commands) {
+   public NuProcessBuilder(List<String> commands)
+   {
       if (commands == null || commands.isEmpty()) {
          throw new IllegalArgumentException("List of commands may not be null or empty");
       }
@@ -125,7 +127,8 @@ public class NuProcessBuilder
     *
     * @param commands a list of commands
     */
-   public NuProcessBuilder(String... commands) {
+   public NuProcessBuilder(String... commands)
+   {
       if (commands == null || commands.length == 0) {
          throw new IllegalArgumentException("List of commands may not be null or empty");
       }
@@ -141,7 +144,8 @@ public class NuProcessBuilder
     * @param nuProcessHandler a {@link NuProcessHandler} instance
     * @param commands a list of commands
     */
-   public NuProcessBuilder(NuProcessHandler nuProcessHandler, String... commands) {
+   public NuProcessBuilder(NuProcessHandler nuProcessHandler, String... commands)
+   {
       this(commands);
 
       if (nuProcessHandler == null) {
@@ -158,7 +162,8 @@ public class NuProcessBuilder
     * @param nuProcessHandler a {@link NuProcessHandler} instance
     * @param commands a {@link List} of commands
     */
-   public NuProcessBuilder(NuProcessHandler nuProcessHandler, List<String> commands) {
+   public NuProcessBuilder(NuProcessHandler nuProcessHandler, List<String> commands)
+   {
       this(commands);
 
       if (nuProcessHandler == null) {

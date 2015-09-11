@@ -24,25 +24,19 @@ import java.util.List;
 
 import com.sun.jna.FromNativeContext;
 import com.sun.jna.IntegerType;
-import com.sun.jna.Native;
-import com.sun.jna.NativeLibrary;
-import com.sun.jna.NativeLong;
 import com.sun.jna.Pointer;
 import com.sun.jna.PointerType;
 import com.sun.jna.Structure;
-import com.sun.jna.WString;
-import com.sun.jna.ptr.ByteByReference;
 import com.sun.jna.ptr.ByReference;
-import com.sun.jna.ptr.IntByReference;
-import com.sun.jna.ptr.NativeLongByReference;
-import com.sun.jna.ptr.PointerByReference;
-import com.sun.jna.win32.W32APIOptions;
+import com.sun.jna.ptr.ByteByReference;
 
 /**
  * Constants and structures for Windows APIs, borrowed from com.sun.jna.platform.win32
  * to avoid pulling in a dependency on that package.
  */
-public interface NuWinNT {
+@SuppressWarnings("serial")
+public interface NuWinNT
+{
    int CREATE_SUSPENDED = 0x00000004;
    int CREATE_UNICODE_ENVIRONMENT = 0x00000400;
    int CREATE_NO_WINDOW = 0x08000000;
@@ -72,15 +66,18 @@ public interface NuWinNT {
 
    class HANDLE extends PointerType
    {
-      public HANDLE() {
+      public HANDLE()
+      {
       }
 
-      public HANDLE(Pointer p) {
+      public HANDLE(Pointer p)
+      {
          setPointer(p);
       }
 
       @Override
-      public Object fromNative(Object nativeValue, FromNativeContext context) {
+      public Object fromNative(Object nativeValue, FromNativeContext context)
+      {
          Object o = super.fromNative(nativeValue, context);
          if (INVALID_HANDLE_VALUE.equals(o)) {
             return INVALID_HANDLE_VALUE;
@@ -93,11 +90,13 @@ public interface NuWinNT {
    {
       public static final int SIZE = 2;
 
-      public WORD() {
+      public WORD()
+      {
          this(0);
       }
 
-      public WORD(long value) {
+      public WORD(long value)
+      {
          super(SIZE, value, true);
       }
    }
@@ -106,40 +105,50 @@ public interface NuWinNT {
    {
       public static final int SIZE = 4;
 
-      public DWORD() {
+      public DWORD()
+      {
          this(0);
       }
 
-      public DWORD(long value) {
+      public DWORD(long value)
+      {
          super(SIZE, value, true);
       }
    }
 
    static class ULONG_PTR extends IntegerType
    {
-      public ULONG_PTR() {
+      public ULONG_PTR()
+      {
          this(0);
       }
 
-      public ULONG_PTR(long value) {
+      public ULONG_PTR(long value)
+      {
          super(Pointer.SIZE, value, true);
       }
 
-      public Pointer toPointer() {
+      public Pointer toPointer()
+      {
          return Pointer.createConstant(longValue());
       }
    }
 
    static class ULONG_PTRByReference extends ByReference
    {
-      public ULONG_PTRByReference() {
+      public ULONG_PTRByReference()
+      {
          this(new ULONG_PTR(0));
       }
-      public ULONG_PTRByReference(ULONG_PTR value) {
+
+      public ULONG_PTRByReference(ULONG_PTR value)
+      {
          super(Pointer.SIZE);
          setValue(value);
       }
-      public void setValue(ULONG_PTR value) {
+
+      public void setValue(ULONG_PTR value)
+      {
          if (Pointer.SIZE == 4) {
             getPointer().setInt(0, value.intValue());
          }
@@ -147,10 +156,10 @@ public interface NuWinNT {
             getPointer().setLong(0, value.longValue());
          }
       }
-      public ULONG_PTR getValue() {
-         return new ULONG_PTR(Pointer.SIZE == 4
-                              ? getPointer().getInt(0)
-                              : getPointer().getLong(0));
+
+      public ULONG_PTR getValue()
+      {
+         return new ULONG_PTR(Pointer.SIZE == 4 ? getPointer().getInt(0) : getPointer().getLong(0));
       }
    }
 
@@ -161,7 +170,9 @@ public interface NuWinNT {
       public boolean bInheritHandle;
 
       @Override
-      protected List getFieldOrder() {
+      @SuppressWarnings("rawtypes")
+      protected List getFieldOrder()
+      {
          return Arrays.asList(new String[] { "dwLength", "lpSecurityDescriptor", "bInheritHandle" });
       }
    }
@@ -188,15 +199,15 @@ public interface NuWinNT {
       public HANDLE hStdError;
 
       @Override
-      protected List getFieldOrder() {
-         return Arrays.asList(new String[] {
-                  "cb", "lpReserved", "lpDesktop", "lpTitle", "dwX", "dwY",
-                  "dwXSize", "dwYSize", "dwXCountChars", "dwYCountChars",
-                  "dwFillAttribute", "dwFlags", "wShowWindow", "cbReserved2",
-                  "lpReserved2", "hStdInput", "hStdOutput", "hStdError" });
+      @SuppressWarnings("rawtypes")
+      protected List getFieldOrder()
+      {
+         return Arrays.asList(new String[] { "cb", "lpReserved", "lpDesktop", "lpTitle", "dwX", "dwY", "dwXSize", "dwYSize", "dwXCountChars", "dwYCountChars",
+               "dwFillAttribute", "dwFlags", "wShowWindow", "cbReserved2", "lpReserved2", "hStdInput", "hStdOutput", "hStdError" });
       }
 
-      public STARTUPINFO() {
+      public STARTUPINFO()
+      {
          cb = new DWORD(size());
       }
    }
@@ -208,7 +219,10 @@ public interface NuWinNT {
       public DWORD dwProcessId;
       public DWORD dwThreadId;
 
-      protected List getFieldOrder() {
+      @Override
+      @SuppressWarnings("rawtypes")
+      protected List getFieldOrder()
+      {
          return Arrays.asList(new String[] { "hProcess", "hThread", "dwProcessId", "dwThreadId" });
       }
    }

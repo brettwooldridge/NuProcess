@@ -18,155 +18,141 @@ import com.zaxxer.nuprocess.windows.WindowsProcess;
 
 public class InterruptTest
 {
-    private String command;
+   private String command;
 
-    @Before
-    public void setup()
-    {
-        command = "/bin/cat";
-        if (System.getProperty("os.name").toLowerCase().contains("win"))
-        {
-            command = "src\\test\\java\\com\\zaxxer\\nuprocess\\cat.exe";
-        }
-    }
+   @Before
+   public void setup()
+   {
+      command = "/bin/cat";
+      if (System.getProperty("os.name").toLowerCase().contains("win")) {
+         command = "src\\test\\java\\com\\zaxxer\\nuprocess\\cat.exe";
+      }
+   }
 
-    @Test
-    public void testDestroy() throws InterruptedException
-    {
-        testDestroy(false);
-    }
-    
-    @Test
-    public void testDestroyForcibly() throws InterruptedException
-    {
-        testDestroy(true);
-    }
-    
-    private void testDestroy(boolean forceKill) throws InterruptedException
-    {
-        final Semaphore semaphore = new Semaphore(0);
-        final AtomicInteger exitCode = new AtomicInteger();
-        final AtomicInteger count = new AtomicInteger();
+   @Test
+   public void testDestroy() throws InterruptedException
+   {
+      testDestroy(false);
+   }
 
-        NuProcessHandler processListener = new NuAbstractProcessHandler()
-        {
-            @Override
-            public void onStart(NuProcess nuProcess)
-            {
-                nuProcess.wantWrite();
-            }
+   @Test
+   public void testDestroyForcibly() throws InterruptedException
+   {
+      testDestroy(true);
+   }
 
-            @Override
-            public void onExit(int statusCode)
-            {
-                exitCode.set(statusCode);
-                semaphore.release();
-            }
+   private void testDestroy(boolean forceKill) throws InterruptedException
+   {
+      final Semaphore semaphore = new Semaphore(0);
+      final AtomicInteger exitCode = new AtomicInteger();
+      final AtomicInteger count = new AtomicInteger();
 
-            @Override
-            public void onStdout(ByteBuffer buffer, boolean closed)
-            {
-                count.addAndGet(buffer.remaining());
-                buffer.position(buffer.limit());
-            }
+      NuProcessHandler processListener = new NuAbstractProcessHandler() {
+         @Override
+         public void onStart(NuProcess nuProcess)
+         {
+            nuProcess.wantWrite();
+         }
 
-            @Override
-            public boolean onStdinReady(ByteBuffer buffer)
-            {
-                buffer.put("This is a test".getBytes());
-                return true;
-            }
-        };
+         @Override
+         public void onExit(int statusCode)
+         {
+            exitCode.set(statusCode);
+            semaphore.release();
+         }
 
-        NuProcessBuilder pb = new NuProcessBuilder(processListener, command);
-        NuProcess process = pb.start();
-        while (true)
-        {
-            if (count.get() > 10000)
-            {
-                process.destroy(forceKill);
-                break;
-            }
-            Thread.sleep(20);
-        }
+         @Override
+         public void onStdout(ByteBuffer buffer, boolean closed)
+         {
+            count.addAndGet(buffer.remaining());
+            buffer.position(buffer.limit());
+         }
+
+         @Override
+         public boolean onStdinReady(ByteBuffer buffer)
+         {
+            buffer.put("This is a test".getBytes());
+            return true;
+         }
+      };
+
+      NuProcessBuilder pb = new NuProcessBuilder(processListener, command);
+      NuProcess process = pb.start();
+      while (true) {
+         if (count.get() > 10000) {
+            process.destroy(forceKill);
+            break;
+         }
+         Thread.sleep(20);
+      }
 
       semaphore.acquireUninterruptibly();
       int exit = process.waitFor(2, TimeUnit.SECONDS);
       Assert.assertNotEquals("Process exit code did not match", 0, exit);
-    }
+   }
 
-    @Test
-    public void chaosMonkey() throws InterruptedException
-    {
-        NuProcessHandler processListener = new NuAbstractProcessHandler()
-        {
+   @Test
+   public void chaosMonkey() throws InterruptedException
+   {
+      NuProcessHandler processListener = new NuAbstractProcessHandler() {
 
-            @Override
-            public void onStart(NuProcess nuProcess)
-            {
-                nuProcess.wantWrite();
+         @Override
+         public void onStart(NuProcess nuProcess)
+         {
+            nuProcess.wantWrite();
+         }
+
+         @Override
+         public void onStdout(ByteBuffer buffer, boolean closed)
+         {
+            buffer.position(buffer.limit());
+         }
+
+         @Override
+         public boolean onStdinReady(ByteBuffer buffer)
+         {
+            buffer.put("This is a test".getBytes());
+            return true;
+         }
+
+      };
+
+      NuProcessBuilder pb = new NuProcessBuilder(processListener, command);
+      List<NuProcess> processes = new LinkedList<NuProcess>();
+      for (int times = 0; times < 1; times++) {
+         for (int i = 0; i < 50; i++) {
+            processes.add(pb.start());
+         }
+
+         List<NuProcess> deadProcs = new ArrayList<NuProcess>();
+         while (true) {
+            Thread.sleep(20);
+            int dead = (int) (Math.random() * processes.size());
+            if (!System.getProperty("os.name").toLowerCase().contains("win")) {
+               BasePosixProcess bpp = (BasePosixProcess) processes.remove(dead);
+               if (bpp == null) {
+                  continue;
+               }
+               deadProcs.add(bpp);
+               LibC.kill(bpp.getPid(), LibC.SIGKILL);
+            }
+            else {
+               WindowsProcess wp = (WindowsProcess) processes.remove(dead);
+               if (wp == null) {
+                  continue;
+               }
+               deadProcs.add(wp);
+               wp.destroy(false);
             }
 
-            @Override
-            public void onStdout(ByteBuffer buffer, boolean closed)
-            {
-                buffer.position(buffer.limit());
+            if (processes.isEmpty()) {
+               for (int i = 0; i < 50; i++) {
+                  int exit = deadProcs.get(i).waitFor(2, TimeUnit.SECONDS);
+                  Assert.assertTrue("Process exit code did not match", (exit != 0 || exit == Integer.MAX_VALUE));
+               }
+               break;
             }
-
-            @Override
-            public boolean onStdinReady(ByteBuffer buffer)
-            {
-                buffer.put("This is a test".getBytes());
-                return true;
-            }
-
-        };
-
-        NuProcessBuilder pb = new NuProcessBuilder(processListener, command);
-        List<NuProcess> processes = new LinkedList<NuProcess>();
-        for (int times = 0; times < 1; times++)
-        {
-            for (int i = 0; i < 50; i++)
-            {
-                processes.add(pb.start());
-            }
-
-            List<NuProcess> deadProcs = new ArrayList<NuProcess>();
-            while (true)
-            {
-                Thread.sleep(20);
-                int dead = (int) (Math.random() * processes.size());
-                if (!System.getProperty("os.name").toLowerCase().contains("win"))
-                {
-                    BasePosixProcess bpp = (BasePosixProcess) processes.remove(dead);
-                    if (bpp == null)
-                    {
-                        continue;
-                    }
-                    deadProcs.add(bpp);
-                    LibC.kill(bpp.getPid(), LibC.SIGKILL);
-                }
-                else
-                {
-                    WindowsProcess wp = (WindowsProcess) processes.remove(dead);
-                    if (wp == null)
-                    {
-                        continue;
-                    }
-                    deadProcs.add(wp);
-                    wp.destroy(false);
-                }
-    
-                if (processes.isEmpty())
-                {
-                	for (int i = 0; i < 50; i++)
-                	{
-                		int exit = deadProcs.get(i).waitFor(2, TimeUnit.SECONDS);
-                		Assert.assertTrue("Process exit code did not match", (exit != 0 || exit == Integer.MAX_VALUE));
-                	}
-                    break;
-                }
-            }
-        }
-    }
+         }
+      }
+   }
 }

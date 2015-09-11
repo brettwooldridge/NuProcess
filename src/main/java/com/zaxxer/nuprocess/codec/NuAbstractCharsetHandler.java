@@ -42,49 +42,58 @@ import java.nio.charset.CoderResult;
  *
  * @author Ben Hamilton
  */
-public abstract class NuAbstractCharsetHandler implements NuProcessHandler {
-  private final NuCharsetEncoder stdinEncoder;
-  private final NuCharsetDecoder stdoutDecoder;
-  private final NuCharsetDecoder stderrDecoder;
+public abstract class NuAbstractCharsetHandler implements NuProcessHandler
+{
+   private final NuCharsetEncoder stdinEncoder;
+   private final NuCharsetDecoder stdoutDecoder;
+   private final NuCharsetDecoder stderrDecoder;
 
-  private class StdinEncoderHandler implements NuCharsetEncoderHandler {
-    @Override
-    public boolean onStdinReady(CharBuffer buffer) {
-      return onStdinCharsReady(buffer);
-    }
+   private class StdinEncoderHandler implements NuCharsetEncoderHandler
+   {
+      @Override
+      public boolean onStdinReady(CharBuffer buffer)
+      {
+         return onStdinCharsReady(buffer);
+      }
 
-    @Override
-    public void onEncoderError(CoderResult result) {
-      onStdinEncoderError(result);
-    }
-  }
+      @Override
+      public void onEncoderError(CoderResult result)
+      {
+         onStdinEncoderError(result);
+      }
+   }
 
-  private class StdoutDecoderHandler implements NuCharsetDecoderHandler {
-    @Override
-    public void onDecode(CharBuffer buffer, boolean closed, CoderResult decoderResult) {
-      onStdoutChars(buffer, closed, decoderResult);
-    }
-  }
+   private class StdoutDecoderHandler implements NuCharsetDecoderHandler
+   {
+      @Override
+      public void onDecode(CharBuffer buffer, boolean closed, CoderResult decoderResult)
+      {
+         onStdoutChars(buffer, closed, decoderResult);
+      }
+   }
 
-  private class StderrDecoderHandler implements NuCharsetDecoderHandler {
-    @Override
-    public void onDecode(CharBuffer buffer, boolean closed, CoderResult decoderResult) {
-      onStderrChars(buffer, closed, decoderResult);
-    }
-  }
+   private class StderrDecoderHandler implements NuCharsetDecoderHandler
+   {
+      @Override
+      public void onDecode(CharBuffer buffer, boolean closed, CoderResult decoderResult)
+      {
+         onStderrChars(buffer, closed, decoderResult);
+      }
+   }
 
-  /**
+   /**
    * Constructor which encodes and decodes stdin, stdout, and stderr bytes using
    * the given {@link Charset}.
    *
    * @param charset The {@link Charset} with which to encode and decode stdin, stdout,
    *                and stderr bytes
    */
-  protected NuAbstractCharsetHandler(Charset charset) {
-    this(charset.newEncoder(), charset.newDecoder(), charset.newDecoder());
-  }
+   protected NuAbstractCharsetHandler(Charset charset)
+   {
+      this(charset.newEncoder(), charset.newDecoder(), charset.newDecoder());
+   }
 
-  /**
+   /**
    * Constructor which encodes and decodes stdin, stdout, and stderr bytes using
    * specific {@link CharsetEncoder} and {@link CharsetDecoder CharsetDecoders},
    * then invokes {@link #onStdinCharsReady(CharBuffer)},
@@ -96,32 +105,36 @@ public abstract class NuAbstractCharsetHandler implements NuProcessHandler {
    * @param stdoutDecoder The {@link CharsetDecoder} with which to decode stdout bytes
    * @param stderrDecoder The {@link CharsetDecoder} with which to decode stderr bytes
    */
-  protected NuAbstractCharsetHandler(CharsetEncoder stdinEncoder, CharsetDecoder stdoutDecoder, CharsetDecoder stderrDecoder) {
-    this.stdinEncoder = new NuCharsetEncoder(new StdinEncoderHandler(), stdinEncoder);
-    this.stdoutDecoder = new NuCharsetDecoder(new StdoutDecoderHandler(), stdoutDecoder);
-    this.stderrDecoder = new NuCharsetDecoder(new StderrDecoderHandler(), stderrDecoder);
-  }
+   protected NuAbstractCharsetHandler(CharsetEncoder stdinEncoder, CharsetDecoder stdoutDecoder, CharsetDecoder stderrDecoder)
+   {
+      this.stdinEncoder = new NuCharsetEncoder(new StdinEncoderHandler(), stdinEncoder);
+      this.stdoutDecoder = new NuCharsetDecoder(new StdoutDecoderHandler(), stdoutDecoder);
+      this.stderrDecoder = new NuCharsetDecoder(new StderrDecoderHandler(), stderrDecoder);
+   }
 
-  /**
+   /**
    * Override this to provide Unicode Java string data to stdin.
    *
    * @param buffer The {@link CharBuffer} into which you should write string data to
    *               be fed to stdin
    * @return {@code true} if you have more string data to feed to stdin
    */
-  protected boolean onStdinCharsReady(CharBuffer buffer) {
-    return false;
-  }
+   protected boolean onStdinCharsReady(CharBuffer buffer)
+   {
+      return false;
+   }
 
-  /**
+   /**
    * Override this to handle errors encoding string data received from
    * {@link #onStdinCharsReady(CharBuffer)}.
    *
    * @param result The {@link CoderResult} indicating encoder error
    */
-  protected void onStdinEncoderError(CoderResult result) { }
+   protected void onStdinEncoderError(CoderResult result)
+   {
+   }
 
-  /**
+   /**
    * Override this to receive decoded Unicode Java string data read from stdout.
    * <p>
    * Make sure to set the {@link CharBuffer#position() position} of
@@ -129,12 +142,13 @@ public abstract class NuAbstractCharsetHandler implements NuProcessHandler {
    *
    * @param buffer The {@link CharBuffer} receiving Unicode string data.
    */
-  protected void onStdoutChars(CharBuffer buffer, boolean closed, CoderResult coderResult) {
-    // Consume the entire buffer by default.
-    buffer.position(buffer.limit());
-  }
+   protected void onStdoutChars(CharBuffer buffer, boolean closed, CoderResult coderResult)
+   {
+      // Consume the entire buffer by default.
+      buffer.position(buffer.limit());
+   }
 
-  /**
+   /**
    * Override this to receive decoded Unicode Java string data read from stderr.
    * <p>
    * Make sure to set the {@link CharBuffer#position() position} of
@@ -142,38 +156,48 @@ public abstract class NuAbstractCharsetHandler implements NuProcessHandler {
    *
    * @param buffer The {@link CharBuffer} receiving Unicode string data.
    */
-  protected void onStderrChars(CharBuffer buffer, boolean closed, CoderResult coderResult) {
-    // Consume the entire buffer by default.
-    buffer.position(buffer.limit());
-  }
+   protected void onStderrChars(CharBuffer buffer, boolean closed, CoderResult coderResult)
+   {
+      // Consume the entire buffer by default.
+      buffer.position(buffer.limit());
+   }
 
-  /** {@inheritDoc} */
-  @Override
-  public void onPreStart(NuProcess nuProcess) { }
+   /** {@inheritDoc} */
+   @Override
+   public void onPreStart(NuProcess nuProcess)
+   {
+   }
 
-  /** {@inheritDoc} */
-  @Override
-  public void onStart(NuProcess nuProcess) { }
+   /** {@inheritDoc} */
+   @Override
+   public void onStart(NuProcess nuProcess)
+   {
+   }
 
-  /** {@inheritDoc} */
-  @Override
-  public void onExit(int exitCode) { }
+   /** {@inheritDoc} */
+   @Override
+   public void onExit(int exitCode)
+   {
+   }
 
-  /** {@inheritDoc} */
-  @Override
-  public final void onStdout(ByteBuffer buffer, boolean closed) {
-    stdoutDecoder.onOutput(buffer, closed);
-  }
+   /** {@inheritDoc} */
+   @Override
+   public final void onStdout(ByteBuffer buffer, boolean closed)
+   {
+      stdoutDecoder.onOutput(buffer, closed);
+   }
 
-  /** {@inheritDoc} */
-  @Override
-  public final void onStderr(ByteBuffer buffer, boolean closed) {
-    stderrDecoder.onOutput(buffer, closed);
-  }
+   /** {@inheritDoc} */
+   @Override
+   public final void onStderr(ByteBuffer buffer, boolean closed)
+   {
+      stderrDecoder.onOutput(buffer, closed);
+   }
 
-  /** {@inheritDoc} */
-  @Override
-  public final boolean onStdinReady(ByteBuffer buffer) {
-    return stdinEncoder.onStdinReady(buffer);
-  }
+   /** {@inheritDoc} */
+   @Override
+   public final boolean onStdinReady(ByteBuffer buffer)
+   {
+      return stdinEncoder.onStdinReady(buffer);
+   }
 }

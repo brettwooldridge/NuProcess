@@ -16,19 +16,20 @@
 
 package com.zaxxer.nuprocess.codec;
 
-import com.zaxxer.nuprocess.NuProcess;
-import com.zaxxer.nuprocess.NuProcessHandler;
-
 import java.nio.CharBuffer;
 import java.nio.charset.CoderResult;
+
+import com.zaxxer.nuprocess.NuProcess;
+import com.zaxxer.nuprocess.NuProcessHandler;
 
 /**
  * Callbacks invoked by {@link NuCharsetEncoder} with decoded string data.
  *
  * @see NuProcessHandler
  */
-public interface NuCharsetEncoderHandler {
-  /**
+public interface NuCharsetEncoderHandler
+{
+   /**
    * This method is invoked after you have expressed a desire to write to stdin
    * by first calling {@link NuProcess#wantWrite()}.  When this method is invoked,
    * your code should write data to be sent to the stdin of the child process into
@@ -48,13 +49,13 @@ public interface NuCharsetEncoderHandler {
    * @param buffer a {@link CharBuffer} into which your stdin-bound data should be written
    * @return true if you have more data to write immediately, false otherwise
    */
-  boolean onStdinReady(CharBuffer buffer);
+   boolean onStdinReady(CharBuffer buffer);
 
-  /**
+   /**
    * This method is invoked immediately after {@link #onStdinReady(CharBuffer)} returns
    * if encoding the {@link CharBuffer} to bytes fails.
    *
    * @param result The {@link CoderResult} indicating the encoding failure
    */
-  void onEncoderError(CoderResult result);
+   void onEncoderError(CoderResult result);
 }

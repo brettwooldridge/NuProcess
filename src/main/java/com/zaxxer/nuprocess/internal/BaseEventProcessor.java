@@ -50,11 +50,13 @@ public abstract class BaseEventProcessor<T extends BasePosixProcess> implements 
       LINGER_ITERATIONS = LINGER_TIME_MS / DEADPOOL_POLL_INTERVAL;
    }
 
-   public BaseEventProcessor() {
+   public BaseEventProcessor()
+   {
       this(LINGER_ITERATIONS);
    }
 
-   public BaseEventProcessor(int lingerIterations) {
+   public BaseEventProcessor(int lingerIterations)
+   {
       this.lingerIterations = lingerIterations;
       pidToProcessMap = new ConcurrentHashMap<Integer, T>();
       fildesToProcessMap = new ConcurrentHashMap<Integer, T>();

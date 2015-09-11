@@ -37,37 +37,38 @@ import java.nio.charset.CoderResult;
  *
  * @author Ben Hamilton
  */
-public final class NuCharsetDecoder {
-  private final NuCharsetDecoderHandler handler;
-  private final CharsetDecoder decoder;
-  private final CharBuffer charBuffer;
+public final class NuCharsetDecoder
+{
+   private final NuCharsetDecoderHandler handler;
+   private final CharsetDecoder decoder;
+   private final CharBuffer charBuffer;
 
-  /**
+   /**
    * Creates a decoder which uses a single {@link Charset} to decode output data.
    *
    * @param handler {@link NuCharsetDecoderHandler} called back with decoded string data
    * @param charset {@link Charset} used to decode output data
    */
-  public NuCharsetDecoder(NuCharsetDecoderHandler handler, Charset charset) {
-    this(handler, charset.newDecoder());
-  }
+   public NuCharsetDecoder(NuCharsetDecoderHandler handler, Charset charset)
+   {
+      this(handler, charset.newDecoder());
+   }
 
-  /**
+   /**
    * Creates a decoder which uses a {@link CharsetDecoder CharsetDecoders} to decode
    * output data.
    *
    * @param handler {@link NuCharsetDecoderHandler} called back with decoded string data
    * @param decoder {@link CharsetDecoder} used to decode stdout bytes to string data
    */
-  public NuCharsetDecoder(
-          NuCharsetDecoderHandler handler,
-          CharsetDecoder decoder) {
-    this.handler = handler;
-    this.decoder = decoder;
-    this.charBuffer = CharBuffer.allocate(NuProcess.BUFFER_CAPACITY);
-  }
+   public NuCharsetDecoder(NuCharsetDecoderHandler handler, CharsetDecoder decoder)
+   {
+      this.handler = handler;
+      this.decoder = decoder;
+      this.charBuffer = CharBuffer.allocate(NuProcess.BUFFER_CAPACITY);
+   }
 
-  /**
+   /**
    * Implementation of {@link NuProcessHandler#onStdout(ByteBuffer, boolean)} or
    * {@link NuProcessHandler#onStderr(ByteBuffer, boolean)} which decodes output
    * data and forwards it to {@code handler}.
@@ -75,10 +76,11 @@ public final class NuCharsetDecoder {
    * @param buffer {@link ByteBuffer} which received bytes from stdout or stderr
    * @param closed true if stdout or stderr was closed, false otherwise
    */
-  public void onOutput(ByteBuffer buffer, boolean closed) {
-    CoderResult coderResult = decoder.decode(buffer, charBuffer, /* endOfInput */ closed);
-    charBuffer.flip();
-    this.handler.onDecode(charBuffer, closed, coderResult);
-    charBuffer.compact();
-  }
+   public void onOutput(ByteBuffer buffer, boolean closed)
+   {
+      CoderResult coderResult = decoder.decode(buffer, charBuffer, /* endOfInput */ closed);
+      charBuffer.flip();
+      this.handler.onDecode(charBuffer, closed, coderResult);
+      charBuffer.compact();
+   }
 }

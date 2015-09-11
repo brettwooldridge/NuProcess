@@ -28,7 +28,8 @@ public abstract class NuAbstractProcessHandler implements NuProcessHandler
 {
    /** {@inheritDoc} */
    @Override
-   public void onPreStart(NuProcess nuProcess) {
+   public void onPreStart(NuProcess nuProcess)
+   {
    }
 
    /** {@inheritDoc} */

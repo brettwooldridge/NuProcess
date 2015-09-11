@@ -16,9 +16,8 @@
 
 package com.zaxxer.nuprocess;
 
-import java.util.List;
-
 import java.nio.file.Path;
+import java.util.List;
 
 /**
  * <b>This is an internal class.</b>  Instances of this interface create and start processes

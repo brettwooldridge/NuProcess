@@ -42,28 +42,31 @@ public class EpollEvent extends Structure
        };
    */
 
-	public int events;
-	public EpollData data;
+   public int events;
+   public EpollData data;
 
-   EpollEvent() {
-	  // per eventpoll.h, x86_64 has the same alignment as 32-bit
+   EpollEvent()
+   {
+      // per eventpoll.h, x86_64 has the same alignment as 32-bit
       super(ALIGN_GNUC);
-      
+
       data = new EpollData();
       data.setType("fd");
    }
-   
+
    @SuppressWarnings("rawtypes")
    @Override
-   protected List getFieldOrder() {
-	   return Arrays.asList("events", "data");
+   protected List getFieldOrder()
+   {
+      return Arrays.asList("events", "data");
    }
 
-   public static class EpollData extends Union {
-	   public Pointer ptr;
-	   public int fd;
-	   public int u32;
-	   public long u64;
+   public static class EpollData extends Union
+   {
+      public Pointer ptr;
+      public int fd;
+      public int u32;
+      public long u64;
    }
-   
+
 }

@@ -16,22 +16,20 @@
 
 package com.zaxxer.nuprocess;
 
-import static org.junit.Assert.assertThat;
-import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.nullValue;
-
-import com.sun.jna.Platform;
+import static org.junit.Assert.assertThat;
 
 import java.io.ByteArrayOutputStream;
 import java.nio.ByteBuffer;
 import java.nio.channels.Channels;
 import java.nio.channels.WritableByteChannel;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.concurrent.TimeUnit;
 
 import org.junit.Test;
+
+import com.sun.jna.Platform;
 
 public class FastExitingProcessTest
 {
@@ -43,36 +41,38 @@ public class FastExitingProcessTest
       public Exception stdoutException;
 
       @Override
-      public void onExit(int exitCode) {
+      public void onExit(int exitCode)
+      {
          this.exitCode = exitCode;
       }
 
       @Override
-      public void onStdout(ByteBuffer buffer, boolean closed) {
+      public void onStdout(ByteBuffer buffer, boolean closed)
+      {
          try {
             stdoutBytesChannel.write(buffer);
-         } catch (Exception e) {
+         }
+         catch (Exception e) {
             stdoutException = e;
          }
       }
    }
 
    @Test
-   public void whenProcessWritesToStdoutThenExitsThenHandlerReceivesOutput() throws Exception {
+   public void whenProcessWritesToStdoutThenExitsThenHandlerReceivesOutput() throws Exception
+   {
       Handler handler = new Handler();
       NuProcess process;
       if (Platform.isWindows()) {
          process = new NuProcessBuilder(handler, "cmd.exe", "/c", "echo", "Hello world!").start();
-      } else {
+      }
+      else {
          process = new NuProcessBuilder(handler, "echo", "Hello world!").start();
       }
       int retVal = process.waitFor(Long.MAX_VALUE, TimeUnit.SECONDS);
       assertThat("Process should exit cleanly", retVal, equalTo(0));
       assertThat("Process callback should indicate clean exit", handler.exitCode, equalTo(0));
       assertThat("No exceptions thrown writing to stdout", handler.stdoutException, is(nullValue()));
-      assertThat(
-            "Stdout should contain expected output",
-            handler.stdoutBytes.toString("UTF-8"),
-            equalTo(String.format("Hello world!%n")));
+      assertThat("Stdout should contain expected output", handler.stdoutBytes.toString("UTF-8"), equalTo(String.format("Hello world!%n")));
    }
 }

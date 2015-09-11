@@ -31,11 +31,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import com.sun.jna.Native;
 import com.sun.jna.ptr.IntByReference;
 import com.sun.jna.ptr.PointerByReference;
-import com.zaxxer.nuprocess.NuProcess;
-import com.zaxxer.nuprocess.windows.WindowsProcess.PipeBundle;
 import com.zaxxer.nuprocess.windows.NuWinNT.HANDLE;
 import com.zaxxer.nuprocess.windows.NuWinNT.ULONG_PTR;
 import com.zaxxer.nuprocess.windows.NuWinNT.ULONG_PTRByReference;
+import com.zaxxer.nuprocess.windows.WindowsProcess.PipeBundle;
 
 public final class ProcessCompletions implements Runnable
 {
@@ -67,7 +66,8 @@ public final class ProcessCompletions implements Runnable
       LINGER_ITERATIONS = lingerTimeMs / DEADPOOL_POLL_INTERVAL;
    }
 
-   public ProcessCompletions() {
+   public ProcessCompletions()
+   {
       completionKeyToProcessMap = new HashMap<Long, WindowsProcess>();
       wantsWrite = new ArrayBlockingQueue<WindowsProcess>(512);
       pendingPool = new LinkedBlockingQueue<WindowsProcess>();

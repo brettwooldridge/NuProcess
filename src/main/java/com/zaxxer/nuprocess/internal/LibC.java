@@ -30,8 +30,7 @@ public class LibC
    static {
       Native.register(NativeLibrary.getProcess());
 
-      if (System.getProperty("os.name").toLowerCase().contains("mac")
-              || System.getProperty("os.name").toLowerCase().contains("freebsd")) {
+      if (System.getProperty("os.name").toLowerCase().contains("mac") || System.getProperty("os.name").toLowerCase().contains("freebsd")) {
          O_NONBLOCK = 0x0004; // MacOS X, Freebsd
       }
       else {
@@ -74,7 +73,7 @@ public class LibC
    public static native int posix_spawn_file_actions_adddup2(Pointer actions, int fildes, int newfildes);
 
    public static native int posix_spawnp(IntByReference restrict_pid, String restrict_path, Pointer file_actions,
-                                         Pointer /*const posix_spawnattr_t*/restrict_attrp, StringArray /*String[]*/argv, Pointer /*String[]*/envp);
+                                         Pointer /*const posix_spawnattr_t*/ restrict_attrp, StringArray /*String[]*/ argv, Pointer /*String[]*/ envp);
 
    public static native Pointer signal(int signal, Pointer func);
 
@@ -84,13 +83,14 @@ public class LibC
 
    // from /usr/include/sys/syscall.h
    // We can't use JNA direct mapping for syscall(), since it takes varargs.
-   public interface SyscallLibrary extends Library {
+   public interface SyscallLibrary extends Library
+   {
       public static final int SYS___pthread_chdir = 348;
+
       int syscall(int syscall_number, Object... args);
    }
 
-   public static SyscallLibrary SYSCALL = (SyscallLibrary) Native.loadLibrary(
-      Platform.C_LIBRARY_NAME, SyscallLibrary.class);
+   public static SyscallLibrary SYSCALL = (SyscallLibrary) Native.loadLibrary(Platform.C_LIBRARY_NAME, SyscallLibrary.class);
 
    public static final int F_GETFL = 3;
    public static final int F_SETFL = 4;
@@ -144,7 +144,7 @@ public class LibC
    {
       return (((byte) (((status) & 0x7f) + 1) >> 1) > 0);
    }
-   
+
    /* Nonzero if STATUS indicates the child is stopped.  */
    public static boolean WIFSTOPPED(int status)
    {

@@ -47,7 +47,8 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
 
    private static BlockingQueue<EpollEvent> eventPool;
 
-   ProcessEpoll() {
+   ProcessEpoll()
+   {
       epoll = LibEpoll.epoll_create(1024);
       if (epoll < 0) {
          throw new RuntimeException("Unable to create kqueue: " + Native.getLastError());
@@ -74,7 +75,7 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
 
       int stdoutFd = process.getStdout().get();
       int stderrFd = process.getStderr().get();
-      
+
       pidToProcessMap.put(process.getPid(), process);
       fildesToProcessMap.put(process.getStdin().get(), process);
       fildesToProcessMap.put(stdoutFd, process);
