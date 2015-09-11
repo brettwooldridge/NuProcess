@@ -25,6 +25,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
@@ -60,6 +61,7 @@ public final class WindowsProcess implements NuProcess
    private static final ProcessCompletions[] processors;
    private static int processorRoundRobin;
 
+   private static final String namedPipePathPrefix;
    private static final AtomicInteger namedPipeCounter;
 
    private volatile ProcessCompletions myProcessor;
@@ -91,6 +93,7 @@ public final class WindowsProcess implements NuProcess
    private PROCESS_INFORMATION processInfo;
 
    static {
+      namedPipePathPrefix = "\\\\.\\pipe\\NuProcess-" + UUID.randomUUID().toString() + "-";
       namedPipeCounter = new AtomicInteger(100);
 
       IS_SOFTEXIT_DETECTION = Boolean.valueOf(System.getProperty("com.zaxxer.nuprocess.softExitDetection", "true"));
@@ -429,11 +432,11 @@ public final class WindowsProcess implements NuProcess
       try {
     	 isRunning = false;
          exitCode.set(statusCode);
-         if (stdoutPipe.buffer != null && !outClosed) {
+         if (stdoutPipe != null && stdoutPipe.buffer != null && !outClosed) {
            stdoutPipe.buffer.flip();
            processHandler.onStdout(stdoutPipe.buffer, true);
          }
-         if (stderrPipe.buffer != null && !errClosed) {
+         if (stderrPipe != null && stderrPipe.buffer != null && !errClosed) {
            stderrPipe.buffer.flip();
            processHandler.onStderr(stderrPipe.buffer, true);
          }
@@ -448,18 +451,26 @@ public final class WindowsProcess implements NuProcess
       finally {
     	 exitPending.countDown();
 
-         if (!inClosed) {
-            NuKernel32.CloseHandle(stdinPipe.pipeHandle);
+         if (stdinPipe != null) {
+            if (!inClosed) {
+              NuKernel32.CloseHandle(stdinPipe.pipeHandle);
+            }
+            Native.free(Pointer.nativeValue(stdinPipe.bufferPointer));
          }
 
-         NuKernel32.CloseHandle(stdoutPipe.pipeHandle);
-         NuKernel32.CloseHandle(stderrPipe.pipeHandle);
-         NuKernel32.CloseHandle(processInfo.hThread);
-         NuKernel32.CloseHandle(processInfo.hProcess);
+         if (stdoutPipe != null) {
+            NuKernel32.CloseHandle(stdoutPipe.pipeHandle);
+            Native.free(Pointer.nativeValue(stdoutPipe.bufferPointer));
+         }
+         if (stderrPipe != null) {
+            NuKernel32.CloseHandle(stderrPipe.pipeHandle);
+            Native.free(Pointer.nativeValue(stderrPipe.bufferPointer));
+         }
 
-         Native.free(Pointer.nativeValue(stdoutPipe.bufferPointer));
-         Native.free(Pointer.nativeValue(stderrPipe.bufferPointer));
-         Native.free(Pointer.nativeValue(stdinPipe.bufferPointer));
+         if (processInfo != null) {
+            NuKernel32.CloseHandle(processInfo.hThread);
+            NuKernel32.CloseHandle(processInfo.hProcess);
+         }
 
          stderrPipe = null;
          stdoutPipe = null;
@@ -511,7 +522,7 @@ public final class WindowsProcess implements NuProcess
 
       // ################ STDOUT PIPE ################
       long ioCompletionKey = namedPipeCounter.getAndIncrement();
-      WString pipeName = new WString("\\\\.\\pipe\\NuProcess" + ioCompletionKey);
+      WString pipeName = new WString(namedPipePathPrefix + ioCompletionKey);
       hStdoutWidow = NuKernel32.CreateNamedPipeW(pipeName, NuKernel32.PIPE_ACCESS_INBOUND, 0 /*dwPipeMode*/, 1 /*nMaxInstances*/, BUFFER_SIZE, BUFFER_SIZE,
                                                  0 /*nDefaultTimeOut*/, sattr);
       checkHandleValidity(hStdoutWidow);
@@ -524,7 +535,7 @@ public final class WindowsProcess implements NuProcess
 
       // ################ STDERR PIPE ################
       ioCompletionKey = namedPipeCounter.getAndIncrement();
-      pipeName = new WString("\\\\.\\pipe\\NuProcess" + ioCompletionKey);
+      pipeName = new WString(namedPipePathPrefix + ioCompletionKey);
       hStderrWidow = NuKernel32.CreateNamedPipeW(pipeName, NuKernel32.PIPE_ACCESS_INBOUND, 0 /*dwPipeMode*/, 1 /*nMaxInstances*/, BUFFER_SIZE, BUFFER_SIZE,
                                                  0 /*nDefaultTimeOut*/, sattr);
       checkHandleValidity(hStderrWidow);
@@ -537,7 +548,7 @@ public final class WindowsProcess implements NuProcess
 
       // ################ STDIN PIPE ################
       ioCompletionKey = namedPipeCounter.getAndIncrement();
-      pipeName = new WString("\\\\.\\pipe\\NuProcess" + ioCompletionKey);
+      pipeName = new WString(namedPipePathPrefix + ioCompletionKey);
       hStdinWidow = NuKernel32.CreateNamedPipeW(pipeName, NuKernel32.PIPE_ACCESS_OUTBOUND, 0 /*dwPipeMode*/, 1 /*nMaxInstances*/, BUFFER_SIZE, BUFFER_SIZE,
                                                 0 /*nDefaultTimeOut*/, sattr);
       checkHandleValidity(hStdinWidow);
@@ -601,31 +612,14 @@ public final class WindowsProcess implements NuProcess
    private char[] getCommandLine(List<String> commands)
    {
       StringBuilder sb = new StringBuilder();
-      if (commands.get(0).contains(" ") && !commands.get(0).startsWith("\"") && !commands.get(0).endsWith("\"")) {
-         commands.set(0, "\"" + commands.get(0).replaceAll("\\\"", "\\\"") + "\"");
+      for (String command : commands) {
+         // It's OK to apply CreateProcess escaping to even the first item in the commands
+         // list (the path to execute). Since Windows paths cannot contain double-quotes
+         // (really!), the logic in WindowsCreateProcessEscape.quote() will either do nothing
+         // or simply add double-quotes around the path.
+         WindowsCreateProcessEscape.quote(sb, command);
       }
-
-      Iterator<String> iterator = commands.iterator();
-      sb.append(iterator.next()).append(' '); // skip the executable itself
-      while (iterator.hasNext()) {
-         String s = iterator.next();
-         if (s.contains(" ")) {
-            sb.append('"').append(s).append('"');
-         }
-         else {
-            sb.append(s);
-         }
-
-         sb.append(' ');
-      }
-
-      if (sb.length() > 0) {
-         sb.setLength(sb.length() - 1);
-      }
-
-      sb.append((char) 0);
-
-      return sb.toString().toCharArray();
+      return Native.toCharArray(sb.toString());
    }
 
    private char[] getEnvironment(String[] environment)
