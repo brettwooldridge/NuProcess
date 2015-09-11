@@ -99,6 +99,7 @@
                     <instructions>
                         <Bundle-Name>NuProcess</Bundle-Name>
                         <Export-Package>com.zaxxer.nuprocess</Export-Package>
+                        <Export-Package>com.zaxxer.nuprocess.codec</Export-Package>
                         <Import-Package>com.sun.*,sun.misc.*</Import-Package>
                         <Bundle-SymbolicName>${project.groupId}.${project.artifactId}</Bundle-SymbolicName>
                     </instructions>
@@ -124,10 +125,13 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-javadoc-plugin</artifactId>
-                <version>2.9.1</version>
+                <version>2.10.2</version>
                 <configuration>
                     <show>public</show>
-                    <excludePackageNames>com.zaxxer.nuprocess.*</excludePackageNames>
+                    <sourceFileExcludes>
+                        <exclude>**/NuProcessFactory.java</exclude>
+                    </sourceFileExcludes>
+                    <excludePackageNames>com.zaxxer.nuprocess.internal,com.zaxxer.nuprocess.linux,com.zaxxer.nuprocess.osx,com.zaxxer.nuprocess.windows</excludePackageNames>
                     <attach>true</attach>
                 </configuration>
                 <executions>
