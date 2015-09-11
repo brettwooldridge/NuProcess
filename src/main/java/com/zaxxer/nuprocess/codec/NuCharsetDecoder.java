@@ -27,8 +27,8 @@ import java.nio.charset.CoderResult;
 
 /**
  * Implementation of {@link NuProcessHandler#onStdout(ByteBuffer, boolean)} or
- * {@link NuProcessHandler#onStderr(ByteBuffer, boolean)}
- * which handles decoding of stdout or stderr bytes to Java UTF-16 string data.
+ * {@link NuProcessHandler#onStderr(ByteBuffer, boolean)} which handles decoding
+ * of stdout or stderr bytes to Java UTF-16 string data.
  *
  * Calls back into a {@link NuCharsetDecoderHandler} with decoded stdout or
  * stderr string data.
@@ -44,23 +44,27 @@ public final class NuCharsetDecoder
    private final CharBuffer charBuffer;
 
    /**
-   * Creates a decoder which uses a single {@link Charset} to decode output data.
-   *
-   * @param handler {@link NuCharsetDecoderHandler} called back with decoded string data
-   * @param charset {@link Charset} used to decode output data
-   */
+    * Creates a decoder which uses a single {@link Charset} to decode output
+    * data.
+    *
+    * @param handler {@link NuCharsetDecoderHandler} called back with decoded
+    *        string data
+    * @param charset {@link Charset} used to decode output data
+    */
    public NuCharsetDecoder(NuCharsetDecoderHandler handler, Charset charset)
    {
       this(handler, charset.newDecoder());
    }
 
    /**
-   * Creates a decoder which uses a {@link CharsetDecoder CharsetDecoders} to decode
-   * output data.
-   *
-   * @param handler {@link NuCharsetDecoderHandler} called back with decoded string data
-   * @param decoder {@link CharsetDecoder} used to decode stdout bytes to string data
-   */
+    * Creates a decoder which uses a {@link CharsetDecoder CharsetDecoders} to
+    * decode output data.
+    *
+    * @param handler {@link NuCharsetDecoderHandler} called back with decoded
+    *        string data
+    * @param decoder {@link CharsetDecoder} used to decode stdout bytes to
+    *        string data
+    */
    public NuCharsetDecoder(NuCharsetDecoderHandler handler, CharsetDecoder decoder)
    {
       this.handler = handler;
@@ -69,13 +73,14 @@ public final class NuCharsetDecoder
    }
 
    /**
-   * Implementation of {@link NuProcessHandler#onStdout(ByteBuffer, boolean)} or
-   * {@link NuProcessHandler#onStderr(ByteBuffer, boolean)} which decodes output
-   * data and forwards it to {@code handler}.
-   *
-   * @param buffer {@link ByteBuffer} which received bytes from stdout or stderr
-   * @param closed true if stdout or stderr was closed, false otherwise
-   */
+    * Implementation of {@link NuProcessHandler#onStdout(ByteBuffer, boolean)}
+    * or {@link NuProcessHandler#onStderr(ByteBuffer, boolean)} which decodes
+    * output data and forwards it to {@code handler}.
+    *
+    * @param buffer {@link ByteBuffer} which received bytes from stdout or
+    *        stderr
+    * @param closed true if stdout or stderr was closed, false otherwise
+    */
    public void onOutput(ByteBuffer buffer, boolean closed)
    {
       CoderResult coderResult = decoder.decode(buffer, charBuffer, /* endOfInput */ closed);

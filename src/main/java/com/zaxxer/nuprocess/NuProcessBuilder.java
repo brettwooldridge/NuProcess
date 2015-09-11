@@ -27,23 +27,30 @@ import java.util.TreeMap;
 /**
  * This class is used to create operating system processes.
  * <p>
- * Each {@code NuProcessBuilder} instance manages a collection of process attributes. The {@link #start()} method 
- * creates a new {@link NuProcess} instance with those attributes. The {@link #start()} method can be invoked 
- * repeatedly from the same instance to create new subprocesses with identical or related attributes.
+ * Each {@code NuProcessBuilder} instance manages a collection of process
+ * attributes. The {@link #start()} method creates a new {@link NuProcess}
+ * instance with those attributes. The {@link #start()} method can be invoked
+ * repeatedly from the same instance to create new subprocesses with identical
+ * or related attributes.
  * <p>
  * Each {@code NuProcessBuilder} manages these attributes:
  * <ul>
- *   <li>a <em>command</em>, a list of strings which signifies the external program file to be invoked and its arguments, 
- *   if any. Which string lists represent a valid operating system command is system-dependent. For example, it is common
- *   for each conceptual argument to be an element in this list, but there are operating systems where programs are
- *   expected to tokenize command line strings themselves - on such a system a Java implementation might require commands
- *   to contain exactly two elements.</li>
- *   <li>an <em>environment</em>, which is a system-dependent mapping from variables to values. The initial value is a 
- *   copy of the environment of the current process. See {@link System#getenv()}.</li>
+ * <li>a <em>command</em>, a list of strings which signifies the external
+ * program file to be invoked and its arguments, if any. Which string lists
+ * represent a valid operating system command is system-dependent. For example,
+ * it is common for each conceptual argument to be an element in this list, but
+ * there are operating systems where programs are expected to tokenize command
+ * line strings themselves - on such a system a Java implementation might
+ * require commands to contain exactly two elements.</li>
+ *
+ * <li>an <em>environment</em>, which is a system-dependent mapping from
+ * variables to values. The initial value is a copy of the environment of the
+ * current process. See {@link System#getenv()}.</li>
  * </ul>
  * <p>
- * Modifying a process builder's attributes will affect processes subsequently started by that object's {@link #start()}
- * method, but will never affect previously started processes or the Java process itself.
+ * Modifying a process builder's attributes will affect processes subsequently
+ * started by that object's {@link #start()} method, but will never affect
+ * previously started processes or the Java process itself.
  *
  * @author Brett Wooldridge
  */
@@ -86,9 +93,11 @@ public class NuProcessBuilder
    }
 
    /**
-    * Constructs a process builder with the specified operating system program and arguments. This constructor
-    * makes a copy of the command list.  Invokers of this constuctor must later call {@link #setProcessListener(NuProcessHandler)}
-    * in order to set a {@link NuProcessHandler} instance.
+    * Constructs a process builder with the specified operating system program
+    * and arguments. This constructor makes a copy of the command list. Invokers
+    * of this constructor must later call
+    * {@link #setProcessListener(NuProcessHandler)} in order to set a
+    * {@link NuProcessHandler} instance.
     *
     * @param commands a {@link List} of commands
     * @param environment The environment for the process
@@ -104,9 +113,11 @@ public class NuProcessBuilder
    }
 
    /**
-    * Constructs a process builder with the specified operating system program and arguments. This constructor 
-    * makes a copy of the command list.  Invokers of this constuctor must later call {@link #setProcessListener(NuProcessHandler)}
-    * in order to set a {@link NuProcessHandler} instance.
+    * Constructs a process builder with the specified operating system program
+    * and arguments. This constructor makes a copy of the command list. Invokers
+    * of this constructor must later call
+    * {@link #setProcessListener(NuProcessHandler)} in order to set a
+    * {@link NuProcessHandler} instance.
     *
     * @param commands a {@link List} of commands
     */
@@ -121,9 +132,10 @@ public class NuProcessBuilder
    }
 
    /**
-    * Constructs a process builder with the specified operating system program and arguments.
-    * Invokers of this constuctor must later call {@link #setProcessListener(NuProcessHandler)}
-    * in order to set a {@link NuProcessHandler} instance.
+    * Constructs a process builder with the specified operating system program
+    * and arguments. Invokers of this constructor must later call
+    * {@link #setProcessListener(NuProcessHandler)} in order to set a
+    * {@link NuProcessHandler} instance.
     *
     * @param commands a list of commands
     */
@@ -138,8 +150,8 @@ public class NuProcessBuilder
    }
 
    /**
-    * Constructs a process builder with the specified {@link NuProcessHandler} and operating 
-    * system program and arguments.
+    * Constructs a process builder with the specified {@link NuProcessHandler}
+    * and operating system program and arguments.
     *
     * @param nuProcessHandler a {@link NuProcessHandler} instance
     * @param commands a list of commands
@@ -156,8 +168,9 @@ public class NuProcessBuilder
    }
 
    /**
-    * Constructs a process builder with the specified {@link NuProcessHandler} and operating 
-    * system program and arguments.  This constructor makes a copy of the command list.
+    * Constructs a process builder with the specified {@link NuProcessHandler}
+    * and operating system program and arguments. This constructor makes a copy
+    * of the command list.
     *
     * @param nuProcessHandler a {@link NuProcessHandler} instance
     * @param commands a {@link List} of commands
@@ -174,7 +187,8 @@ public class NuProcessBuilder
    }
 
    /**
-    * Get the {@link List} of commands that were used to construct this {@link NuProcessBuilder}.
+    * Get the {@link List} of commands that were used to construct this
+    * {@link NuProcessBuilder}.
     *
     * @return a {@link List} of commands
     */
@@ -184,12 +198,14 @@ public class NuProcessBuilder
    }
 
    /**
-    * Returns a string map view of this process builder's environment. Whenever a process builder is created,
-    * the environment is initialized to a copy of the current process environment.  Subprocesses subsequently 
-    * started by this object's {@link #start()} method will use this map as their environment.
+    * Returns a string map view of this process builder's environment. Whenever
+    * a process builder is created, the environment is initialized to a copy of
+    * the current process environment. Subprocesses subsequently started by this
+    * object's {@link #start()} method will use this map as their environment.
     * <p>
-    * The returned object may be modified using ordinary Map operations prior to invoking the {@link #start()}
-    * method.  The returned map is typically case-sensitive on all platforms.
+    * The returned object may be modified using ordinary Map operations prior to
+    * invoking the {@link #start()} method. The returned map is typically
+    * case-sensitive on all platforms.
     *
     * @return This process builder's environment
     */
@@ -199,10 +215,11 @@ public class NuProcessBuilder
    }
 
    /**
-    * Set the {@link NuProcessHandler} instance that will be used for the next and
-    * subsequent launch of a {@link NuProcess} when calling the {@link #start()} method.
+    * Set the {@link NuProcessHandler} instance that will be used for the next
+    * and subsequent launch of a {@link NuProcess} when calling the
+    * {@link #start()} method.
     *
-    * @param listener a {@link NuProcessHandler} instance 
+    * @param listener a {@link NuProcessHandler} instance
     */
    public void setProcessListener(NuProcessHandler listener)
    {
@@ -215,10 +232,12 @@ public class NuProcessBuilder
 
    /**
     * Set the {@link Path} to which the current working directory (cwd) of the
-    * subsequent launch of a {@link NuProcess} will be set when calling the {@link #start()} method.
+    * subsequent launch of a {@link NuProcess} will be set when calling the
+    * {@link #start()} method.
     *
-    * @param cwd a {@link Path} to use for the process's current working directory, or {@code null}
-    *            to disable setting the cwd of subsequently launched proceses
+    * @param cwd a {@link Path} to use for the process's current working
+    *        directory, or {@code null} to disable setting the cwd of
+    *        subsequently launched proceses
     */
    public void setCwd(Path cwd)
    {
@@ -226,9 +245,11 @@ public class NuProcessBuilder
    }
 
    /**
-    * Spawn the child process with the configured commands, environment, and {@link NuProcessHandler}.
+    * Spawn the child process with the configured commands, environment, and
+    * {@link NuProcessHandler}.
     *
-    * @return a {@link NuProcess} instance or {@code null} if there is an immediately detectable launch failure
+    * @return a {@link NuProcess} instance or {@code null} if there is an
+    *         immediately detectable launch failure
     */
    public NuProcess start()
    {

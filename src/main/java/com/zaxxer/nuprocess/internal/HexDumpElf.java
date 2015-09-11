@@ -33,6 +33,8 @@ public final class HexDumpElf
    }
 
    /**
+    * Dump an array of bytes in hexadecimal.
+    * 
     * @param displayOffset the display offset (left column)
     * @param data the byte array of data
     * @param offset the offset to start dumping in the byte array

@@ -19,8 +19,8 @@ package com.zaxxer.nuprocess;
 import java.nio.ByteBuffer;
 
 /**
- * Convenience base class for a {@link NuProcessHandler} with default methods that can be
- * overridden.
+ * Convenience base class for a {@link NuProcessHandler} with default methods
+ * that can be overridden.
  * 
  * @author Brett Wooldridge
  */

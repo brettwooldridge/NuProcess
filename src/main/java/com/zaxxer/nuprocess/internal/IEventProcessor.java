@@ -18,24 +18,31 @@ package com.zaxxer.nuprocess.internal;
 
 import java.util.concurrent.CyclicBarrier;
 
+/**
+ * This class is internal.
+ *
+ * @author Brett Wooldridge
+ *
+ * @param <T> a subclass of {@link BasePosixProcess}
+ */
 public interface IEventProcessor<T extends BasePosixProcess> extends Runnable
 {
    /**
-    * Check whether the processor instance is currently running, and if not
-    * set it to the running state.
+    * Check whether the processor instance is currently running, and if not set
+    * it to the running state.
     *
     * @return true if the processor was already running, false otherwise
     */
    boolean checkAndSetRunning();
 
    /**
-    * Get the CyclicBarrier that this thread should join, along with the NuProcess
-    * start thread that is starting this processor.  Used to cause the OsxProcess to
-    * waitn until the processor is up and running before returning from start() to
-    * the user.
+    * Get the CyclicBarrier that this thread should join, along with the
+    * NuProcess start thread that is starting this processor. Used to cause the
+    * OsxProcess to wait until the processor is up and running before returning
+    * from start() to the user.
     *
-    * @return the CyclicBarrier to join to ensure the processor is running before
-    *  registering processes with it
+    * @return the CyclicBarrier to join to ensure the processor is running
+    *         before registering processes with it
     */
    CyclicBarrier getSpawnBarrier();
 
@@ -47,8 +54,8 @@ public interface IEventProcessor<T extends BasePosixProcess> extends Runnable
    void registerProcess(T process);
 
    /**
-    * Express that the client desires to write data into the STDIN stream as soon
-    * as possible.
+    * Express that the client desires to write data into the STDIN stream as
+    * soon as possible.
     *
     * @param process the process that wants to write to STDIN
     */
