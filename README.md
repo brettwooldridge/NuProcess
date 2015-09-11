@@ -19,11 +19,11 @@ Java process and the spawned processes:
     <dependency>
         <groupId>com.zaxxer</groupId>
         <artifactId>nuprocess</artifactId>
-        <version>1.0.0</version>
+        <version>1.0.3</version>
         <scope>compile</scope>
     </dependency>
 
-:point_right: **Note: Version 1.0.0 contains breaking API changes from 0.9.7.**
+:point_right: **Note: Versions 1.0.0 and above contain breaking API changes from 0.9.7.**
 
 #### It's mostly about the memory
 Speed-wise, there is not a significant difference between NuProcess and the standard Java Process class, even when running
@@ -162,5 +162,5 @@ Charles Duffy has developed a Clojure wrapper library [here](https://github.com/
 #### Limitations
 The following limitations exist in NuProcess:
  * Currently only supports Linux, Windows, and MacOS X.
- * The provided library has only been fully tested on Java 7
+ * Java 7 and above
  * Linux support requires at least kernel version 2.6.17 or higher (kernels after June 2006)
