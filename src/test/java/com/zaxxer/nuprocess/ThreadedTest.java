@@ -155,7 +155,7 @@ public class ThreadedTest
          readAdler32.update(bytes);
 
          if (size == LIMIT)
-            nuProcess.closeStdin();
+            nuProcess.closeStdin(true);
       }
 
       @Override

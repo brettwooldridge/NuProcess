@@ -97,19 +97,24 @@ public interface NuProcess
 
    /**
     * This method is used to close the STDIN pipe between the Java process and
-    * the spawned process. The STDIN pipe is immediately closed regardless of
+    * the spawned process.
+    * <p>
+    * If {@code force} is {@code true}, the STDIN pipe is immediately closed regardless of
     * pending unwritten data, and even data that has been written into the pipe
     * will be immediately discarded.
+    * <p>
+    * Otherwise, STDIN will be closed only after all pending writes
+    * have completed.
     */
-   void closeStdin();
+   void closeStdin(boolean force);
 
    /**
     * This method is most useful in combination with {@link #writeStdin}. This
     * method returns true if there is outstanding data to be written to the
     * stdin stream, and false if there are no pending writes.
-    * 
-    * @return <code>true</code> if there are pending writes, <code>false</code>
-    *         otherwise
+    *
+    * @return <code>true</code> if there are pending writes or STDIN is pending
+    *         close, <code>false</code> otherwise
     */
    boolean hasPendingWrites();
 

@@ -56,6 +56,7 @@ public abstract class BasePosixProcess implements NuProcess
    protected static final boolean IS_LINUX = System.getProperty("os.name").toLowerCase().contains("linux");
    private static final boolean LINUX_USE_VFORK = Boolean.parseBoolean(System.getProperty("com.zaxxer.nuprocess.linuxUseVfork", "true"));
    private static final boolean IS_SOFTEXIT_DETECTION;
+   private static final ByteBuffer STDIN_CLOSED_PENDING_WRITE_TOMBSTONE = ByteBuffer.allocate(1);
 
    protected static final IEventProcessor<? extends BasePosixProcess>[] processors;
    protected static int processorRoundRobin;
@@ -89,6 +90,7 @@ public abstract class BasePosixProcess implements NuProcess
    protected volatile int stdoutWidow;
    protected volatile int stderrWidow;
 
+   protected AtomicBoolean stdinClosing;
    protected boolean outClosed;
    protected boolean errClosed;
 
@@ -176,6 +178,7 @@ public abstract class BasePosixProcess implements NuProcess
       this.stdin = new AtomicInteger(-1);
       this.stdout = new AtomicInteger(-1);
       this.stderr = new AtomicInteger(-1);
+      this.stdinClosing = new AtomicBoolean();
       this.outClosed = true;
       this.errClosed = true;
    }
@@ -230,14 +233,23 @@ public abstract class BasePosixProcess implements NuProcess
 
    /** {@inheritDoc} */
    @Override
-   public void closeStdin()
+   public void closeStdin(boolean force)
    {
-      int fd = stdin.getAndSet(-1);
-      if (fd != -1) {
-         if (myProcessor != null) {
-            myProcessor.closeStdin(this);
+      if (force) {
+         int fd = stdin.getAndSet(-1);
+         if (fd != -1) {
+            if (myProcessor != null) {
+               myProcessor.closeStdin(this);
+            }
+            LibC.close(fd);
          }
-         LibC.close(fd);
+      } else {
+         if (stdinClosing.compareAndSet(false, true)) {
+            pendingWrites.add(STDIN_CLOSED_PENDING_WRITE_TOMBSTONE);
+            myProcessor.queueWrite(this);
+         } else {
+            throw new IllegalStateException("closeStdin() method has already been called.");
+         }
       }
    }
 
@@ -246,7 +258,8 @@ public abstract class BasePosixProcess implements NuProcess
    public void writeStdin(ByteBuffer buffer)
    {
       int fd = stdin.get();
-      if (fd != -1) {
+      boolean closing = stdinClosing.get();
+      if (fd != -1 && !closing) {
          pendingWrites.add(buffer);
          myProcessor.queueWrite(this);
       }
@@ -485,7 +498,7 @@ public abstract class BasePosixProcess implements NuProcess
       }
 
       try {
-         closeStdin();
+         closeStdin(true);
          close(stdout);
          close(stderr);
 
@@ -621,6 +634,7 @@ public abstract class BasePosixProcess implements NuProcess
          }
          while (wrote < 0);
 
+         availability -= wrote;
          remainingWrite -= wrote;
          writeOffset += wrote;
          if (remainingWrite > 0) {
@@ -635,7 +649,14 @@ public abstract class BasePosixProcess implements NuProcess
       if (!pendingWrites.isEmpty()) {
          // copy the next buffer into our direct buffer (inBuffer)
          ByteBuffer byteBuffer = pendingWrites.peek();
-         if (byteBuffer.remaining() > BUFFER_CAPACITY) {
+         if (byteBuffer == STDIN_CLOSED_PENDING_WRITE_TOMBSTONE) {
+            // We've written everything the user requested, and the user wants to close stdin now.
+            closeStdin(true);
+            userWantsWrite.set(false);
+            pendingWrites.clear();
+            remainingWrite = 0;
+            return false;
+         } else if (byteBuffer.remaining() > BUFFER_CAPACITY) {
             ByteBuffer slice = byteBuffer.slice();
             slice.limit(BUFFER_CAPACITY);
             inBuffer.put(slice);
@@ -663,8 +684,12 @@ public abstract class BasePosixProcess implements NuProcess
          boolean wantMore = processHandler.onStdinReady(inBuffer);
          userWantsWrite.set(wantMore);
          remainingWrite = inBuffer.remaining();
-
-         return true;
+         if (remainingWrite > 0 && availability > 0) {
+            // Recurse
+            return writeStdin(availability);
+         } else {
+            return true;
+         }
       }
       catch (Exception e) {
          // Don't let an exception thrown from the user's handler interrupt us

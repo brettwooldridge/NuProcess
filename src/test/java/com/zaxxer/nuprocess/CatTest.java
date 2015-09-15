@@ -115,7 +115,7 @@ public class CatTest
       Semaphore semaphore = new Semaphore(0);
       String SHORT_UNICODE_TEXT = "Hello \uD83D\uDCA9 world";
       System.err.println("Starting test decodingShortUtf8Data()");
-      Utf8DecodingListener processListener = new Utf8DecodingListener(semaphore, SHORT_UNICODE_TEXT);
+      Utf8DecodingListener processListener = new Utf8DecodingListener(semaphore, SHORT_UNICODE_TEXT, true);
       NuProcessBuilder pb = new NuProcessBuilder(processListener, command);
       pb.start();
       semaphore.acquireUninterruptibly();
@@ -136,7 +136,7 @@ public class CatTest
          unicodeTextWhichDoesNotFitInBuffer.append(THREE_BYTE_UTF_8);
       }
       System.err.println("Starting test decodingLongUtf8Data()");
-      Utf8DecodingListener processListener = new Utf8DecodingListener(semaphore, unicodeTextWhichDoesNotFitInBuffer.toString());
+      Utf8DecodingListener processListener = new Utf8DecodingListener(semaphore, unicodeTextWhichDoesNotFitInBuffer.toString(), true);
       NuProcessBuilder pb = new NuProcessBuilder(processListener, command);
       pb.start();
       semaphore.acquireUninterruptibly();
@@ -215,7 +215,7 @@ public class CatTest
          public void onStdout(ByteBuffer buffer, boolean closed)
          {
             callbacks.add("stdout");
-            nuProcess.closeStdin();
+            nuProcess.closeStdin(true);
          }
 
          @Override
@@ -271,7 +271,7 @@ public class CatTest
       String message = "Hello cwd-aware world\n";
       Files.write(tmpPath.resolve("foo.txt"), message.getBytes(Charset.forName("UTF-8")));
       final Semaphore semaphore = new Semaphore(0);
-      Utf8DecodingListener processListener = new Utf8DecodingListener(semaphore, "");
+      Utf8DecodingListener processListener = new Utf8DecodingListener(semaphore, "", true);
       NuProcessBuilder pb = new NuProcessBuilder(processListener, command, "foo.txt");
       pb.setCwd(tmpPath);
       pb.start();
@@ -281,6 +281,22 @@ public class CatTest
       javaCwd = Paths.get(System.getProperty("user.dir"));
       Assert.assertNotEquals("java cwd should not be tmp path after process", javaCwd.toRealPath(), tmpPath.toRealPath());
       System.err.println("Completed test changeCwd()");
+   }
+
+   @Test
+   public void softCloseStdinAfterWrite() throws Exception
+   {
+      Semaphore semaphore = new Semaphore(0);
+      String text = "Hello world!";
+      System.err.println("Starting test softCloseStdinAfterWrite()");
+      Utf8DecodingListener processListener = new Utf8DecodingListener(semaphore, text, false);
+      NuProcessBuilder pb = new NuProcessBuilder(processListener, command);
+      pb.start();
+      semaphore.acquireUninterruptibly();
+      Assert.assertEquals("Decoding mismatch", text, processListener.decodedStdout.toString());
+      Assert.assertEquals("Exit code mismatch", 0, processListener.exitCode);
+      Assert.assertFalse("Decoder stdin should not overflow", processListener.stdinOverflow);
+      System.err.println("Completed test softCloseStdinAfterWrite()");
    }
 
    private static class LottaProcessListener extends NuAbstractProcessHandler
@@ -330,7 +346,7 @@ public class CatTest
       {
          size += buffer.remaining();
          if (size == (WRITES * bytes.length)) {
-            nuProcess.closeStdin();
+            nuProcess.closeStdin(true);
          }
 
          byte[] bytes = new byte[buffer.remaining()];
@@ -364,6 +380,7 @@ public class CatTest
    {
       private final Semaphore semaphore;
       private final CharBuffer utf8Buffer;
+      private final boolean forceCloseStdin;
       private int charsWritten;
       private int charsRead;
       private NuProcess nuProcess;
@@ -371,11 +388,12 @@ public class CatTest
       public boolean stdinOverflow;
       public int exitCode;
 
-      Utf8DecodingListener(Semaphore semaphore, String utf8Text)
+      Utf8DecodingListener(Semaphore semaphore, String utf8Text, boolean forceCloseStdin)
       {
          super(Charset.forName("UTF-8"));
          this.semaphore = semaphore;
          this.utf8Buffer = CharBuffer.wrap(utf8Text);
+         this.forceCloseStdin = forceCloseStdin;
          this.charsWritten = 0;
          this.charsRead = 0;
          this.decodedStdout = new StringBuilder();
@@ -404,8 +422,8 @@ public class CatTest
          decodedStdout.append(buffer);
          buffer.position(buffer.limit());
 
-         if (charsRead == charsWritten) {
-            nuProcess.closeStdin();
+         if (forceCloseStdin && charsRead == charsWritten) {
+            nuProcess.closeStdin(true);
          }
       }
 
@@ -416,6 +434,9 @@ public class CatTest
             charsWritten += utf8Buffer.remaining();
             buffer.put(utf8Buffer);
             buffer.flip();
+            if (!forceCloseStdin) {
+               nuProcess.closeStdin(false);
+            }
             return false;
          }
          else {

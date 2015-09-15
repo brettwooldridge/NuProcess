@@ -72,6 +72,7 @@ public final class WindowsProcess implements NuProcess
 
    AtomicBoolean userWantsWrite;
    private volatile boolean writePending;
+   private AtomicBoolean stdinClosing;
 
    private volatile PipeBundle stdinPipe;
    private volatile PipeBundle stdoutPipe;
@@ -82,6 +83,7 @@ public final class WindowsProcess implements NuProcess
    private HANDLE hStderrWidow;
 
    private ConcurrentLinkedQueue<ByteBuffer> pendingWrites;
+   private final ByteBuffer pendingWriteStdinClosedTombstone;
    private int remainingWrite;
    private int writeOffset;
 
@@ -138,6 +140,8 @@ public final class WindowsProcess implements NuProcess
       this.outClosed = true;
       this.errClosed = true;
       this.inClosed = true;
+      this.stdinClosing = new AtomicBoolean();
+      this.pendingWriteStdinClosedTombstone = ByteBuffer.allocate(1);
    }
 
    // ************************************************************************
@@ -185,9 +189,20 @@ public final class WindowsProcess implements NuProcess
 
    /** {@inheritDoc} */
    @Override
-   public void closeStdin()
+   public void closeStdin(boolean force)
    {
-      stdinClose();
+      if (force) {
+         stdinClose();
+      } else {
+        if (stdinClosing.compareAndSet(false, true)) {
+           pendingWrites.add(pendingWriteStdinClosedTombstone);
+           if (!writePending) {
+              myProcessor.wantWrite(this);
+           }
+        } else {
+           throw new IllegalStateException("closeStdin() method has already been called.");
+        }
+      }
    }
 
    /** {@inheritDoc} */
@@ -385,7 +400,13 @@ public final class WindowsProcess implements NuProcess
       if (!pendingWrites.isEmpty()) {
          // copy the next buffer into our direct buffer (inBuffer)
          ByteBuffer byteBuffer = pendingWrites.peek();
-         if (byteBuffer.remaining() > BUFFER_CAPACITY) {
+         if (byteBuffer == pendingWriteStdinClosedTombstone) {
+            closeStdin(true);
+            userWantsWrite.set(false);
+            pendingWrites.clear();
+            remainingWrite = 0;
+            return false;
+         } else if (byteBuffer.remaining() > BUFFER_CAPACITY) {
             ByteBuffer slice = byteBuffer.slice();
             slice.limit(BUFFER_CAPACITY);
             stdinPipe.buffer.put(slice);
