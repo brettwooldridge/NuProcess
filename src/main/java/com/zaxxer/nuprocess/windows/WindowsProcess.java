@@ -612,7 +612,14 @@ public final class WindowsProcess implements NuProcess
    private char[] getCommandLine(List<String> commands)
    {
       StringBuilder sb = new StringBuilder();
+      boolean isFirstCommand = true;
       for (String command : commands) {
+         if (isFirstCommand) {
+            isFirstCommand = false;
+         } else {
+            // Prepend a space before the second and subsequent components of the command line.
+            sb.append(' ');
+         }
          // It's OK to apply CreateProcess escaping to even the first item in the commands
          // list (the path to execute). Since Windows paths cannot contain double-quotes
          // (really!), the logic in WindowsCreateProcessEscape.quote() will either do nothing
