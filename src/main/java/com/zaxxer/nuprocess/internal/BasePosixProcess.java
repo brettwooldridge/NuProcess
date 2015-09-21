@@ -78,9 +78,6 @@ public abstract class BasePosixProcess implements NuProcess
    protected ByteBuffer outBuffer;
    protected ByteBuffer errBuffer;
    protected ByteBuffer inBuffer;
-   protected Pointer outBufferPointer;
-   protected Pointer errBufferPointer;
-   protected Pointer inBufferPointer;
 
    // ******* Stdin/Stdout/Stderr pipe handles
    protected AtomicInteger stdin;
@@ -95,8 +92,6 @@ public abstract class BasePosixProcess implements NuProcess
    protected boolean errClosed;
 
    private ConcurrentLinkedQueue<ByteBuffer> pendingWrites;
-   private int remainingWrite;
-   private int writeOffset;
 
    // Launches threads under which changes to cwd do not affect the cwd of the process.
    public static class LinuxCwdThreadFactory implements ThreadFactory
@@ -524,11 +519,11 @@ public abstract class BasePosixProcess implements NuProcess
       }
       finally {
          exitPending.countDown();
-
-         Native.free(Pointer.nativeValue(outBufferPointer));
-         Native.free(Pointer.nativeValue(errBufferPointer));
-         Native.free(Pointer.nativeValue(inBufferPointer));
-
+         // Once the last reference to the buffer is gone, Java will finalize the buffer
+         // and release the native memory we allocated in initializeBuffers().
+         outBuffer = null;
+         errBuffer = null;
+         inBuffer = null;
          processHandler = null;
       }
    }
@@ -547,7 +542,7 @@ public abstract class BasePosixProcess implements NuProcess
             return;
          }
 
-         int read = LibC.read(stdout.get(), outBufferPointer.share(outBuffer.position()), Math.min(availability, outBuffer.remaining()));
+         int read = LibC.read(stdout.get(), outBuffer, Math.min(availability, outBuffer.remaining()));
          if (read == -1) {
             outClosed = true;
             throw new RuntimeException("Unexpected eof");
@@ -585,7 +580,7 @@ public abstract class BasePosixProcess implements NuProcess
             return;
          }
 
-         int read = LibC.read(stderr.get(), errBufferPointer.share(errBuffer.position()), Math.min(availability, errBuffer.remaining()));
+         int read = LibC.read(stderr.get(), errBuffer, Math.min(availability, errBuffer.remaining()));
          if (read == -1) {
             // EOF?
             errClosed = true;
@@ -616,10 +611,10 @@ public abstract class BasePosixProcess implements NuProcess
          return false;
       }
 
-      if (remainingWrite > 0) {
+      if (inBuffer.hasRemaining()) {
          int wrote;
          do {
-            wrote = LibC.write(fd, inBufferPointer.share(writeOffset), Math.min(remainingWrite, availability));
+            wrote = LibC.write(fd, inBuffer, Math.min(availability, inBuffer.remaining()));
             if (wrote < 0) {
                int errno = Native.getLastError();
                if (errno == 11 /*EAGAIN on MacOS*/ || errno == 35 /*EAGAIN on Linux*/) {
@@ -635,16 +630,13 @@ public abstract class BasePosixProcess implements NuProcess
          while (wrote < 0);
 
          availability -= wrote;
-         remainingWrite -= wrote;
-         writeOffset += wrote;
-         if (remainingWrite > 0) {
-            return true;
+         inBuffer.position(inBuffer.position() + wrote);
+         if (inBuffer.hasRemaining()) {
+           return true;
          }
-
-         inBuffer.clear();
-         remainingWrite = 0;
-         writeOffset = 0;
       }
+
+      inBuffer.clear();
 
       if (!pendingWrites.isEmpty()) {
          // copy the next buffer into our direct buffer (inBuffer)
@@ -654,23 +646,21 @@ public abstract class BasePosixProcess implements NuProcess
             closeStdin(true);
             userWantsWrite.set(false);
             pendingWrites.clear();
-            remainingWrite = 0;
             return false;
          } else if (byteBuffer.remaining() > BUFFER_CAPACITY) {
             ByteBuffer slice = byteBuffer.slice();
             slice.limit(BUFFER_CAPACITY);
             inBuffer.put(slice);
             byteBuffer.position(byteBuffer.position() + BUFFER_CAPACITY);
-            remainingWrite = BUFFER_CAPACITY;
          }
          else {
-            remainingWrite = byteBuffer.remaining();
             inBuffer.put(byteBuffer);
             pendingWrites.poll();
          }
 
+         inBuffer.flip();
          // Recurse
-         if (remainingWrite > 0) {
+         if (inBuffer.hasRemaining()) {
             return writeStdin(availability);
          }
       }
@@ -683,8 +673,7 @@ public abstract class BasePosixProcess implements NuProcess
          inBuffer.clear();
          boolean wantMore = processHandler.onStdinReady(inBuffer);
          userWantsWrite.set(wantMore);
-         remainingWrite = inBuffer.remaining();
-         if (remainingWrite > 0 && availability > 0) {
+         if (inBuffer.hasRemaining() && availability > 0) {
             // Recurse
             return writeStdin(availability);
          } else {
@@ -713,17 +702,13 @@ public abstract class BasePosixProcess implements NuProcess
 
       pendingWrites = new ConcurrentLinkedQueue<ByteBuffer>();
 
-      long peer = Native.malloc(BUFFER_CAPACITY);
-      outBuffer = UnsafeHelper.wrapNativeMemory(peer, BUFFER_CAPACITY);
-      outBufferPointer = new Pointer(peer);
+      outBuffer = ByteBuffer.allocateDirect(BUFFER_CAPACITY);
+      errBuffer = ByteBuffer.allocateDirect(BUFFER_CAPACITY);
+      inBuffer = ByteBuffer.allocateDirect(BUFFER_CAPACITY);
 
-      peer = Native.malloc(BUFFER_CAPACITY);
-      errBuffer = UnsafeHelper.wrapNativeMemory(peer, BUFFER_CAPACITY);
-      errBufferPointer = new Pointer(peer);
-
-      peer = Native.malloc(BUFFER_CAPACITY);
-      inBuffer = UnsafeHelper.wrapNativeMemory(peer, BUFFER_CAPACITY);
-      inBufferPointer = new Pointer(peer);
+      // Ensure stdin initially has 0 bytes pending write. We'll
+      // update this before invoking onStdinReady.
+      inBuffer.limit(0);
    }
 
    @SuppressWarnings("unchecked")

@@ -38,7 +38,6 @@ import com.sun.jna.Pointer;
 import com.sun.jna.WString;
 import com.zaxxer.nuprocess.NuProcess;
 import com.zaxxer.nuprocess.NuProcessHandler;
-import com.zaxxer.nuprocess.internal.UnsafeHelper;
 import com.zaxxer.nuprocess.windows.NuKernel32.OVERLAPPED;
 import com.zaxxer.nuprocess.windows.NuWinNT.DWORD;
 import com.zaxxer.nuprocess.windows.NuWinNT.HANDLE;
@@ -84,8 +83,6 @@ public final class WindowsProcess implements NuProcess
 
    private ConcurrentLinkedQueue<ByteBuffer> pendingWrites;
    private final ByteBuffer pendingWriteStdinClosedTombstone;
-   private int remainingWrite;
-   private int writeOffset;
 
    private volatile boolean inClosed;
    private volatile boolean outClosed;
@@ -383,10 +380,9 @@ public final class WindowsProcess implements NuProcess
          return false;
       }
 
-      writeOffset += transferred;
-      remainingWrite -= transferred;
-      if (remainingWrite > 0) {
-         NuKernel32.WriteFile(stdinPipe.pipeHandle, stdinPipe.bufferPointer.share(writeOffset), remainingWrite, null, stdinPipe.overlapped);
+      stdinPipe.buffer.position(stdinPipe.buffer.position() + transferred);
+      if (stdinPipe.buffer.hasRemaining()) {
+         NuKernel32.WriteFile(stdinPipe.pipeHandle, stdinPipe.buffer, stdinPipe.buffer.remaining(), null, stdinPipe.overlapped);
 
          writePending = true;
          return false;
@@ -394,8 +390,6 @@ public final class WindowsProcess implements NuProcess
 
       writePending = false;
       stdinPipe.buffer.clear();
-      remainingWrite = 0;
-      writeOffset = 0;
 
       if (!pendingWrites.isEmpty()) {
          // copy the next buffer into our direct buffer (inBuffer)
@@ -404,22 +398,21 @@ public final class WindowsProcess implements NuProcess
             closeStdin(true);
             userWantsWrite.set(false);
             pendingWrites.clear();
-            remainingWrite = 0;
             return false;
          } else if (byteBuffer.remaining() > BUFFER_CAPACITY) {
             ByteBuffer slice = byteBuffer.slice();
             slice.limit(BUFFER_CAPACITY);
             stdinPipe.buffer.put(slice);
             byteBuffer.position(byteBuffer.position() + BUFFER_CAPACITY);
-            remainingWrite = BUFFER_CAPACITY;
          }
          else {
-            remainingWrite = byteBuffer.remaining();
             stdinPipe.buffer.put(byteBuffer);
             pendingWrites.poll();
          }
 
-         if (remainingWrite > 0) {
+         stdinPipe.buffer.flip();
+
+         if (stdinPipe.buffer.hasRemaining()) {
             return true;
          }
       }
@@ -430,7 +423,6 @@ public final class WindowsProcess implements NuProcess
             final ByteBuffer buffer = stdinPipe.buffer;
             buffer.clear();
             userWantsWrite.set(processHandler.onStdinReady(buffer));
-            remainingWrite = buffer.remaining();
 
             return true;
          }
@@ -476,16 +468,18 @@ public final class WindowsProcess implements NuProcess
             if (!inClosed) {
                NuKernel32.CloseHandle(stdinPipe.pipeHandle);
             }
-            Native.free(Pointer.nativeValue(stdinPipe.bufferPointer));
+            // Once the last reference to the buffer is gone, Java will finalize the buffer
+            // and release the native memory we allocated in initializeBuffers().
+            stdinPipe.buffer = null;
          }
 
          if (stdoutPipe != null) {
             NuKernel32.CloseHandle(stdoutPipe.pipeHandle);
-            Native.free(Pointer.nativeValue(stdoutPipe.bufferPointer));
+            stdoutPipe.buffer = null;
          }
          if (stderrPipe != null) {
             NuKernel32.CloseHandle(stderrPipe.pipeHandle);
-            Native.free(Pointer.nativeValue(stderrPipe.bufferPointer));
+            stderrPipe.buffer = null;
          }
 
          if (processInfo != null) {
@@ -590,17 +584,13 @@ public final class WindowsProcess implements NuProcess
       inClosed = false;
       isRunning = true;
 
-      long peer = Native.malloc(BUFFER_CAPACITY);
-      stdoutPipe.buffer = UnsafeHelper.wrapNativeMemory(peer, BUFFER_CAPACITY);
-      stdoutPipe.bufferPointer = new Pointer(peer);
+      stdoutPipe.buffer = ByteBuffer.allocateDirect(BUFFER_CAPACITY);
+      stderrPipe.buffer = ByteBuffer.allocateDirect(BUFFER_CAPACITY);
+      stdinPipe.buffer = ByteBuffer.allocateDirect(BUFFER_CAPACITY);
 
-      peer = Native.malloc(BUFFER_CAPACITY);
-      stderrPipe.buffer = UnsafeHelper.wrapNativeMemory(peer, BUFFER_CAPACITY);
-      stderrPipe.bufferPointer = new Pointer(peer);
-
-      peer = Native.malloc(BUFFER_CAPACITY);
-      stdinPipe.buffer = UnsafeHelper.wrapNativeMemory(peer, BUFFER_CAPACITY);
-      stdinPipe.bufferPointer = new Pointer(peer);
+      // Ensure stdin initially has 0 bytes pending write. We'll
+      // update this before invoking onStdinReady.
+      stdinPipe.buffer.limit(0);
    }
 
    private void registerProcess()
@@ -734,7 +724,6 @@ public final class WindowsProcess implements NuProcess
       final long ioCompletionKey;
       final HANDLE pipeHandle;
       ByteBuffer buffer;
-      Pointer bufferPointer;
       boolean registered;
 
       PipeBundle(HANDLE pipeHandle, long ioCompletionKey)

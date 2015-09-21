@@ -228,7 +228,7 @@ public final class ProcessCompletions implements Runnable
          stdinPipe.registered = true;
       }
 
-      if (NuKernel32.WriteFile(stdinPipe.pipeHandle, stdinPipe.bufferPointer, 0, null, stdinPipe.overlapped) == 0
+      if (NuKernel32.WriteFile(stdinPipe.pipeHandle, stdinPipe.buffer, 0, null, stdinPipe.overlapped) == 0
             && Native.getLastError() != NuWinNT.ERROR_IO_PENDING) {
          process.stdinClose();
       }
@@ -241,7 +241,7 @@ public final class ProcessCompletions implements Runnable
       if (!pipe.buffer.hasRemaining()) {
          throw new RuntimeException("stdout / stderr buffer has no bytes remaining");
       }
-      if (NuKernel32.ReadFile(pipe.pipeHandle, pipe.bufferPointer.share(pipe.buffer.position()), pipe.buffer.remaining(), null, pipe.overlapped) == 0) {
+      if (NuKernel32.ReadFile(pipe.pipeHandle, pipe.buffer, pipe.buffer.remaining(), null, pipe.overlapped) == 0) {
          int lastError = Native.getLastError();
          switch (lastError) {
          case NuWinNT.ERROR_SUCCESS:
