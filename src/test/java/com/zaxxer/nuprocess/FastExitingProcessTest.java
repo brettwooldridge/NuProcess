@@ -64,15 +64,18 @@ public class FastExitingProcessTest
       Handler handler = new Handler();
       NuProcess process;
       if (Platform.isWindows()) {
-         process = new NuProcessBuilder(handler, "cmd.exe", "/c", "echo", "Hello world!").start();
+         // We can't use an argument with a space here because the following command:
+         //   cmd /c echo "Hello world!"
+         // literally echoes the quotes around "Hello world!" to stdout.
+         process = new NuProcessBuilder(handler, "cmd.exe", "/c", "echo", "hello").start();
       }
       else {
-         process = new NuProcessBuilder(handler, "echo", "Hello world!").start();
+         process = new NuProcessBuilder(handler, "echo", "hello").start();
       }
       int retVal = process.waitFor(Long.MAX_VALUE, TimeUnit.SECONDS);
       assertThat("Process should exit cleanly", retVal, equalTo(0));
       assertThat("Process callback should indicate clean exit", handler.exitCode, equalTo(0));
       assertThat("No exceptions thrown writing to stdout", handler.stdoutException, is(nullValue()));
-      assertThat("Stdout should contain expected output", handler.stdoutBytes.toString("UTF-8"), equalTo(String.format("Hello world!%n")));
+      assertThat("Stdout should contain expected output", handler.stdoutBytes.toString("UTF-8"), equalTo(String.format("hello%n")));
    }
 }
