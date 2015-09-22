@@ -84,7 +84,7 @@ public class DirectWrite
 
       Thread.sleep(500);
 
-      nuProcess.closeStdin();
+      nuProcess.closeStdin(true);
       nuProcess.waitFor(0, TimeUnit.SECONDS);
       Assert.assertEquals("Count did not match", 14, count.get());
    }
@@ -114,7 +114,7 @@ public class DirectWrite
 
       Thread.sleep(500);
 
-      nuProcess.closeStdin();
+      nuProcess.closeStdin(true);
       nuProcess.waitFor(0, TimeUnit.SECONDS);
       Assert.assertEquals("Count did not match", 14000, count.get());
    }
@@ -144,7 +144,7 @@ public class DirectWrite
          buffer.get(chars);
          result = new String(chars);
          System.out.println("Read: " + result);
-         nuProcess.closeStdin();
+         nuProcess.closeStdin(true);
       }
    }
 
@@ -182,7 +182,7 @@ public class DirectWrite
          System.out.println("Reading.  Current checksum " + checksum2);
          if (checksum2 == checksum) {
             System.out.println("Checksums matched, exiting.");
-            nuProcess.closeStdin();
+            nuProcess.closeStdin(true);
          }
       }
    }

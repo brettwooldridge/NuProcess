@@ -138,7 +138,7 @@ public class NuSchool
 
             if (size == LIMIT || closed)
             {
-                nuProcess.closeStdin();
+                nuProcess.closeStdin(true);
             }
         }
 

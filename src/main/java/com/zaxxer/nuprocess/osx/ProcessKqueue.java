@@ -243,7 +243,8 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
          else {
             userWantsMore = true;
          }
-         if (!userWantsMore) {
+         int stdinFd = osxProcess.getStdin().get();
+         if (!userWantsMore && stdinFd != -1) {
             // No more stdin for now. Disable the event.
             // We could use processEvents here and overwrite just the first entry, but this probably doesn't happen
             // enough to warrant that optimization.
@@ -299,12 +300,17 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
          // We don't use the processEvents array here, since this is invoked from process()
          // and we would be overwriting the contents of that array while it's being processed.
          Kevent[] kevents = (Kevent[]) new Kevent().toArray(processes.size());
+         int numKevents = 0;
          for (int i = 0; i < processes.size(); i++) {
             OsxProcess process = processes.get(i);
-            kevents[i].EV_SET(process.getStdin().get(), Kevent.EVFILT_WRITE, Kevent.EV_ENABLE | Kevent.EV_RECEIPT, 0, 0l,
-                              Pointer.createConstant(process.getPid()));
+            int fd = process.getStdin().get();
+            if (fd != -1) {
+              kevents[numKevents].EV_SET(fd, Kevent.EVFILT_WRITE, Kevent.EV_ENABLE | Kevent.EV_RECEIPT, 0, 0l,
+                                         Pointer.createConstant(process.getPid()));
+              numKevents++;
+            }
          }
-         registerEvents(kevents, processes.size());
+         registerEvents(kevents, numKevents);
       }
    }
 

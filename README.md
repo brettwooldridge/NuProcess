@@ -75,7 +75,7 @@ class ProcessHandler extends NuAbstractProcessHandler {
       System.out.println(new String(bytes));
 
       // We're done, so closing STDIN will cause the "cat" process to exit
-      nuProcess.closeStdin();
+      nuProcess.closeStdin(true);
 }
 ```
 
@@ -113,7 +113,7 @@ class ProcessHandler extends NuAbstractProcessHandler {
       System.out.println(new String(bytes));
 
       // We're done, so closing STDIN will cause the "cat" process to exit
-      nuProcess.closeStdin();
+      nuProcess.closeStdin(true);
 }
 ```
 
