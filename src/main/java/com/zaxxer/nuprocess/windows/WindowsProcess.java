@@ -34,7 +34,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import com.sun.jna.Memory;
 import com.sun.jna.Native;
-import com.sun.jna.Pointer;
 import com.sun.jna.WString;
 import com.zaxxer.nuprocess.NuProcess;
 import com.zaxxer.nuprocess.NuProcessHandler;

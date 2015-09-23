@@ -29,7 +29,8 @@ import com.sun.jna.ptr.IntByReference;
  */
 public abstract class BaseEventProcessor<T extends BasePosixProcess> implements IEventProcessor<T>
 {
-   protected static final int LINGER_TIME_MS;
+   public static final int LINGER_TIME_MS;
+
    protected static final int DEADPOOL_POLL_INTERVAL;
    protected static final int LINGER_ITERATIONS;
    private final int lingerIterations;
