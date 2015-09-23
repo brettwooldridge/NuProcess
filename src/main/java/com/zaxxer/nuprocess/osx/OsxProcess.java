@@ -17,14 +17,12 @@
 package com.zaxxer.nuprocess.osx;
 
 import java.nio.file.Path;
-import java.util.List;
 
 import com.sun.jna.Memory;
 import com.sun.jna.Native;
 import com.sun.jna.Pointer;
 import com.sun.jna.StringArray;
 import com.sun.jna.ptr.IntByReference;
-import com.zaxxer.nuprocess.NuProcess;
 import com.zaxxer.nuprocess.NuProcessHandler;
 import com.zaxxer.nuprocess.internal.BasePosixProcess;
 import com.zaxxer.nuprocess.internal.LibC;
@@ -56,67 +54,11 @@ public class OsxProcess extends BasePosixProcess
       }
    }
 
-   public NuProcess start(List<String> command, String[] environment, Path cwd)
+   @Override
+   protected short getSpawnFlags()
    {
-      callPreStart();
-
-      String[] commands = command.toArray(new String[command.size()]);
-
-      Pointer posix_spawn_file_actions = createPipes();
-
-      Pointer posix_spawnattr = new Memory(Pointer.SIZE);
-
-      try {
-         int rc = LibC.posix_spawnattr_init(posix_spawnattr);
-         checkReturnCode(rc, "Internal call to posix_spawnattr_init() failed");
-
-         short flags = 0;
-         // Start the spawned process in suspended mode
-         flags = LibC.POSIX_SPAWN_START_SUSPENDED | LibC.POSIX_SPAWN_CLOEXEC_DEFAULT;
-         LibC.posix_spawnattr_setflags(posix_spawnattr, flags);
-
-         IntByReference restrict_pid = new IntByReference();
-         StringArray commandsArray = new StringArray(commands);
-         StringArray environmentArray = new StringArray(environment);
-         if (cwd != null) {
-            rc = spawnOsxWithCwd(restrict_pid, commands[0], posix_spawn_file_actions, posix_spawnattr, commandsArray, environmentArray, cwd);
-         }
-         else {
-            rc = LibC.posix_spawnp(restrict_pid, commands[0], posix_spawn_file_actions, posix_spawnattr, commandsArray, environmentArray);
-         }
-
-         pid = restrict_pid.getValue();
-
-         initializeBuffers();
-
-         checkReturnCode(rc, "Invocation of posix_spawn() failed");
-
-         afterStart();
-
-         registerProcess();
-
-         callStart();
-
-         // Signal the spawned process to continue (unsuspend)
-         LibC.kill(pid, LibC.SIGCONT);
-      }
-      catch (RuntimeException re) {
-         // TODO remove from event processor pid map?
-         re.printStackTrace(System.err);
-         onExit(Integer.MIN_VALUE);
-         return null;
-      }
-      finally {
-         LibC.posix_spawnattr_destroy(posix_spawnattr);
-         LibC.posix_spawn_file_actions_destroy(posix_spawn_file_actions);
-
-         // After we've spawned, close the unused ends of our pipes (that were dup'd into the child process space)
-         LibC.close(stdinWidow);
-         LibC.close(stdoutWidow);
-         LibC.close(stderrWidow);
-      }
-
-      return this;
+      // Start the spawned process in suspended mode
+      return LibC.POSIX_SPAWN_START_SUSPENDED | LibC.POSIX_SPAWN_CLOEXEC_DEFAULT;
    }
 
    @Override
@@ -125,8 +67,20 @@ public class OsxProcess extends BasePosixProcess
       return new Memory(Pointer.SIZE);
    }
 
-   private int spawnOsxWithCwd(IntByReference restrict_pid, String restrict_path, Pointer file_actions, Pointer /*const posix_spawnattr_t*/ restrict_attrp,
-                               StringArray /*String[]*/ argv, Pointer /*String[]*/ envp, Path cwd)
+   @Override
+   protected Pointer createPosixSpawnAttributes()
+   {
+      return new Memory(Pointer.SIZE);
+   }
+
+   @Override
+   protected int spawnWithCwd(final IntByReference restrict_pid,
+                              final String restrict_path,
+                              final Pointer file_actions,
+                              final Pointer /*const posix_spawnattr_t*/ restrict_attrp,
+                              final StringArray /*String[]*/ argv,
+                              final Pointer /*String[]*/ envp,
+                              final Path cwd)
    {
       int cwdBufSize = 1024;
       long peer = Native.malloc(cwdBufSize);
@@ -144,5 +98,12 @@ public class OsxProcess extends BasePosixProcess
          Native.free(Pointer.nativeValue(oldCwd));
          checkReturnCode(rc, "syscall(SYS__pthread_chdir) failed to restore current directory");
       }
+   }
+
+   @Override
+   protected void singleProcessContinue()
+   {
+      // Signal the spawned process to continue (unsuspend)
+      LibC.kill(pid, LibC.SIGCONT);
    }
 }

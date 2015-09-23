@@ -17,7 +17,9 @@
 package com.zaxxer.nuprocess.internal;
 
 import java.nio.ByteBuffer;
+import java.nio.file.Path;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
@@ -30,6 +32,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 import com.sun.jna.Native;
 import com.sun.jna.Pointer;
+import com.sun.jna.StringArray;
+import com.sun.jna.ptr.IntByReference;
 import com.zaxxer.nuprocess.NuProcess;
 import com.zaxxer.nuprocess.NuProcessHandler;
 
@@ -148,6 +152,114 @@ public abstract class BasePosixProcess implements NuProcess
    // ************************************************************************
    //                        NuProcess interface methods
    // ************************************************************************
+
+   public NuProcess start(List<String> command, String[] environment, Path cwd)
+   {
+      callPreStart();
+
+      String[] commands = command.toArray(new String[command.size()]);
+
+      Pointer posix_spawn_file_actions = createPipes();
+      Pointer posix_spawnattr = createPosixSpawnAttributes();
+
+      try {
+         int rc = LibC.posix_spawnattr_init(posix_spawnattr);
+         checkReturnCode(rc, "Internal call to posix_spawnattr_init() failed");
+
+         LibC.posix_spawnattr_setflags(posix_spawnattr, getSpawnFlags());
+
+         IntByReference restrict_pid = new IntByReference();
+         StringArray commandsArray = new StringArray(commands);
+         StringArray environmentArray = new StringArray(environment);
+         if (cwd != null) {
+            rc = spawnWithCwd(restrict_pid, commands[0], posix_spawn_file_actions, posix_spawnattr, commandsArray, environmentArray, cwd);
+         }
+         else {
+            rc = LibC.posix_spawnp(restrict_pid, commands[0], posix_spawn_file_actions, posix_spawnattr, commandsArray, environmentArray);
+         }
+
+         pid = restrict_pid.getValue();
+
+         initializeBuffers();
+
+         if (!checkLaunch()) {
+            return null;
+         }
+ 
+         checkReturnCode(rc, "Invocation of posix_spawn() failed");
+
+         afterStart();
+
+         registerProcess();
+
+         callStart();
+
+         singleProcessContinue();
+      }
+      catch (RuntimeException re) {
+         // TODO remove from event processor pid map?
+         re.printStackTrace(System.err);
+         onExit(Integer.MIN_VALUE);
+         return null;
+      }
+      finally {
+         LibC.posix_spawnattr_destroy(posix_spawnattr);
+         LibC.posix_spawn_file_actions_destroy(posix_spawn_file_actions);
+
+         // After we've spawned, close the unused ends of our pipes (that were dup'd into the child process space)
+         LibC.close(stdinWidow);
+         LibC.close(stdoutWidow);
+         LibC.close(stderrWidow);
+
+         deallocateStructures(posix_spawn_file_actions, posix_spawnattr);
+      }
+
+      return this;
+   }
+   
+   protected abstract short getSpawnFlags();
+
+   protected abstract int spawnWithCwd(IntByReference restrict_pid,
+                                       String restrict_path,
+                                       Pointer posix_spawn_file_actions,
+                                       Pointer posix_spawnattr,
+                                       StringArray commandsArray,
+                                       Pointer environmentArray,
+                                       Path cwd);
+
+   /**
+    * Check the launched process and return {@code true} if launch was successful,
+    * or {@code false} if there was an error in launch.
+    *
+    * @return {@code true} on success, {@code false} on failure
+    */
+   protected boolean checkLaunch()
+   {
+      // Can be overridden by subclasses for post-launch checks
+      return true;
+   }
+
+   /**
+    * Deallocate the memory associated with these structures if the Java process is
+    * responsible for freeing them.
+    *
+    * @param posix_spawn_file_actions a pointer to the posix_spawn_file_actions structure
+    * @param posix_spawnattr a pointer to the posix_spawnattr structure
+    */
+   protected void deallocateStructures(Pointer posix_spawn_file_actions, Pointer posix_spawnattr)
+   {
+      // Can be overridden by subclasses
+   }
+
+   /**
+    * For OS's that support launching a process in suspended mode, this is the chance to
+    * signal the process to continue.
+    *
+    */
+   protected void singleProcessContinue()
+   {
+      // Can be overridden by subclasses
+   }
 
    /** {@inheritDoc} */
    @Override
@@ -622,6 +734,8 @@ public abstract class BasePosixProcess implements NuProcess
    }
 
    protected abstract Pointer createPosixSpawnFileActions();
+
+   protected abstract Pointer createPosixSpawnAttributes();
 
    protected void setNonBlocking(int[] in, int[] out, int[] err)
    {

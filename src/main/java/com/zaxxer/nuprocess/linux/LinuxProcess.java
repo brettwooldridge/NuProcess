@@ -22,7 +22,6 @@ import static com.zaxxer.nuprocess.internal.LibC.WIFSIGNALED;
 import static com.zaxxer.nuprocess.internal.LibC.WTERMSIG;
 
 import java.nio.file.Path;
-import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -35,7 +34,6 @@ import com.sun.jna.Native;
 import com.sun.jna.Pointer;
 import com.sun.jna.StringArray;
 import com.sun.jna.ptr.IntByReference;
-import com.zaxxer.nuprocess.NuProcess;
 import com.zaxxer.nuprocess.NuProcessHandler;
 import com.zaxxer.nuprocess.internal.BaseEventProcessor;
 import com.zaxxer.nuprocess.internal.BasePosixProcess;
@@ -72,100 +70,14 @@ public class LinuxProcess extends BasePosixProcess
       super(processListener);
    }
 
-   public NuProcess start(List<String> command, String[] environment, Path cwd)
+   @Override
+   protected short getSpawnFlags()
    {
-      callPreStart();
-
-      String[] commands = command.toArray(new String[command.size()]);
-
-      Pointer posix_spawn_file_actions = createPipes();
-
-      Pointer posix_spawnattr;
-      long peer = Native.malloc(340);
-      posix_spawnattr = new Pointer(peer);
-
-      try {
-         int rc = LibC.posix_spawnattr_init(posix_spawnattr);
-         checkReturnCode(rc, "Internal call to posix_spawnattr_init() failed");
-
-         short flags = 0;
-         if (LINUX_USE_VFORK) {
-            flags = 0x40; // POSIX_SPAWN_USEVFORK
-         }
-
-         LibC.posix_spawnattr_setflags(posix_spawnattr, flags);
-
-         IntByReference restrict_pid = new IntByReference();
-         StringArray commandsArray = new StringArray(commands);
-         StringArray environmentArray = new StringArray(environment);
-         if (cwd != null) {
-            rc = spawnLinuxWithCwd(restrict_pid, commands[0], posix_spawn_file_actions, posix_spawnattr, commandsArray, environmentArray, cwd);
-         }
-         else {
-            rc = LibC.posix_spawnp(restrict_pid, commands[0], posix_spawn_file_actions, posix_spawnattr, commandsArray, environmentArray);
-         }
-
-         pid = restrict_pid.getValue();
-
-         initializeBuffers();
-
-         // This is necessary on Linux because spawn failures are not reflected in the rc, and this will reap
-         // any zombies due to launch failure
-         IntByReference ret = new IntByReference();
-         int waitpidRc = LibC.waitpid(pid, ret, LibC.WNOHANG);
-         int status = ret.getValue();
-         boolean cleanExit = waitpidRc == pid && WIFEXITED(status) && WEXITSTATUS(status) == 0;
-
-         if (cleanExit) {
-            // If the process already exited cleanly, make sure we run epoll to dispatch any stdout/stderr sent
-            // before we tear everything down.
-            cleanlyExitedBeforeProcess.set(true);
-         }
-         else if (waitpidRc != 0) {
-            if (WIFEXITED(status)) {
-               status = WEXITSTATUS(status);
-               if (status == 127) {
-                  onExit(Integer.MIN_VALUE);
-               }
-               else {
-                  onExit(status);
-               }
-            }
-            else if (WIFSIGNALED(status)) {
-               onExit(WTERMSIG(status));
-            }
-
-            return null;
-         }
-
-         checkReturnCode(rc, "Invocation of posix_spawn() failed");
-
-         afterStart();
-
-         registerProcess();
-
-         callStart();
-      }
-      catch (RuntimeException re) {
-         // TODO remove from event processor pid map?
-         re.printStackTrace(System.err);
-         onExit(Integer.MIN_VALUE);
-         return null;
-      }
-      finally {
-         LibC.posix_spawnattr_destroy(posix_spawnattr);
-         LibC.posix_spawn_file_actions_destroy(posix_spawn_file_actions);
-
-         // After we've spawned, close the unused ends of our pipes (that were dup'd into the child process space)
-         LibC.close(stdinWidow);
-         LibC.close(stdoutWidow);
-         LibC.close(stderrWidow);
-
-         Native.free(Pointer.nativeValue(posix_spawn_file_actions));
-         Native.free(Pointer.nativeValue(posix_spawnattr));
+      if (LINUX_USE_VFORK) {
+         return 0x40; // POSIX_SPAWN_USEVFORK
       }
 
-      return this;
+      return 0x0;
    }
 
    @Override
@@ -177,9 +89,21 @@ public class LinuxProcess extends BasePosixProcess
       return posix_spawn_file_actions;
    }
 
-   private int spawnLinuxWithCwd(final IntByReference restrict_pid, final String restrict_path, final Pointer file_actions,
-                                 final Pointer /*const posix_spawnattr_t*/ restrict_attrp, final StringArray /*String[]*/ argv, final Pointer /*String[]*/ envp,
-                                 final Path cwd)
+   @Override
+   protected Pointer createPosixSpawnAttributes()
+   {
+      long peer = Native.malloc(340);
+      return new Pointer(peer);
+   }
+
+   @Override
+   protected int spawnWithCwd(final IntByReference restrict_pid,
+                              final String restrict_path,
+                              final Pointer file_actions,
+                              final Pointer /*const posix_spawnattr_t*/ restrict_attrp,
+                              final StringArray /*String[]*/ argv,
+                              final Pointer /*String[]*/ envp,
+                              final Path cwd)
    {
       Future<Integer> setCwdThenSpawnFuture = linuxCwdExecutorService.submit(new Callable<Integer>() {
          @Override
@@ -212,5 +136,47 @@ public class LinuxProcess extends BasePosixProcess
       catch (InterruptedException e) {
          throw new RuntimeException(e);
       }
+   }
+
+   @Override
+   protected boolean checkLaunch()
+   {
+      // This is necessary on Linux because spawn failures are not reflected in the rc, and this will reap
+      // any zombies due to launch failure
+      IntByReference ret = new IntByReference();
+      int waitpidRc = LibC.waitpid(pid, ret, LibC.WNOHANG);
+      int status = ret.getValue();
+      boolean cleanExit = waitpidRc == pid && WIFEXITED(status) && WEXITSTATUS(status) == 0;
+
+      if (cleanExit) {
+         // If the process already exited cleanly, make sure we run epoll to dispatch any stdout/stderr sent
+         // before we tear everything down.
+         cleanlyExitedBeforeProcess.set(true);
+      }
+      else if (waitpidRc != 0) {
+         if (WIFEXITED(status)) {
+            status = WEXITSTATUS(status);
+            if (status == 127) {
+               onExit(Integer.MIN_VALUE);
+            }
+            else {
+               onExit(status);
+            }
+         }
+         else if (WIFSIGNALED(status)) {
+            onExit(WTERMSIG(status));
+         }
+
+         return false;
+      }
+
+      return true;
+   }
+
+   @Override
+   protected void deallocateStructures(Pointer posix_spawn_file_actions, Pointer posix_spawnattr)
+   {
+      Native.free(Pointer.nativeValue(posix_spawn_file_actions));
+      Native.free(Pointer.nativeValue(posix_spawnattr));
    }
 }
