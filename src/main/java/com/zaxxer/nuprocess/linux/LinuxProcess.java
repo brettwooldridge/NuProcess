@@ -57,9 +57,11 @@ public class LinuxProcess extends BasePosixProcess
          processors[i] = new ProcessEpoll();
       }
 
-      ThreadPoolExecutor executor = new ThreadPoolExecutor(/* corePoolSize */ processors.length, /* maximumPoolSize */ processors.length,
+      ThreadPoolExecutor executor = new ThreadPoolExecutor(/* corePoolSize */ processors.length,
+                                                           /* maximumPoolSize */ processors.length,
                                                            /* keepAliveTime */ BaseEventProcessor.LINGER_TIME_MS, TimeUnit.MILLISECONDS,
-                                                           /* workQueue */ new LinkedBlockingQueue<Runnable>(), /* threadFactory */ new LinuxCwdThreadFactory(),
+                                                           /* workQueue */ new LinkedBlockingQueue<Runnable>(),
+                                                           /* threadFactory */ new LinuxCwdThreadFactory(),
                                                            /* handler */ new ThreadPoolExecutor.DiscardPolicy());
       // Allow going back down to 0 threads after LINGER_TIME_MS.
       executor.allowCoreThreadTimeOut(true);
