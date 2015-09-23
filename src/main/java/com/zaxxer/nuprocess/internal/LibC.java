@@ -25,6 +25,8 @@ import com.sun.jna.Pointer;
 import com.sun.jna.StringArray;
 import com.sun.jna.ptr.IntByReference;
 
+import java.nio.ByteBuffer;
+
 public class LibC
 {
    static {
@@ -46,9 +48,9 @@ public class LibC
 
    public static native int close(int fildes);
 
-   public static native int write(int fildes, Pointer buf, int nbyte);
+   public static native int write(int fildes, ByteBuffer buf, int nbyte);
 
-   public static native int read(int fildes, Pointer buf, int nbyte);
+   public static native int read(int fildes, ByteBuffer buf, int nbyte);
 
    public static native int getpid();
 

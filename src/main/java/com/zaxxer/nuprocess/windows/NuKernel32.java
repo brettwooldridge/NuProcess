@@ -16,6 +16,8 @@
 
 package com.zaxxer.nuprocess.windows;
 
+import java.nio.ByteBuffer;
+
 import java.util.Arrays;
 import java.util.List;
 
@@ -77,10 +79,10 @@ public class NuKernel32
 
    public static native boolean GetExitCodeProcess(HANDLE hProcess, IntByReference exitCode);
 
-   public static native int ReadFile(HANDLE hFile, Pointer lpBuffer, int nNumberOfBytesToRead, IntByReference lpNumberOfBytesRead,
+   public static native int ReadFile(HANDLE hFile, ByteBuffer lpBuffer, int nNumberOfBytesToRead, IntByReference lpNumberOfBytesRead,
                                      NuKernel32.OVERLAPPED lpOverlapped);
 
-   public static native int WriteFile(HANDLE hFile, Pointer lpBuffer, int nNumberOfBytesToWrite, IntByReference lpNumberOfBytesWritten,
+   public static native int WriteFile(HANDLE hFile, ByteBuffer lpBuffer, int nNumberOfBytesToWrite, IntByReference lpNumberOfBytesWritten,
                                       NuKernel32.OVERLAPPED lpOverlapped);
 
    /**
