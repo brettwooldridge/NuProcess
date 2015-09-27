@@ -62,9 +62,9 @@ public abstract class BasePosixProcess implements NuProcess
    protected ByteBuffer inBuffer;
 
    // ******* Stdin/Stdout/Stderr pipe handles
-   protected AtomicInteger stdin;
-   protected AtomicInteger stdout;
-   protected AtomicInteger stderr;
+   protected ReferenceCountedFileDescriptor stdin;
+   protected ReferenceCountedFileDescriptor stdout;
+   protected ReferenceCountedFileDescriptor stderr;
    protected volatile int stdinWidow;
    protected volatile int stdoutWidow;
    protected volatile int stderrWidow;
@@ -141,9 +141,9 @@ public abstract class BasePosixProcess implements NuProcess
       this.cleanlyExitedBeforeProcess = new AtomicBoolean();
       this.exitCode = new AtomicInteger();
       this.exitPending = new CountDownLatch(1);
-      this.stdin = new AtomicInteger(-1);
-      this.stdout = new AtomicInteger(-1);
-      this.stderr = new AtomicInteger(-1);
+      this.stdin = new ReferenceCountedFileDescriptor(-1);
+      this.stdout = new ReferenceCountedFileDescriptor(-1);
+      this.stderr = new ReferenceCountedFileDescriptor(-1);
       this.stdinClosing = new AtomicBoolean();
       this.outClosed = true;
       this.errClosed = true;
@@ -295,13 +295,17 @@ public abstract class BasePosixProcess implements NuProcess
    @Override
    public void wantWrite()
    {
-      int fd = stdin.get();
-      if (fd != -1) {
-         userWantsWrite.set(true);
-         myProcessor.queueWrite(this);
-      }
-      else {
-         throw new IllegalStateException("closeStdin() method has already been called.");
+      try {
+        int fd = stdin.acquire();
+        if (fd != -1) {
+          userWantsWrite.set(true);
+          myProcessor.queueWrite(this);
+        }
+        else {
+          throw new IllegalStateException("closeStdin() method has already been called.");
+        }
+      } finally {
+        stdin.release();
       }
    }
 
@@ -310,12 +314,16 @@ public abstract class BasePosixProcess implements NuProcess
    public void closeStdin(boolean force)
    {
       if (force) {
-         int fd = stdin.getAndSet(-1);
-         if (fd != -1) {
-            if (myProcessor != null) {
-               myProcessor.closeStdin(this);
+         try {
+            int fd = stdin.acquire();
+            if (fd != -1) {
+               if (myProcessor != null) {
+                  myProcessor.closeStdin(this);
+               }
+               stdin.close();
             }
-            LibC.close(fd);
+         } finally {
+            stdin.release();
          }
       } else {
          if (stdinClosing.compareAndSet(false, true)) {
@@ -331,14 +339,18 @@ public abstract class BasePosixProcess implements NuProcess
    @Override
    public void writeStdin(ByteBuffer buffer)
    {
-      int fd = stdin.get();
-      boolean closing = stdinClosing.get();
-      if (fd != -1 && !closing) {
-         pendingWrites.add(buffer);
-         myProcessor.queueWrite(this);
-      }
-      else {
-         throw new IllegalStateException("closeStdin() method has already been called.");
+      try {
+         int fd = stdin.acquire();
+         boolean closing = stdinClosing.get();
+         if (fd != -1 && !closing) {
+            pendingWrites.add(buffer);
+            myProcessor.queueWrite(this);
+         }
+         else {
+            throw new IllegalStateException("closeStdin() method has already been called.");
+         }
+      } finally {
+         stdin.release();
       }
    }
 
@@ -365,17 +377,17 @@ public abstract class BasePosixProcess implements NuProcess
       return pid;
    }
 
-   public AtomicInteger getStdin()
+   public ReferenceCountedFileDescriptor getStdin()
    {
       return stdin;
    }
 
-   public AtomicInteger getStdout()
+   public ReferenceCountedFileDescriptor getStdout()
    {
       return stdout;
    }
 
-   public AtomicInteger getStderr()
+   public ReferenceCountedFileDescriptor getStderr()
    {
       return stderr;
    }
@@ -394,8 +406,8 @@ public abstract class BasePosixProcess implements NuProcess
 
       try {
          closeStdin(true);
-         close(stdout);
-         close(stderr);
+         stdout.close();
+         stderr.close();
 
          isRunning = false;
          exitCode.set(statusCode);
@@ -428,7 +440,7 @@ public abstract class BasePosixProcess implements NuProcess
       }
    }
 
-   public void readStdout(int availability)
+   public void readStdout(int availability, int fd)
    {
       if (outClosed || availability == 0) {
          return;
@@ -442,7 +454,7 @@ public abstract class BasePosixProcess implements NuProcess
             return;
          }
 
-         int read = LibC.read(stdout.get(), outBuffer, Math.min(availability, outBuffer.remaining()));
+         int read = LibC.read(fd, outBuffer, Math.min(availability, outBuffer.remaining()));
          if (read == -1) {
             outClosed = true;
             throw new RuntimeException("Unexpected eof");
@@ -466,7 +478,7 @@ public abstract class BasePosixProcess implements NuProcess
       }
    }
 
-   public void readStderr(int availability)
+   public void readStderr(int availability, int fd)
    {
       if (errClosed || availability == 0) {
          return;
@@ -480,7 +492,7 @@ public abstract class BasePosixProcess implements NuProcess
             return;
          }
 
-         int read = LibC.read(stderr.get(), errBuffer, Math.min(availability, errBuffer.remaining()));
+         int read = LibC.read(fd, errBuffer, Math.min(availability, errBuffer.remaining()));
          if (read == -1) {
             // EOF?
             errClosed = true;
@@ -504,9 +516,8 @@ public abstract class BasePosixProcess implements NuProcess
       }
    }
 
-   public boolean writeStdin(int availability)
+   public boolean writeStdin(int availability, int fd)
    {
-      int fd = stdin.get();
       if (availability <= 0 || fd == -1) {
          return false;
       }
@@ -523,7 +534,7 @@ public abstract class BasePosixProcess implements NuProcess
                }
 
                // EOF?
-               close(stdin);
+               stdin.close();
                return false;
             }
          }
@@ -561,7 +572,7 @@ public abstract class BasePosixProcess implements NuProcess
          inBuffer.flip();
          // Recurse
          if (inBuffer.hasRemaining()) {
-            return writeStdin(availability);
+            return writeStdin(availability, fd);
          }
       }
 
@@ -575,7 +586,7 @@ public abstract class BasePosixProcess implements NuProcess
          userWantsWrite.set(wantMore);
          if (inBuffer.hasRemaining() && availability > 0) {
             // Recurse
-            return writeStdin(availability);
+            return writeStdin(availability, fd);
          } else {
             return true;
          }
@@ -659,14 +670,6 @@ public abstract class BasePosixProcess implements NuProcess
       }
    }
 
-   private void close(AtomicInteger stdX)
-   {
-      int fd = stdX.getAndSet(-1);
-      if (fd != -1) {
-         LibC.close(fd);
-      }
-   }
-
    protected Pointer createPipes()
    {
       int rc;
@@ -697,7 +700,7 @@ public abstract class BasePosixProcess implements NuProcess
          rc = LibC.posix_spawn_file_actions_addclose(posix_spawn_file_actions, in[1]);
          checkReturnCode(rc, "Internal call to posix_spawn_file_actions_addclose() failed");
 
-         stdin.set(in[1]);
+         stdin = new ReferenceCountedFileDescriptor(in[1]);
          stdinWidow = in[0];
 
          // Dup the writing end of the pipe into the sub-process, and close our end
@@ -707,7 +710,7 @@ public abstract class BasePosixProcess implements NuProcess
          rc = LibC.posix_spawn_file_actions_addclose(posix_spawn_file_actions, out[0]);
          checkReturnCode(rc, "Internal call to posix_spawn_file_actions_addclose() failed");
 
-         stdout.set(out[0]);
+         stdout = new ReferenceCountedFileDescriptor(out[0]);
          stdoutWidow = out[1];
 
          // Dup the writing end of the pipe into the sub-process, and close our end
@@ -717,7 +720,7 @@ public abstract class BasePosixProcess implements NuProcess
          rc = LibC.posix_spawn_file_actions_addclose(posix_spawn_file_actions, err[0]);
          checkReturnCode(rc, "Internal call to posix_spawn_file_actions_addclose() failed");
 
-         stderr.set(err[0]);
+         stderr = new ReferenceCountedFileDescriptor(err[0]);
          stderrWidow = err[1];
 
          setNonBlocking(in, out, err);

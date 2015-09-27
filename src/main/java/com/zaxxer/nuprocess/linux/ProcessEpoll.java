@@ -73,39 +73,55 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
          return;
       }
 
-      int stdoutFd = process.getStdout().get();
-      int stderrFd = process.getStderr().get();
-
-      pidToProcessMap.put(process.getPid(), process);
-      fildesToProcessMap.put(process.getStdin().get(), process);
-      fildesToProcessMap.put(stdoutFd, process);
-      fildesToProcessMap.put(stderrFd, process);
-
+      Integer stdinFd = null;
+      Integer stdoutFd = null;
+      Integer stderrFd = null;
       try {
-         EpollEvent event = eventPool.take();
-         event.events = LibEpoll.EPOLLIN;
-         event.data.fd = stdoutFd;
-         int rc = LibEpoll.epoll_ctl(epoll, LibEpoll.EPOLL_CTL_ADD, stdoutFd, event);
-         if (rc == -1) {
-            rc = Native.getLastError();
-            eventPool.put(event);
-            throw new RuntimeException("Unable to register new events to epoll, errorcode: " + rc);
-         }
-         eventPool.put(event);
+         stdinFd = process.getStdin().acquire();
+         stdoutFd = process.getStdout().acquire();
+         stderrFd = process.getStderr().acquire();
 
-         event = eventPool.take();
-         event.events = LibEpoll.EPOLLIN;
-         event.data.fd = stderrFd;
-         rc = LibEpoll.epoll_ctl(epoll, LibEpoll.EPOLL_CTL_ADD, stderrFd, event);
-         if (rc == -1) {
-            rc = Native.getLastError();
+         pidToProcessMap.put(process.getPid(), process);
+         fildesToProcessMap.put(stdinFd, process);
+         fildesToProcessMap.put(stdoutFd, process);
+         fildesToProcessMap.put(stderrFd, process);
+
+         try {
+            EpollEvent event = eventPool.take();
+            event.events = LibEpoll.EPOLLIN;
+            event.data.fd = stdoutFd;
+            int rc = LibEpoll.epoll_ctl(epoll, LibEpoll.EPOLL_CTL_ADD, stdoutFd, event);
+            if (rc == -1) {
+               rc = Native.getLastError();
+               eventPool.put(event);
+               throw new RuntimeException("Unable to register new events to epoll, errorcode: " + rc);
+            }
             eventPool.put(event);
-            throw new RuntimeException("Unable to register new events to epoll, errorcode: " + rc);
+
+            event = eventPool.take();
+            event.events = LibEpoll.EPOLLIN;
+            event.data.fd = stderrFd;
+            rc = LibEpoll.epoll_ctl(epoll, LibEpoll.EPOLL_CTL_ADD, stderrFd, event);
+            if (rc == -1) {
+               rc = Native.getLastError();
+               eventPool.put(event);
+               throw new RuntimeException("Unable to register new events to epoll, errorcode: " + rc);
+            }
+            eventPool.put(event);
          }
-         eventPool.put(event);
-      }
-      catch (InterruptedException ie) {
-         throw new RuntimeException(ie);
+         catch (InterruptedException ie) {
+            throw new RuntimeException(ie);
+         }
+      } finally {
+         if (stdinFd != null) {
+            process.getStdin().release();
+         }
+         if (stdoutFd != null) {
+            process.getStdout().release();
+         }
+         if (stderrFd != null) {
+            process.getStderr().release();
+         }
       }
    }
 
@@ -117,7 +133,7 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
       }
 
       try {
-         int stdin = process.getStdin().get();
+         int stdin = process.getStdin().acquire();
          if (stdin == -1) {
            return;
          }
@@ -137,22 +153,32 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
       }
       catch (InterruptedException ie) {
          throw new RuntimeException(ie);
+      } finally {
+         process.getStdin().release();
       }
    }
 
    @Override
    public void closeStdin(LinuxProcess process)
    {
-      int stdin = process.getStdin().get();
-      if (stdin != -1) {
-         fildesToProcessMap.remove(stdin);
-         LibEpoll.epoll_ctl(epoll, LibEpoll.EPOLL_CTL_DEL, stdin, null);
+      try {
+         int stdin = process.getStdin().acquire();
+         if (stdin != -1) {
+            fildesToProcessMap.remove(stdin);
+            LibEpoll.epoll_ctl(epoll, LibEpoll.EPOLL_CTL_DEL, stdin, null);
+         }
+      } finally {
+         process.getStdin().release();
       }
    }
 
    @Override
    public boolean process()
    {
+      Integer stdinFd = null;
+      Integer stdoutFd = null;
+      Integer stderrFd = null;
+      LinuxProcess linuxProcess = null;
       try {
          int nev = LibEpoll.epoll_wait(epoll, triggeredEvent, 1, DEADPOOL_POLL_INTERVAL);
          if (nev == -1) {
@@ -167,24 +193,28 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
          int ident = epEvent.data.fd;
          int events = epEvent.events;
 
-         LinuxProcess linuxProcess = fildesToProcessMap.get(ident);
+         linuxProcess = fildesToProcessMap.get(ident);
          if (linuxProcess == null) {
             return true;
          }
 
+         stdinFd = linuxProcess.getStdin().acquire();
+         stdoutFd = linuxProcess.getStdout().acquire();
+         stderrFd = linuxProcess.getStderr().acquire();
+
          if ((events & LibEpoll.EPOLLIN) != 0) // stdout/stderr data available to read
          {
-            if (ident == linuxProcess.getStdout().get()) {
-               linuxProcess.readStdout(NuProcess.BUFFER_CAPACITY);
+            if (ident == stdoutFd) {
+               linuxProcess.readStdout(NuProcess.BUFFER_CAPACITY, stdoutFd);
             }
-            else {
-               linuxProcess.readStderr(NuProcess.BUFFER_CAPACITY);
+            else if (ident == stderrFd) {
+               linuxProcess.readStderr(NuProcess.BUFFER_CAPACITY, stderrFd);
             }
          }
          else if ((events & LibEpoll.EPOLLOUT) != 0) // Room in stdin pipe available to write
          {
-            if (linuxProcess.getStdin().get() != -1) {
-               if (linuxProcess.writeStdin(NuProcess.BUFFER_CAPACITY)) {
+            if (stdinFd != -1) {
+               if (linuxProcess.writeStdin(NuProcess.BUFFER_CAPACITY, stdinFd)) {
                   epEvent.events = LibEpoll.EPOLLOUT | LibEpoll.EPOLLONESHOT | LibEpoll.EPOLLRDHUP | LibEpoll.EPOLLHUP;
                   LibEpoll.epoll_ctl(epoll, LibEpoll.EPOLL_CTL_MOD, ident, epEvent);
                }
@@ -193,24 +223,35 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
 
          if ((events & LibEpoll.EPOLLHUP) != 0 || (events & LibEpoll.EPOLLRDHUP) != 0 || (events & LibEpoll.EPOLLERR) != 0) {
             LibEpoll.epoll_ctl(epoll, LibEpoll.EPOLL_CTL_DEL, ident, null);
-            if (ident == linuxProcess.getStdout().get()) {
-               linuxProcess.readStdout(-1);
+            if (ident == stdoutFd) {
+               linuxProcess.readStdout(-1, stdoutFd);
             }
-            else if (ident == linuxProcess.getStderr().get()) {
-               linuxProcess.readStderr(-1);
+            else if (ident == stderrFd) {
+               linuxProcess.readStderr(-1, stderrFd);
             }
-            else if (ident == linuxProcess.getStdin().get()) {
+            else if (ident == stdinFd) {
                linuxProcess.closeStdin(true);
             }
          }
 
          if (linuxProcess.isSoftExit()) {
-            cleanupProcess(linuxProcess);
+            cleanupProcess(linuxProcess, stdinFd, stdoutFd, stderrFd);
          }
 
          return true;
       }
       finally {
+         if (linuxProcess != null) {
+            if (stdinFd != null) {
+               linuxProcess.getStdin().release();
+            }
+            if (stdoutFd != null) {
+               linuxProcess.getStdout().release();
+            }
+            if (stderrFd != null) {
+               linuxProcess.getStderr().release();
+            }
+         }
          triggeredEvent.clear();
          checkDeadPool();
       }
@@ -221,12 +262,13 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
    // ************************************************************************
    AtomicInteger count = new AtomicInteger();
 
-   private void cleanupProcess(LinuxProcess linuxProcess)
+   private void cleanupProcess(
+         LinuxProcess linuxProcess, Integer stdinFd, Integer stdoutFd, Integer stderrFd)
    {
       pidToProcessMap.remove(linuxProcess.getPid());
-      fildesToProcessMap.remove(linuxProcess.getStdin().get());
-      fildesToProcessMap.remove(linuxProcess.getStdout().get());
-      fildesToProcessMap.remove(linuxProcess.getStderr().get());
+      fildesToProcessMap.remove(stdinFd);
+      fildesToProcessMap.remove(stdoutFd);
+      fildesToProcessMap.remove(stderrFd);
 
       //        linuxProcess.close(linuxProcess.getStdin());
       //        linuxProcess.close(linuxProcess.getStdout());
