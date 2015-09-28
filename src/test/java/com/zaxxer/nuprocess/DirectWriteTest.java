@@ -27,7 +27,7 @@ import org.junit.Test;
 /**
  * @author Brett Wooldridge
  */
-public class DirectWrite
+public class DirectWriteTest
 {
    private String command;
 
@@ -50,6 +50,7 @@ public class DirectWrite
       Assert.assertEquals("Results did not match", "This is a test", processListener.result);
    }
 
+   // TODO: DirectWriteBig will explore a bug when using writeStdin at onStart()
    @Test
    public void testDirectWriteBig() throws InterruptedException
    {
@@ -90,7 +91,7 @@ public class DirectWrite
    }
 
    @Test
-   public void testManyWrites() throws InterruptedException
+   public void testConsecutiveWrites() throws InterruptedException
    {
       final AtomicInteger count = new AtomicInteger();
 
@@ -105,7 +106,7 @@ public class DirectWrite
 
       NuProcessBuilder pb = new NuProcessBuilder(processListener, command);
       NuProcess nuProcess = pb.start();
-      for (int i = 0; i < 1000; i++) {
+      for (int i = 0; i < 10000; i++) {
          ByteBuffer buffer = ByteBuffer.allocate(64);
          buffer.put("This is a test".getBytes());
          buffer.flip();
@@ -116,7 +117,7 @@ public class DirectWrite
 
       nuProcess.closeStdin(true);
       nuProcess.waitFor(0, TimeUnit.SECONDS);
-      Assert.assertEquals("Count did not match", 14000, count.get());
+      Assert.assertEquals("Count did not match", 140000, count.get());
    }
 
    private static class ProcessHandler1 extends NuAbstractProcessHandler
@@ -138,12 +139,13 @@ public class DirectWrite
       }
 
       @Override
-      public void onStdout(ByteBuffer buffer, boolean closed)
-      {
-         byte[] chars = new byte[buffer.remaining()];
-         buffer.get(chars);
-         result = new String(chars);
-         System.out.println("Read: " + result);
+      public void onStdout(ByteBuffer buffer, boolean closed) {
+         if (buffer.hasRemaining()) {
+            byte[] chars = new byte[buffer.remaining()];
+            buffer.get(chars);
+            result = new String(chars);
+            System.out.println("Read: " + result);
+         }
          nuProcess.closeStdin(true);
       }
    }
