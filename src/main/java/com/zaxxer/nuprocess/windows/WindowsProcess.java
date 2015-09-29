@@ -388,9 +388,9 @@ public final class WindowsProcess implements NuProcess
       }
 
       writePending = false;
-      stdinPipe.buffer.clear();
 
       if (!pendingWrites.isEmpty()) {
+         stdinPipe.buffer.clear();
          // copy the next buffer into our direct buffer (inBuffer)
          ByteBuffer byteBuffer = pendingWrites.peek();
          if (byteBuffer == pendingWriteStdinClosedTombstone) {

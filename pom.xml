@@ -90,27 +90,37 @@
                     <target>1.7</target>
                 </configuration>
             </plugin>
-            <plugin>
-                <groupId>org.apache.felix</groupId>
-                <artifactId>maven-bundle-plugin</artifactId>
-                <version>2.3.7</version>
-                <extensions>true</extensions>
-                <configuration>
-                    <instructions>
-                        <Bundle-Name>NuProcess</Bundle-Name>
-                        <Export-Package>com.zaxxer.nuprocess</Export-Package>
-                        <Export-Package>com.zaxxer.nuprocess.codec</Export-Package>
-                        <Import-Package>com.sun.*,sun.misc.*</Import-Package>
-                        <Bundle-SymbolicName>${project.groupId}.${project.artifactId}</Bundle-SymbolicName>
-                    </instructions>
-                </configuration>
-            </plugin>
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-source-plugin</artifactId>
-                <version>2.2.1</version>
-                <configuration>
-                    <!-- outputDirectory>/absolute/path/to/the/output/directory</outputDirectory> <finalName>filename-of-generated-jar-file</finalName -->
+           <!-- Note: we might need this for removing side-effect on InterruptTest
+           <plugin>
+               <groupId>org.apache.maven.plugins</groupId>
+               <artifactId>maven-surefire-plugin</artifactId>
+               <version>2.18.1</version>
+               <configuration>
+                   <reuseForks>false</reuseForks>
+               </configuration>
+           </plugin>
+           -->
+           <plugin>
+               <groupId>org.apache.felix</groupId>
+               <artifactId>maven-bundle-plugin</artifactId>
+               <version>2.3.7</version>
+               <extensions>true</extensions>
+               <configuration>
+                   <instructions>
+                       <Bundle-Name>NuProcess</Bundle-Name>
+                       <Export-Package>com.zaxxer.nuprocess</Export-Package>
+                       <Export-Package>com.zaxxer.nuprocess.codec</Export-Package>
+                       <Import-Package>com.sun.*,sun.misc.*</Import-Package>
+                       <Bundle-SymbolicName>${project.groupId}.${project.artifactId}</Bundle-SymbolicName>
+                   </instructions>
+               </configuration>
+           </plugin>
+           <plugin>
+               <groupId>org.apache.maven.plugins</groupId>
+               <artifactId>maven-source-plugin</artifactId>
+               <version>2.2.1</version>
+               <configuration>
+                   <!-- outputDirectory>/absolute/path/to/the/output/directory</outputDirectory> <finalName>filename-of-generated-jar-file</finalName -->
                     <attach>true</attach>
                 </configuration>
                 <executions>

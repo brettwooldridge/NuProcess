@@ -536,9 +536,8 @@ public abstract class BasePosixProcess implements NuProcess
          }
       }
 
-      inBuffer.clear();
-
       if (!pendingWrites.isEmpty()) {
+         inBuffer.clear();
          // copy the next buffer into our direct buffer (inBuffer)
          ByteBuffer byteBuffer = pendingWrites.peek();
          if (byteBuffer == STDIN_CLOSED_PENDING_WRITE_TOMBSTONE) {
