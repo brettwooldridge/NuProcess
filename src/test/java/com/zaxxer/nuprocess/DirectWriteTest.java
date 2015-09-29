@@ -51,6 +51,7 @@ public class DirectWriteTest
    }
 
    // TODO: DirectWriteBig will explore a bug when using writeStdin at onStart()
+   //       (has problem on Mac OS X and Linux, but works on Win32)
    //@Test
    public void testDirectWriteBig() throws InterruptedException
    {
@@ -107,7 +108,7 @@ public class DirectWriteTest
       NuProcessBuilder pb = new NuProcessBuilder(processListener, command);
       NuProcess nuProcess = pb.start();
       // TODO: given a large i (e.g. 1,000, 10,000), this unit test (testConsecutiveWrites) will
-      //       produce a side-effect on InterruptTest (Mac OS X).
+      //       produce a side-effect on InterruptTest (has problem on Mac OS X, but works on Linux and Win32).
       for (int i = 0; i < 100; i++) {
          ByteBuffer buffer = ByteBuffer.allocate(64);
          buffer.put("This is a test".getBytes());
