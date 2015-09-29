@@ -79,7 +79,7 @@ public class InterruptTest
       NuProcessBuilder pb = new NuProcessBuilder(processListener, command);
       NuProcess process = pb.start();
       while (true) {
-         if (count.get() > 10000) {
+         if (count.getAndIncrement() > 100) {
             process.destroy(forceKill);
             break;
          }
