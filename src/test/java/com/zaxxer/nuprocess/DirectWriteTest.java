@@ -109,7 +109,8 @@ public class DirectWriteTest
       NuProcess nuProcess = pb.start();
       // TODO: given a large i (e.g. 1,000, 10,000), this unit test (testConsecutiveWrites) will
       //       produce a side-effect on InterruptTest (has problem on Mac OS X, but works on Linux and Win32).
-      for (int i = 0; i < 100; i++) {
+      //       We do not reuse fork on surefire (reuseForks=false) to address this issue for now.
+      for (int i = 0; i < 1000; i++) {
          ByteBuffer buffer = ByteBuffer.allocate(64);
          buffer.put("This is a test".getBytes());
          buffer.flip();
@@ -120,7 +121,7 @@ public class DirectWriteTest
 
       nuProcess.closeStdin(true);
       nuProcess.waitFor(0, TimeUnit.SECONDS);
-      Assert.assertEquals("Count did not match", 1400, count.get());
+      Assert.assertEquals("Count did not match", 14000, count.get());
    }
 
    private static class ProcessHandler1 extends NuAbstractProcessHandler
