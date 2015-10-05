@@ -37,9 +37,6 @@ import static com.zaxxer.nuprocess.internal.LibC.*;
  */
 final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
 {
-   // If we return false from process() even once while no processes
-   // are registered, we'll shut down the event processor thread.
-   private static final int LINGER_ITERATIONS = 0;
    private static final int NUM_KEVENTS = 64;
    private static final int JAVA_PID;
 
@@ -56,7 +53,7 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
 
    ProcessKqueue()
    {
-      super(LINGER_ITERATIONS);
+      super();
       kqueue = LibKevent.kqueue();
       if (kqueue < 0) {
          throw new RuntimeException("Unable to create kqueue");

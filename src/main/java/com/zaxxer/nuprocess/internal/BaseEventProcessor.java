@@ -29,12 +29,7 @@ import com.sun.jna.ptr.IntByReference;
  */
 public abstract class BaseEventProcessor<T extends BasePosixProcess> implements IEventProcessor<T>
 {
-   public static final int LINGER_TIME_MS;
-
-   protected static final int DEADPOOL_POLL_INTERVAL;
-   protected static final int LINGER_ITERATIONS;
-   private final int lingerIterations;
-
+   public static final int LINGER_TIME_MS = Math.max(1000, Integer.getInteger("com.zaxxer.nuprocess.lingerTimeMs", 2500));
    protected Map<Integer, T> pidToProcessMap;
    protected Map<Integer, T> fildesToProcessMap;
 
@@ -43,22 +38,8 @@ public abstract class BaseEventProcessor<T extends BasePosixProcess> implements 
    private CyclicBarrier startBarrier;
    private AtomicBoolean isRunning;
 
-   static {
-      LINGER_TIME_MS = Math.max(1000, Integer.getInteger("com.zaxxer.nuprocess.lingerTimeMs", 2500));
-
-      DEADPOOL_POLL_INTERVAL = Math.min(LINGER_TIME_MS, Math.max(100, Integer.getInteger("com.zaxxer.nuprocess.deadPoolPollMs", 250)));
-
-      LINGER_ITERATIONS = LINGER_TIME_MS / DEADPOOL_POLL_INTERVAL;
-   }
-
    public BaseEventProcessor()
    {
-      this(LINGER_ITERATIONS);
-   }
-
-   public BaseEventProcessor(int lingerIterations)
-   {
-      this.lingerIterations = lingerIterations;
       pidToProcessMap = new ConcurrentHashMap<Integer, T>();
       fildesToProcessMap = new ConcurrentHashMap<Integer, T>();
       isRunning = new AtomicBoolean();
@@ -73,9 +54,8 @@ public abstract class BaseEventProcessor<T extends BasePosixProcess> implements 
       try {
          startBarrier.await();
 
-         int idleCount = 0;
-         while (!isRunning.compareAndSet(idleCount > lingerIterations && pidToProcessMap.isEmpty(), false)) {
-            idleCount = (!shutdown && process()) ? 0 : (idleCount + 1);
+         while (!shutdown && !isRunning.compareAndSet(pidToProcessMap.isEmpty(), false)) {
+	     process();
          }
       }
       catch (Exception e) {

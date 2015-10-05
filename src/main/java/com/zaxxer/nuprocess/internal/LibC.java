@@ -24,6 +24,7 @@ import com.sun.jna.Platform;
 import com.sun.jna.Pointer;
 import com.sun.jna.StringArray;
 import com.sun.jna.ptr.IntByReference;
+import com.sun.jna.ptr.NativeLongByReference;
 
 import java.nio.ByteBuffer;
 
@@ -82,6 +83,9 @@ public class LibC
    public static native int chdir(String path);
 
    public static native String getcwd(Pointer buf, int size);
+
+   public static native int sigemptyset(NativeLongByReference sigset);
+   public static native int sigaddset(NativeLongByReference sigset, int signal);
 
    // from /usr/include/sys/syscall.h
    // We can't use JNA direct mapping for syscall(), since it takes varargs.

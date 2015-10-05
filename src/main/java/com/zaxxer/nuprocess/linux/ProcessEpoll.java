@@ -16,18 +16,18 @@
 
 package com.zaxxer.nuprocess.linux;
 
-import java.util.Iterator;
-import java.util.LinkedList;
-import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import com.sun.jna.Native;
 import com.sun.jna.ptr.IntByReference;
+import com.sun.jna.ptr.NativeLongByReference;
 import com.zaxxer.nuprocess.NuProcess;
 import com.zaxxer.nuprocess.internal.BaseEventProcessor;
 import com.zaxxer.nuprocess.internal.LibC;
+import com.zaxxer.nuprocess.internal.LinuxLibC;
+
+import java.nio.ByteBuffer;
 
 import static com.zaxxer.nuprocess.internal.LibC.WIFEXITED;
 import static com.zaxxer.nuprocess.internal.LibC.WEXITSTATUS;
@@ -42,8 +42,8 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
    private static final int EVENT_POOL_SIZE = 32;
 
    private int epoll;
+   private int signalFd;
    private EpollEvent triggeredEvent;
-   private List<LinuxProcess> deadPool;
 
    private static BlockingQueue<EpollEvent> eventPool;
 
@@ -51,11 +51,25 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
    {
       epoll = LibEpoll.epoll_create(1024);
       if (epoll < 0) {
-         throw new RuntimeException("Unable to create kqueue: " + Native.getLastError());
+         throw new RuntimeException("Unable to create epoll: " + Native.getLastError());
       }
-
+      NativeLongByReference sigset = new NativeLongByReference();
+      if (LibC.sigemptyset(sigset) != 0 || LibC.sigaddset(sigset, LinuxLibC.SIGCHLD) != 0) {
+         throw new RuntimeException("Unable to initialize sigset");
+      }
+      signalFd = LinuxLibC.signalfd(-1, sigset.getValue(), LinuxLibC.SFD_CLOEXEC);
+      if (signalFd == -1) {
+         throw new RuntimeException("signalfd failed");
+      }
+      EpollEvent event = new EpollEvent();
+      event.events = LibEpoll.EPOLLIN;
+      event.data.fd = signalFd;
+      int rc = LibEpoll.epoll_ctl(epoll, LibEpoll.EPOLL_CTL_ADD, signalFd, event);
+      if (rc == -1) {
+	 rc = Native.getLastError();
+	 throw new RuntimeException("Unable to register new events to epoll, errorcode: " + rc);
+      }
       triggeredEvent = new EpollEvent();
-      deadPool = new LinkedList<LinuxProcess>();
       eventPool = new ArrayBlockingQueue<EpollEvent>(EVENT_POOL_SIZE);
       for (int i = 0; i < EVENT_POOL_SIZE; i++) {
          eventPool.add(new EpollEvent());
@@ -154,7 +168,7 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
    public boolean process()
    {
       try {
-         int nev = LibEpoll.epoll_wait(epoll, triggeredEvent, 1, DEADPOOL_POLL_INTERVAL);
+         int nev = LibEpoll.epoll_wait(epoll, triggeredEvent, 1, -1);
          if (nev == -1) {
             throw new RuntimeException("Error waiting for epoll");
          }
@@ -166,6 +180,11 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
          EpollEvent epEvent = triggeredEvent;
          int ident = epEvent.data.fd;
          int events = epEvent.events;
+
+	 if (ident == signalFd) {
+	     handleSigchld(epEvent);
+	     return true;
+	 }
 
          LinuxProcess linuxProcess = fildesToProcessMap.get(ident);
          if (linuxProcess == null) {
@@ -204,44 +223,36 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
             }
          }
 
-         if (linuxProcess.isSoftExit()) {
-            cleanupProcess(linuxProcess);
-         }
-
          return true;
       }
       finally {
          triggeredEvent.clear();
-         checkDeadPool();
       }
    }
 
    // ************************************************************************
    //                             Private methods
    // ************************************************************************
-   AtomicInteger count = new AtomicInteger();
 
-   private void cleanupProcess(LinuxProcess linuxProcess)
+   private void handleSigchld(EpollEvent event)
    {
-      pidToProcessMap.remove(linuxProcess.getPid());
-      fildesToProcessMap.remove(linuxProcess.getStdin().get());
-      fildesToProcessMap.remove(linuxProcess.getStdout().get());
-      fildesToProcessMap.remove(linuxProcess.getStderr().get());
-
-      //        linuxProcess.close(linuxProcess.getStdin());
-      //        linuxProcess.close(linuxProcess.getStdout());
-      //        linuxProcess.close(linuxProcess.getStderr());
-
-      if (linuxProcess.cleanlyExitedBeforeProcess.get()) {
-         linuxProcess.onExit(0);
-         return;
+      LinuxLibC.SignalFdSiginfo siginfo = new LinuxLibC.SignalFdSiginfo();
+      ByteBuffer buf = siginfo.getPointer().getByteBuffer(0, 0);
+      int bytesRead = LibC.read(signalFd, buf, siginfo.size());
+      if (bytesRead != siginfo.size()) {
+	 throw new RuntimeException("Couldn't read struct signalfd_siginfo");
       }
-
+      siginfo.read();
+      int pid = siginfo.ssi_pid;
+      LinuxProcess linuxProcess = pidToProcessMap.get(pid);
+      if (linuxProcess == null) {
+	 return;
+      }
       IntByReference ret = new IntByReference();
       int rc = LibC.waitpid(linuxProcess.getPid(), ret, LibC.WNOHANG);
 
       if (rc == 0) {
-         deadPool.add(linuxProcess);
+	 return;
       }
       else if (rc < 0) {
          linuxProcess.onExit((Native.getLastError() == LibC.ECHILD) ? Integer.MAX_VALUE : Integer.MIN_VALUE);
@@ -262,46 +273,6 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
          }
          else {
             linuxProcess.onExit(Integer.MIN_VALUE);
-         }
-      }
-   }
-
-   private void checkDeadPool()
-   {
-      if (deadPool.isEmpty()) {
-         return;
-      }
-
-      IntByReference ret = new IntByReference();
-      Iterator<LinuxProcess> iterator = deadPool.iterator();
-      while (iterator.hasNext()) {
-         LinuxProcess process = iterator.next();
-         int rc = LibC.waitpid(process.getPid(), ret, LibC.WNOHANG);
-         if (rc == 0) {
-            continue;
-         }
-
-         iterator.remove();
-         if (rc < 0) {
-            process.onExit((Native.getLastError() == LibC.ECHILD) ? Integer.MAX_VALUE : Integer.MIN_VALUE);
-            continue;
-         }
-
-         int status = ret.getValue();
-         if (WIFEXITED(status)) {
-            status = WEXITSTATUS(status);
-            if (status == 127) {
-               process.onExit(Integer.MIN_VALUE);
-            }
-            else {
-               process.onExit(status);
-            }
-         }
-         else if (WIFSIGNALED(status)) {
-            process.onExit(WTERMSIG(status));
-         }
-         else {
-            process.onExit(Integer.MIN_VALUE);
          }
       }
    }

@@ -39,7 +39,6 @@ import com.zaxxer.nuprocess.NuProcessHandler;
 
 public abstract class BasePosixProcess implements NuProcess
 {
-   private static final boolean IS_SOFTEXIT_DETECTION;
    private static final ByteBuffer STDIN_CLOSED_PENDING_WRITE_TOMBSTONE = ByteBuffer.allocate(1);
 
    protected static final IEventProcessor<? extends BasePosixProcess>[] processors;
@@ -103,8 +102,6 @@ public abstract class BasePosixProcess implements NuProcess
    }
 
    static {
-      IS_SOFTEXIT_DETECTION = Boolean.valueOf(System.getProperty("com.zaxxer.nuprocess.softExitDetection", "true"));
-
       int numThreads;
       String threads = System.getProperty("com.zaxxer.nuprocess.threads", "auto");
       if ("auto".equals(threads)) {
@@ -378,11 +375,6 @@ public abstract class BasePosixProcess implements NuProcess
    public AtomicInteger getStderr()
    {
       return stderr;
-   }
-
-   public boolean isSoftExit()
-   {
-      return (IS_SOFTEXIT_DETECTION && outClosed && errClosed);
    }
 
    public void onExit(int statusCode)
