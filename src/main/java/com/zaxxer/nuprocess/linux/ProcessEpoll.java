@@ -53,23 +53,25 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
       if (epoll < 0) {
          throw new RuntimeException("Unable to create epoll: " + Native.getLastError());
       }
-      NativeLongByReference sigset = new NativeLongByReference();
-      if (LibC.sigemptyset(sigset) != 0 || LibC.sigaddset(sigset, LinuxLibC.SIGCHLD) != 0) {
+      LibC.SigsetT sigset = new LibC.SigsetT();
+      if (LibC.sigemptyset(sigset) != 0 ||
+	  LibC.sigaddset(sigset, LinuxLibC.SIGCHLD) != 0 ||
+	  // Ensure default SIGCHLD handler is not called
+	  LibC.sigprocmask(LibC.SIG_BLOCK, sigset, null) != 0) {
          throw new RuntimeException("Unable to initialize sigset");
       }
-      signalFd = LinuxLibC.signalfd(-1, sigset.getValue(), LinuxLibC.SFD_CLOEXEC);
+      signalFd = LinuxLibC.signalfd(-1, sigset, LinuxLibC.SFD_CLOEXEC | LinuxLibC.SFD_NONBLOCK);
       if (signalFd == -1) {
          throw new RuntimeException("signalfd failed");
       }
-      EpollEvent event = new EpollEvent();
-      event.events = LibEpoll.EPOLLIN;
-      event.data.fd = signalFd;
-      int rc = LibEpoll.epoll_ctl(epoll, LibEpoll.EPOLL_CTL_ADD, signalFd, event);
+      triggeredEvent = new EpollEvent();
+      triggeredEvent.events = LibEpoll.EPOLLIN;
+      triggeredEvent.data.fd = signalFd;
+      int rc = LibEpoll.epoll_ctl(epoll, LibEpoll.EPOLL_CTL_ADD, signalFd, triggeredEvent);
       if (rc == -1) {
 	 rc = Native.getLastError();
 	 throw new RuntimeException("Unable to register new events to epoll, errorcode: " + rc);
       }
-      triggeredEvent = new EpollEvent();
       eventPool = new ArrayBlockingQueue<EpollEvent>(EVENT_POOL_SIZE);
       for (int i = 0; i < EVENT_POOL_SIZE; i++) {
          eventPool.add(new EpollEvent());
@@ -236,9 +238,12 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
 
    private void handleSigchld(EpollEvent event)
    {
+      System.err.format("got sigchld\n");
       LinuxLibC.SignalFdSiginfo siginfo = new LinuxLibC.SignalFdSiginfo();
       ByteBuffer buf = siginfo.getPointer().getByteBuffer(0, 0);
+      System.err.format("read %d\n", siginfo.size());
       int bytesRead = LibC.read(signalFd, buf, siginfo.size());
+      System.err.format("got %d\n", bytesRead);
       if (bytesRead != siginfo.size()) {
 	 throw new RuntimeException("Couldn't read struct signalfd_siginfo");
       }

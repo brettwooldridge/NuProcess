@@ -23,10 +23,12 @@ import com.sun.jna.NativeLibrary;
 import com.sun.jna.Platform;
 import com.sun.jna.Pointer;
 import com.sun.jna.StringArray;
+import com.sun.jna.Structure;
 import com.sun.jna.ptr.IntByReference;
-import com.sun.jna.ptr.NativeLongByReference;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
+import java.util.List;
 
 public class LibC
 {
@@ -84,8 +86,21 @@ public class LibC
 
    public static native String getcwd(Pointer buf, int size);
 
-   public static native int sigemptyset(NativeLongByReference sigset);
-   public static native int sigaddset(NativeLongByReference sigset, int signal);
+   public static class SigsetT extends Structure {
+      public byte[] signals = new byte[128];
+
+      @SuppressWarnings("rawtypes")
+      @Override
+      protected List getFieldOrder()
+      {
+         return Arrays.asList("signals");
+      }
+   }
+
+   public static native int sigemptyset(SigsetT sigset);
+   public static native int sigaddset(SigsetT sigset, int signal);
+   public static final int SIG_BLOCK = 0;
+   public static native int sigprocmask(int how, SigsetT set, SigsetT oldset);
 
    // from /usr/include/sys/syscall.h
    // We can't use JNA direct mapping for syscall(), since it takes varargs.

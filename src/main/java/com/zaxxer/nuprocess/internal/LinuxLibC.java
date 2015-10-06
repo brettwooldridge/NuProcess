@@ -17,7 +17,6 @@
 package com.zaxxer.nuprocess.internal;
 
 import com.sun.jna.Native;
-import com.sun.jna.NativeLong;
 import com.sun.jna.Platform;
 import com.sun.jna.Structure;
 
@@ -37,11 +36,11 @@ public class LinuxLibC
    public static final int CLONE_FS = 0x00000200; /* Share or unshare cwd between threads / processes */
 
    // /usr/include/sys/signalfd.h
-   public static native int signalfd(int fd, NativeLong mask, int flags);
+   public static native int signalfd(int fd, LibC.SigsetT mask, int flags);
 
    public static final int SIGCHLD = 17;
    public static final int SFD_CLOEXEC = 02000000;
-
+   public static final int SFD_NONBLOCK = 00004000;
    public static class SignalFdSiginfo extends Structure {                                                                         
       public int ssi_signo;   /* Signal number */                                                     
       public int ssi_errno;   /* Error number (unused) */                                             
@@ -62,6 +61,7 @@ public class LinuxLibC
 				  (for hardware-generated signals) */                                  
 
       public SignalFdSiginfo() {
+	 super();
 	 allocateMemory(128);
       }
 
