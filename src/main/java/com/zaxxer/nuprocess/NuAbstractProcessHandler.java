@@ -46,18 +46,20 @@ public abstract class NuAbstractProcessHandler implements NuProcessHandler
 
    /** {@inheritDoc} */
    @Override
-   public void onStdout(ByteBuffer buffer, boolean closed)
+   public boolean onStdout(ByteBuffer buffer, boolean closed)
    {
       // Ensure we consume the entire buffer in case it's not used.
       buffer.position(buffer.limit());
+      return true;
    }
 
    /** {@inheritDoc} */
    @Override
-   public void onStderr(ByteBuffer buffer, boolean closed)
+   public boolean onStderr(ByteBuffer buffer, boolean closed)
    {
       // Ensure we consume the entire buffer in case it's not used.
       buffer.position(buffer.limit());
+      return true;
    }
 
    /** {@inheritDoc} */

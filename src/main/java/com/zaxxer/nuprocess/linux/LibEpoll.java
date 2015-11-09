@@ -51,4 +51,6 @@ public class LibEpoll
    public static final int EPOLLRDHUP = 0x2000;
    public static final int EPOLLONESHOT = (1 << 30);
    public static final int EPOLLET = (1 << 31);
+
+   public static final int ENOENT = 2; /* No such file or directory */
 }

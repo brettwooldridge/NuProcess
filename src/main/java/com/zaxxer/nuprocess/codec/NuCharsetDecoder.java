@@ -80,12 +80,15 @@ public final class NuCharsetDecoder
     * @param buffer {@link ByteBuffer} which received bytes from stdout or
     *        stderr
     * @param closed true if stdout or stderr was closed, false otherwise
+    * @return the method should return {@code true} if more data is desired
     */
-   public void onOutput(ByteBuffer buffer, boolean closed)
+   public boolean onOutput(ByteBuffer buffer, boolean closed)
    {
       CoderResult coderResult = decoder.decode(buffer, charBuffer, /* endOfInput */ closed);
       charBuffer.flip();
-      this.handler.onDecode(charBuffer, closed, coderResult);
+      boolean more = this.handler.onDecode(charBuffer, closed, coderResult);
       charBuffer.compact();
+
+      return more;
    }
 }

@@ -38,6 +38,7 @@ import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 
+import com.zaxxer.nuprocess.NuProcess.Stream;
 import com.zaxxer.nuprocess.codec.NuAbstractCharsetHandler;
 
 /**
@@ -68,14 +69,14 @@ public class CatTest
          System.err.printf(" Iteration %d\n", times + 1);
 
          Semaphore[] semaphores = new Semaphore[100];
-         LottaProcessListener[] listeners = new LottaProcessListener[100];
+         LottaProcessListener[] listeners = new LottaProcessListener[semaphores.length];
 
          for (int i = 0; i < semaphores.length; i++) {
             semaphores[i] = new Semaphore(0);
             listeners[i] = new LottaProcessListener(semaphores[i]);
             NuProcessBuilder pb = new NuProcessBuilder(listeners[i], command);
-            pb.start();
-            // System.err.printf("  starting process: %d\n", i + 1);
+            NuProcess process = pb.start();
+            process.want(Stream.STDOUT);
          }
 
          for (Semaphore sem : semaphores) {
@@ -100,7 +101,7 @@ public class CatTest
 
          LottaProcessListener processListener = new LottaProcessListener(semaphore);
          NuProcessBuilder pb = new NuProcessBuilder(processListener, command);
-         pb.start();
+         pb.start().want(Stream.STDOUT);
          semaphore.acquireUninterruptibly();
 
          Assert.assertTrue("Adler32 mismatch between written and read", processListener.checkAdlers());
@@ -117,7 +118,7 @@ public class CatTest
       System.err.println("Starting test decodingShortUtf8Data()");
       Utf8DecodingListener processListener = new Utf8DecodingListener(semaphore, SHORT_UNICODE_TEXT, true);
       NuProcessBuilder pb = new NuProcessBuilder(processListener, command);
-      pb.start();
+      pb.start().want(Stream.STDOUT);
       semaphore.acquireUninterruptibly();
       Assert.assertEquals("Decoding mismatch", SHORT_UNICODE_TEXT, processListener.decodedStdout.toString());
       Assert.assertEquals("Exit code mismatch", 0, processListener.exitCode);
@@ -138,7 +139,7 @@ public class CatTest
       System.err.println("Starting test decodingLongUtf8Data()");
       Utf8DecodingListener processListener = new Utf8DecodingListener(semaphore, unicodeTextWhichDoesNotFitInBuffer.toString(), true);
       NuProcessBuilder pb = new NuProcessBuilder(processListener, command);
-      pb.start();
+      pb.start().want(Stream.STDOUT);
       semaphore.acquireUninterruptibly();
       Assert.assertEquals("Decoding mismatch", unicodeTextWhichDoesNotFitInBuffer.toString(), processListener.decodedStdout.toString());
       Assert.assertEquals("Exit code mismatch", 0, processListener.exitCode);
@@ -165,6 +166,7 @@ public class CatTest
 
       NuProcessBuilder pb = new NuProcessBuilder(processListener, command, "/tmp/sdfadsf");
       NuProcess nuProcess = pb.start();
+      nuProcess.want(Stream.STDOUT);
       int syncExitCode = nuProcess.waitFor(5, TimeUnit.SECONDS);
       boolean countedDown = exitLatch.await(5, TimeUnit.SECONDS);
       Assert.assertTrue("Async exit latch was not triggered", countedDown);
@@ -195,6 +197,7 @@ public class CatTest
 
       NuProcessBuilder pb = new NuProcessBuilder(processListener, "/bin/zxczxc");
       NuProcess process = pb.start();
+      process.want(Stream.STDOUT);
       semaphore.acquireUninterruptibly();
       Assert.assertFalse("Process incorrectly reported running", process.isRunning());
       Assert.assertEquals("Output did not matched expected result", Integer.MIN_VALUE, exitCode.get());
@@ -212,10 +215,11 @@ public class CatTest
          private NuProcess nuProcess;
 
          @Override
-         public void onStdout(ByteBuffer buffer, boolean closed)
+         public boolean onStdout(ByteBuffer buffer, boolean closed)
          {
             callbacks.add("stdout");
             nuProcess.closeStdin(true);
+            return !closed;
          }
 
          @Override
@@ -227,9 +231,10 @@ public class CatTest
          }
 
          @Override
-         public void onStderr(ByteBuffer buffer, boolean closed)
+         public boolean onStderr(ByteBuffer buffer, boolean closed)
          {
             callbacks.add("stderr");
+            return !closed;
          }
 
          @Override
@@ -237,7 +242,7 @@ public class CatTest
          {
             callbacks.add("start");
             this.nuProcess = nuProcess;
-            nuProcess.wantWrite();
+            nuProcess.want(Stream.STDIN);
          }
 
          @Override
@@ -254,7 +259,9 @@ public class CatTest
          }
       };
 
-      Assert.assertNotNull("process is null", new NuProcessBuilder(handler, command).start());
+      NuProcess process = new NuProcessBuilder(handler, command).start();
+      process.want(Stream.STDOUT);
+      Assert.assertNotNull("process is null", process);
       latch.await();
 
       Assert.assertEquals("onPreStart was not called first", 0, callbacks.indexOf("prestart"));
@@ -291,7 +298,7 @@ public class CatTest
       System.err.println("Starting test softCloseStdinAfterWrite()");
       Utf8DecodingListener processListener = new Utf8DecodingListener(semaphore, text, false);
       NuProcessBuilder pb = new NuProcessBuilder(processListener, command);
-      pb.start();
+      pb.start().want(Stream.STDOUT);
       semaphore.acquireUninterruptibly();
       Assert.assertEquals("Decoding mismatch", text, processListener.decodedStdout.toString());
       Assert.assertEquals("Exit code mismatch", 0, processListener.exitCode);
@@ -331,7 +338,7 @@ public class CatTest
       public void onStart(NuProcess nuProcess)
       {
          this.nuProcess = nuProcess;
-         nuProcess.wantWrite();
+         nuProcess.want(Stream.STDIN);
       }
 
       @Override
@@ -342,8 +349,12 @@ public class CatTest
       }
 
       @Override
-      public void onStdout(ByteBuffer buffer, boolean closed)
+      public boolean onStdout(ByteBuffer buffer, boolean closed)
       {
+         if (closed) {
+            return false;
+         }
+
          size += buffer.remaining();
          if (size == (WRITES * bytes.length)) {
             nuProcess.closeStdin(true);
@@ -352,6 +363,8 @@ public class CatTest
          byte[] bytes = new byte[buffer.remaining()];
          buffer.get(bytes);
          readAdler32.update(bytes);
+
+         return !closed;
       }
 
       @Override
@@ -405,7 +418,8 @@ public class CatTest
       public void onStart(NuProcess nuProcess)
       {
          this.nuProcess = nuProcess;
-         nuProcess.wantWrite();
+         nuProcess.want(Stream.STDIN);
+         nuProcess.want(Stream.STDOUT);
       }
 
       @Override
@@ -416,7 +430,7 @@ public class CatTest
       }
 
       @Override
-      public void onStdoutChars(CharBuffer buffer, boolean closed, CoderResult coderResult)
+      public boolean onStdoutChars(CharBuffer buffer, boolean closed, CoderResult coderResult)
       {
          charsRead += buffer.remaining();
          decodedStdout.append(buffer);
@@ -425,6 +439,8 @@ public class CatTest
          if (forceCloseStdin && charsRead == charsWritten) {
             nuProcess.closeStdin(true);
          }
+
+         return !closed;
       }
 
       @Override

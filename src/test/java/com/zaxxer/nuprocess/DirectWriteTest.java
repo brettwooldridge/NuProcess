@@ -24,6 +24,8 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
+import com.zaxxer.nuprocess.NuProcess.Stream;
+
 /**
  * @author Brett Wooldridge
  */
@@ -46,13 +48,13 @@ public class DirectWriteTest
       ProcessHandler1 processListener = new ProcessHandler1();
       NuProcessBuilder pb = new NuProcessBuilder(processListener, command);
       NuProcess nuProcess = pb.start();
-      nuProcess.waitFor(0, TimeUnit.SECONDS);
+      nuProcess.waitFor(5, TimeUnit.SECONDS);
       Assert.assertEquals("Results did not match", "This is a test", processListener.result);
    }
 
    // TODO: DirectWriteBig will explore a bug when using writeStdin at onStart()
    //       (has problem on Mac OS X and Linux, but works on Win32)
-   //@Test
+   // @Test
    public void testDirectWriteBig() throws InterruptedException
    {
       ProcessHandler2 processListener = new ProcessHandler2();
@@ -69,10 +71,17 @@ public class DirectWriteTest
 
       NuProcessHandler processListener = new NuAbstractProcessHandler() {
          @Override
-         public void onStdout(ByteBuffer buffer, boolean closed)
+         public void onStart(NuProcess nuProcess)
+         {
+            nuProcess.want(Stream.STDOUT);
+         }
+
+         @Override
+         public boolean onStdout(ByteBuffer buffer, boolean closed)
          {
             count.addAndGet(buffer.remaining());
             buffer.position(buffer.limit());
+            return !closed;
          }
       };
 
@@ -87,7 +96,7 @@ public class DirectWriteTest
       Thread.sleep(500);
 
       nuProcess.closeStdin(true);
-      nuProcess.waitFor(0, TimeUnit.SECONDS);
+      nuProcess.waitFor(5, TimeUnit.SECONDS);
       Assert.assertEquals("Count did not match", 14, count.get());
    }
 
@@ -98,15 +107,18 @@ public class DirectWriteTest
 
       NuProcessHandler processListener = new NuAbstractProcessHandler() {
          @Override
-         public void onStdout(ByteBuffer buffer, boolean closed)
+         public boolean onStdout(ByteBuffer buffer, boolean closed)
          {
             count.addAndGet(buffer.remaining());
             buffer.position(buffer.limit());
+            return !closed;
          }
       };
 
       NuProcessBuilder pb = new NuProcessBuilder(processListener, command);
       NuProcess nuProcess = pb.start();
+      nuProcess.want(Stream.STDOUT);
+
       // TODO: given a large i (e.g. 1,000, 10,000), this unit test (testConsecutiveWrites) will
       //       produce a side-effect on InterruptTest (has problem on Mac OS X, but works on Linux and Win32).
       //       We do not reuse fork on surefire (reuseForks=false) to address this issue for now.
@@ -120,7 +132,7 @@ public class DirectWriteTest
       Thread.sleep(500);
 
       nuProcess.closeStdin(true);
-      nuProcess.waitFor(0, TimeUnit.SECONDS);
+      nuProcess.waitFor(5, TimeUnit.SECONDS);
       Assert.assertEquals("Count did not match", 14000, count.get());
    }
 
@@ -133,24 +145,28 @@ public class DirectWriteTest
       public void onStart(NuProcess nuProcess)
       {
          this.nuProcess = nuProcess;
+         nuProcess.want(Stream.STDOUT);
 
          ByteBuffer buffer = ByteBuffer.allocate(256);
          buffer.put("This is a test".getBytes());
          buffer.flip();
 
-         System.out.println("Writing: This is a test");
+         System.err.println("Writing: This is a test");
          nuProcess.writeStdin(buffer);
       }
 
       @Override
-      public void onStdout(ByteBuffer buffer, boolean closed) {
+      public boolean onStdout(ByteBuffer buffer, boolean closed) {
+         System.err.println("In ProcessHandler1.onStdout()...");
          if (buffer.hasRemaining()) {
             byte[] chars = new byte[buffer.remaining()];
             buffer.get(chars);
             result = new String(chars);
-            System.out.println("Read: " + result);
+            System.err.println("  Read: " + result);
+            nuProcess.closeStdin(false);
          }
-         nuProcess.closeStdin(true);
+
+         return !closed;
       }
    }
 
@@ -164,6 +180,7 @@ public class DirectWriteTest
       public void onStart(NuProcess nuProcess)
       {
          this.nuProcess = nuProcess;
+         nuProcess.want(Stream.STDOUT);
 
          ByteBuffer buffer = ByteBuffer.allocate(1024 * 128);
          for (int i = 0; i < buffer.capacity(); i++) {
@@ -174,12 +191,12 @@ public class DirectWriteTest
 
          buffer.flip();
 
-         System.out.println("Writing: 128K of data, waiting for checksum " + checksum);
+         System.err.println("Writing: 128K of data, waiting for checksum " + checksum);
          nuProcess.writeStdin(buffer);
       }
 
       @Override
-      public void onStdout(ByteBuffer buffer, boolean closed)
+      public boolean onStdout(ByteBuffer buffer, boolean closed)
       {
          while (buffer.hasRemaining()) {
             checksum2 += buffer.get();
@@ -190,6 +207,8 @@ public class DirectWriteTest
             System.out.println("Checksums matched, exiting.");
             nuProcess.closeStdin(true);
          }
+
+         return !closed;
       }
    }
 }

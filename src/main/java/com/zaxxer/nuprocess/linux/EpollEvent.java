@@ -48,10 +48,11 @@ public class EpollEvent extends Structure
    EpollEvent()
    {
       // per eventpoll.h, x86_64 has the same alignment as 32-bit
-      super(ALIGN_GNUC);
+      // super(ALIGN_GNUC);
+      super(ALIGN_NONE);
 
       data = new EpollData();
-      data.setType("fd");
+      data.setType("u64");
    }
 
    @SuppressWarnings("rawtypes")

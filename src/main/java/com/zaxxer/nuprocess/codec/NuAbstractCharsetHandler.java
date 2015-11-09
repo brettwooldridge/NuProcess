@@ -66,18 +66,18 @@ public abstract class NuAbstractCharsetHandler implements NuProcessHandler
    private class StdoutDecoderHandler implements NuCharsetDecoderHandler
    {
       @Override
-      public void onDecode(CharBuffer buffer, boolean closed, CoderResult decoderResult)
+      public boolean onDecode(CharBuffer buffer, boolean closed, CoderResult decoderResult)
       {
-         onStdoutChars(buffer, closed, decoderResult);
+         return onStdoutChars(buffer, closed, decoderResult);
       }
    }
 
    private class StderrDecoderHandler implements NuCharsetDecoderHandler
    {
       @Override
-      public void onDecode(CharBuffer buffer, boolean closed, CoderResult decoderResult)
+      public boolean onDecode(CharBuffer buffer, boolean closed, CoderResult decoderResult)
       {
-         onStderrChars(buffer, closed, decoderResult);
+         return onStderrChars(buffer, closed, decoderResult);
       }
    }
 
@@ -146,10 +146,11 @@ public abstract class NuAbstractCharsetHandler implements NuProcessHandler
     *
     * @param buffer The {@link CharBuffer} receiving Unicode string data.
     */
-   protected void onStdoutChars(CharBuffer buffer, boolean closed, CoderResult coderResult)
+   protected boolean onStdoutChars(CharBuffer buffer, boolean closed, CoderResult coderResult)
    {
       // Consume the entire buffer by default.
       buffer.position(buffer.limit());
+      return !closed;
    }
 
    /**
@@ -161,10 +162,11 @@ public abstract class NuAbstractCharsetHandler implements NuProcessHandler
     *
     * @param buffer The {@link CharBuffer} receiving Unicode string data.
     */
-   protected void onStderrChars(CharBuffer buffer, boolean closed, CoderResult coderResult)
+   protected boolean onStderrChars(CharBuffer buffer, boolean closed, CoderResult coderResult)
    {
       // Consume the entire buffer by default.
       buffer.position(buffer.limit());
+      return !closed;
    }
 
    /** {@inheritDoc} */
@@ -187,16 +189,18 @@ public abstract class NuAbstractCharsetHandler implements NuProcessHandler
 
    /** {@inheritDoc} */
    @Override
-   public final void onStdout(ByteBuffer buffer, boolean closed)
+   public final boolean onStdout(ByteBuffer buffer, boolean closed)
    {
       stdoutDecoder.onOutput(buffer, closed);
+      return true;
    }
 
    /** {@inheritDoc} */
    @Override
-   public final void onStderr(ByteBuffer buffer, boolean closed)
+   public final boolean onStderr(ByteBuffer buffer, boolean closed)
    {
       stderrDecoder.onOutput(buffer, closed);
+      return true;
    }
 
    /** {@inheritDoc} */

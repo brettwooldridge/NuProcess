@@ -42,6 +42,13 @@ public interface NuProcess
 {
    int BUFFER_CAPACITY = 65536;
 
+   enum Stream
+   {
+      STDIN,
+      STDOUT,
+      STDERR
+   }
+
    /**
     * Waits for the process to exit in a blocking fashion. See
     * {@link NuProcessHandler#onExit} for the non-blocking method process exit
@@ -58,21 +65,27 @@ public interface NuProcess
    int waitFor(long timeout, TimeUnit timeUnit) throws InterruptedException;
 
    /**
-    * Express a desire to write data to the STDIN stream of the process. Calling
-    * this method will result in the {@link NuProcessHandler#onStdinReady}
-    * callback method of the process handler being called when space is
-    * available in the STDIN pipe.
+    * Express a desire to read or write data from the specified stream of the
+    * process.
     * <p>
-    * This method will throw a {@link IllegalStateException} if the
-    * {@link #closeStdin} method has already been called.
+    * Calling this method with {@link Stream#STDIN} will result in the
+    * {@link NuProcessHandler#onStdinReady} callback method of the process handler
+    * being called when space is available in the STDIN pipe.
+    * <p>
+    * Calling this method with either {@link Stream#STDOUT} or {@link Stream#STDERR}
+    * will result in the {@link NuProcessHandler#onStdout} or {@link NuProcessHandler#onStderr} 
+    * callback method of the process handler being called respectively when output
+    * is available to be read.
+    *
+    * @param stream the {@link Stream} that the caller wants to read/write
     */
-   void wantWrite();
+   void want(Stream stream);
 
    /**
     * Performs a "direct write" rather than expressing a desire to write using
-    * {@link #wantWrite} and performing the write in a callback. Be careful
+    * {@link #want(Stream)} and performing the write in a callback. Be careful
     * mixing this paradigm with the asynchronous paradigm imposed by
-    * {@link #wantWrite()}.
+    * {@link #want(Stream)}.
     * <p>
     * This method returns immediately and the write of the data occurs on the
     * asynchronous processing thread. You can perform multiple

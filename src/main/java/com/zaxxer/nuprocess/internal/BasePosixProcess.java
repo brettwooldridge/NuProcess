@@ -20,6 +20,7 @@ import java.nio.ByteBuffer;
 import java.nio.file.Path;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
@@ -29,6 +30,9 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.sun.jna.Native;
 import com.sun.jna.Pointer;
@@ -45,16 +49,23 @@ public abstract class BasePosixProcess implements NuProcess
    protected static final IEventProcessor<? extends BasePosixProcess>[] processors;
    protected static int processorRoundRobin;
 
+   protected static AtomicInteger uidSequence = new AtomicInteger();
+
+   protected Logger LOGGER = LoggerFactory.getLogger(this.getClass());
+
    protected IEventProcessor<? super BasePosixProcess> myProcessor;
    protected volatile NuProcessHandler processHandler;
 
+   protected volatile int uid;
    protected volatile int pid;
    protected volatile boolean isRunning;
    public final AtomicBoolean cleanlyExitedBeforeProcess;
    protected AtomicInteger exitCode;
    protected CountDownLatch exitPending;
 
-   protected AtomicBoolean userWantsWrite;
+   protected final AtomicBoolean isWantStdin;
+   protected final AtomicBoolean isWantStdout;
+   protected final AtomicBoolean isWantStderr;
 
    // ******* Input/Output Buffers
    protected ByteBuffer outBuffer;
@@ -62,9 +73,9 @@ public abstract class BasePosixProcess implements NuProcess
    protected ByteBuffer inBuffer;
 
    // ******* Stdin/Stdout/Stderr pipe handles
-   protected AtomicInteger stdin;
-   protected AtomicInteger stdout;
-   protected AtomicInteger stderr;
+   protected final AtomicInteger stdin;
+   protected final AtomicInteger stdout;
+   protected final AtomicInteger stderr;
    protected volatile int stdinWidow;
    protected volatile int stdoutWidow;
    protected volatile int stderrWidow;
@@ -74,6 +85,7 @@ public abstract class BasePosixProcess implements NuProcess
    protected boolean errClosed;
 
    private ConcurrentLinkedQueue<ByteBuffer> pendingWrites;
+   private boolean hasProcessExited;
 
    // Launches threads under which changes to cwd do not affect the cwd of the process.
    public static class LinuxCwdThreadFactory implements ThreadFactory
@@ -132,12 +144,21 @@ public abstract class BasePosixProcess implements NuProcess
             }
          }));
       }
+
+      Properties systemProperties = System.getProperties();
+      uidSequence = (AtomicInteger) systemProperties.get("com.zaxxer.nuprocess.uidAtomicInteger");
+      if (uidSequence == null) {
+         uidSequence = new AtomicInteger(0);
+         systemProperties.put("com.zaxxer.nuprocess.uidAtomicInteger", uidSequence);
+      }
    }
 
    protected BasePosixProcess(NuProcessHandler processListener)
    {
       this.processHandler = processListener;
-      this.userWantsWrite = new AtomicBoolean();
+      this.isWantStdin = new AtomicBoolean();
+      this.isWantStdout = new AtomicBoolean();
+      this.isWantStderr = new AtomicBoolean();
       this.cleanlyExitedBeforeProcess = new AtomicBoolean();
       this.exitCode = new AtomicInteger();
       this.exitPending = new CountDownLatch(1);
@@ -155,6 +176,8 @@ public abstract class BasePosixProcess implements NuProcess
 
    public NuProcess start(List<String> command, String[] environment, Path cwd)
    {
+      uid = uidSequence.incrementAndGet();
+
       callPreStart();
 
       String[] commands = command.toArray(new String[command.size()]);
@@ -198,8 +221,8 @@ public abstract class BasePosixProcess implements NuProcess
       }
       catch (RuntimeException re) {
          // TODO remove from event processor pid map?
-         re.printStackTrace(System.err);
-         onExit(Integer.MIN_VALUE);
+         exitCode.set(Integer.MIN_VALUE);
+         onExit();
          return null;
       }
       finally {
@@ -293,15 +316,34 @@ public abstract class BasePosixProcess implements NuProcess
 
    /** {@inheritDoc} */
    @Override
-   public void wantWrite()
+   public void want(Stream stream)
    {
-      int fd = stdin.get();
-      if (fd != -1) {
-         userWantsWrite.set(true);
-         myProcessor.queueWrite(this);
-      }
-      else {
-         throw new IllegalStateException("closeStdin() method has already been called.");
+      int fd;
+      switch (stream) {
+      case STDIN:
+         fd = stdin.get();
+         if (fd != -1) {
+            isWantStdin.set(true);
+            myProcessor.queueWrite(this);
+         }
+         else {
+            throw new IllegalStateException("closeStdin() method has already been called.");
+         }
+         break;
+      case STDOUT:
+         fd = stdout.get();
+         if (fd != -1) {
+            isWantStdout.set(true);
+            myProcessor.queueRead(this, Stream.STDOUT);
+         }
+         break;
+      case STDERR:
+         fd = stderr.get();
+         if (fd != -1) {
+            isWantStderr.set(true);
+            myProcessor.queueRead(this, Stream.STDERR);
+         }
+         break;
       }
    }
 
@@ -310,7 +352,7 @@ public abstract class BasePosixProcess implements NuProcess
    public void closeStdin(boolean force)
    {
       if (force) {
-         int fd = stdin.getAndSet(-1);
+         int fd = stdin.get();
          if (fd != -1) {
             if (myProcessor != null) {
                myProcessor.closeStdin(this);
@@ -380,12 +422,62 @@ public abstract class BasePosixProcess implements NuProcess
       return stderr;
    }
 
+   public boolean isStdoutClosed()
+   {
+      return outClosed;
+   }
+
+   public boolean isStderrClosed()
+   {
+      return errClosed;
+   }
+
+   public boolean isWantStdout()
+   {
+      return isWantStdout.get();
+   }
+
+   public boolean isWantStderr()
+   {
+      return isWantStderr.get();
+   }
+   
+   public void markProcessExited()
+   {
+      hasProcessExited = true;
+   }
+
+   public boolean isProcessExited()
+   {
+      return hasProcessExited;
+   }
+
+   public void setExitCode(int exitCode)
+   {
+      this.exitCode.set(exitCode);
+   }
+
    public boolean isSoftExit()
    {
       return (IS_SOFTEXIT_DETECTION && outClosed && errClosed);
    }
 
-   public void onExit(int statusCode)
+   public long getUid()
+   {
+      return uid;
+   }
+
+   public long getKey(int fd)
+   {
+      return (long) uid << 32 | ((long) fd & 0xffffffffL);
+   }
+
+   public int getFdFromKey(long key)
+   {
+      return (int) (key & 0xffffffff);
+   }
+
+   public void onExit()
    {
       if (exitPending.getCount() == 0) {
          // TODO: handle SIGCHLD
@@ -393,14 +485,14 @@ public abstract class BasePosixProcess implements NuProcess
       }
 
       try {
-         closeStdin(true);
+         // closeStdin(true);
          close(stdout);
          close(stderr);
 
          isRunning = false;
-         exitCode.set(statusCode);
 
          if (outBuffer != null && !outClosed) {
+            LOGGER.debug("onExit(): outBuffer != null && !outClosed, calling onStdout() with closed=true");
             outBuffer.flip();
             processHandler.onStdout(outBuffer, true);
          }
@@ -410,8 +502,8 @@ public abstract class BasePosixProcess implements NuProcess
             processHandler.onStderr(errBuffer, true);
          }
 
-         if (statusCode != Integer.MAX_VALUE - 1) {
-            processHandler.onExit(statusCode);
+         if (exitCode.get() != Integer.MAX_VALUE - 1) {
+            processHandler.onExit(exitCode.get());
          }
       }
       catch (Exception e) {
@@ -428,79 +520,97 @@ public abstract class BasePosixProcess implements NuProcess
       }
    }
 
-   public void readStdout(int availability)
+   public boolean readStdout(int availability)
    {
+      isWantStdout.set(false);
+
       if (outClosed || availability == 0) {
-         return;
+         return true;
       }
 
       try {
          if (availability < 0) {
             outClosed = true;
-            outBuffer.flip();
+            outBuffer.limit(outBuffer.position());
             processHandler.onStdout(outBuffer, true);
-            return;
+            return false;
          }
 
          int read = LibC.read(stdout.get(), outBuffer, Math.min(availability, outBuffer.remaining()));
-         if (read == -1) {
+         if (read == 0) {  // EOF
+            LOGGER.debug("Read 0 bytes, calling onStdout() with closed=true");
             outClosed = true;
-            throw new RuntimeException("Unexpected eof");
-            // EOF?
+            outBuffer.limit(outBuffer.position());
+            processHandler.onStdout(outBuffer, true);
+            return false;
+         }
+
+         if (read == -1) {  // Unknown error
+            LOGGER.debug("Unexpected error during read ({})", Native.getLastError());
+            close(stdout);
+            outClosed = true;
+            return false;
          }
 
          outBuffer.limit(outBuffer.position() + read);
          outBuffer.position(0);
-         processHandler.onStdout(outBuffer, false);
+         boolean more = processHandler.onStdout(outBuffer, false);
+
+         isWantStdout.set(more);
          outBuffer.compact();
+         return more;
       }
       catch (Exception e) {
          // Don't let an exception thrown from the user's handler interrupt us
          e.printStackTrace(System.err);
-      }
-      if (!outBuffer.hasRemaining()) {
-         // The caller's onStdout() callback must set the buffer's position
-         // to indicate how many bytes were consumed, or else it will
-         // eventually run out of capacity.
-         throw new RuntimeException("stdout buffer has no bytes remaining");
+         return true;
       }
    }
 
-   public void readStderr(int availability)
+   public boolean readStderr(int availability)
    {
+      isWantStderr.set(false);
+
       if (errClosed || availability == 0) {
-         return;
+         return true;
       }
 
       try {
          if (availability < 0) {
             errClosed = true;
-            errBuffer.flip();
+            errBuffer.limit(errBuffer.position());
             processHandler.onStderr(errBuffer, true);
-            return;
+            return false;
          }
 
          int read = LibC.read(stderr.get(), errBuffer, Math.min(availability, errBuffer.remaining()));
-         if (read == -1) {
-            // EOF?
+         if (read == 0) {  // EOF
+            LOGGER.debug("Read 0 bytes, calling onStderr() with closed=true");
             errClosed = true;
-            throw new RuntimeException("Unexpected eof");
+            errBuffer.limit(errBuffer.position());
+            processHandler.onStderr(errBuffer, true);
+            return false;
+         }
+
+         if (read == -1) {  // Unknown error
+            LOGGER.debug("Unexpected error during read ({})", Native.getLastError());
+            close(stderr);
+            errClosed = true;
+            return false;
          }
 
          errBuffer.limit(errBuffer.position() + read);
          errBuffer.position(0);
-         processHandler.onStderr(errBuffer, false);
+         boolean more = processHandler.onStderr(errBuffer, false);
+
+         isWantStderr.set(more);
          errBuffer.compact();
+         return more;
       }
       catch (Exception e) {
          // Don't let an exception thrown from the user's handler interrupt us
          e.printStackTrace(System.err);
-      }
-      if (!errBuffer.hasRemaining()) {
-         // The caller's onStderr() callback must set the buffer's position
-         // to indicate how many bytes were consumed, or else it will
-         // eventually run out of capacity.
-         throw new RuntimeException("stderr buffer has no bytes remaining");
+         return true;
       }
    }
 
@@ -543,7 +653,7 @@ public abstract class BasePosixProcess implements NuProcess
          if (byteBuffer == STDIN_CLOSED_PENDING_WRITE_TOMBSTONE) {
             // We've written everything the user requested, and the user wants to close stdin now.
             closeStdin(true);
-            userWantsWrite.set(false);
+            isWantStdin.set(false);
             pendingWrites.clear();
             return false;
          } else if (byteBuffer.remaining() > BUFFER_CAPACITY) {
@@ -564,14 +674,14 @@ public abstract class BasePosixProcess implements NuProcess
          }
       }
 
-      if (!userWantsWrite.get()) {
+      if (!isWantStdin.get()) {
          return false;
       }
 
       try {
          inBuffer.clear();
          boolean wantMore = processHandler.onStdinReady(inBuffer);
-         userWantsWrite.set(wantMore);
+         isWantStdin.set(wantMore);
          if (inBuffer.hasRemaining() && availability > 0) {
             // Recurse
             return writeStdin(availability);
@@ -620,7 +730,6 @@ public abstract class BasePosixProcess implements NuProcess
       }
 
       myProcessor = (IEventProcessor<? super BasePosixProcess>) processors[mySlot];
-      myProcessor.registerProcess(this);
 
       if (myProcessor.checkAndSetRunning()) {
          CyclicBarrier spawnBarrier = myProcessor.getSpawnBarrier();
@@ -636,6 +745,8 @@ public abstract class BasePosixProcess implements NuProcess
             throw new RuntimeException(e);
          }
       }
+
+      myProcessor.registerProcess(this);
    }
 
    protected void callPreStart()

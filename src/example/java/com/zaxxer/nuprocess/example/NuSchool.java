@@ -7,6 +7,7 @@ import java.util.zip.Adler32;
 
 import com.zaxxer.nuprocess.NuAbstractProcessHandler;
 import com.zaxxer.nuprocess.NuProcess;
+import com.zaxxer.nuprocess.NuProcess.Stream;
 import com.zaxxer.nuprocess.NuProcessBuilder;
 
 /**
@@ -54,7 +55,7 @@ public class NuSchool
             // Kick all of the processes to start going
             for (NuProcess process : processes)
             {
-                process.wantWrite();
+                process.want(Stream.STDIN);
             }
 
             for (NuProcess process : processes)
@@ -128,7 +129,7 @@ public class NuSchool
         }
 
         @Override
-        public void onStdout(ByteBuffer buffer, boolean closed)
+        public boolean onStdout(ByteBuffer buffer, boolean closed)
         {
             size += buffer.remaining();
 
@@ -140,6 +141,8 @@ public class NuSchool
             {
                 nuProcess.closeStdin(true);
             }
+
+            return true;
         }
 
         @Override

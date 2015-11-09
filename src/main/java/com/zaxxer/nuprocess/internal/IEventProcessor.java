@@ -17,7 +17,6 @@
 package com.zaxxer.nuprocess.internal;
 
 import java.util.concurrent.CyclicBarrier;
-
 /**
  * This class is internal.
  *
@@ -27,6 +26,10 @@ import java.util.concurrent.CyclicBarrier;
  */
 public interface IEventProcessor<T extends BasePosixProcess> extends Runnable
 {
+   int STDIN = 0;
+   int STDOUT = 1;
+   int STDERR = 2;
+
    /**
     * Check whether the processor instance is currently running, and if not set
     * it to the running state.
@@ -60,6 +63,8 @@ public interface IEventProcessor<T extends BasePosixProcess> extends Runnable
     * @param process the process that wants to write to STDIN
     */
    void queueWrite(T process);
+
+   void queueRead(T process, T.Stream stream);
 
    /**
     * Close the process's STDIN pipe.

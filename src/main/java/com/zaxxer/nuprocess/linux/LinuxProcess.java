@@ -159,16 +159,17 @@ public class LinuxProcess extends BasePosixProcess
          if (WIFEXITED(status)) {
             status = WEXITSTATUS(status);
             if (status == 127) {
-               onExit(Integer.MIN_VALUE);
+               setExitCode(Integer.MIN_VALUE);
             }
             else {
-               onExit(status);
+               setExitCode(status);
             }
          }
          else if (WIFSIGNALED(status)) {
-            onExit(WTERMSIG(status));
+            setExitCode(WTERMSIG(status));
          }
 
+         onExit();
          return false;
       }
 

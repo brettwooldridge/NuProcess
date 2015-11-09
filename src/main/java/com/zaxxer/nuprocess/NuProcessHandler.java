@@ -109,8 +109,9 @@ public interface NuProcessHandler
     *
     * @param buffer a {@link ByteBuffer} containing received stdout data
     * @param closed {@code true} if EOF has been reached
+    * @return the method should return {@code true} if more data is desired
     */
-   void onStdout(ByteBuffer buffer, boolean closed);
+   boolean onStdout(ByteBuffer buffer, boolean closed);
 
    /**
     * This method is invoked when there is stderr data to process or an the
@@ -152,23 +153,24 @@ public interface NuProcessHandler
     * 
     * @param buffer a {@link ByteBuffer} containing received stderr data
     * @param closed {@code true} if EOF has been reached
+    * @return the method should return {@code true} if more data is desired
     */
-   void onStderr(ByteBuffer buffer, boolean closed);
+   boolean onStderr(ByteBuffer buffer, boolean closed);
 
    /**
     * This method is invoked after you have expressed a desire to write to stdin
-    * by first calling {@link NuProcess#wantWrite()}. When this method is
-    * invoked, your code should write data to be sent to the stdin of the child
-    * process into the provided {@link ByteBuffer}. After writing data into the
-    * {@code buffer} your code <em>must</em> {@link ByteBuffer#flip() flip} the
-    * buffer before returning.
+    * by first calling {@link NuProcess#want(com.zaxxer.nuprocess.NuProcess.Stream)}.
+    * When this method is invoked, your code should write data to be sent to the stdin
+    * of the child process into the provided {@link ByteBuffer}. After writing data
+    * into the {@code buffer} your code <em>must</em> {@link ByteBuffer#flip() flip}
+    * the buffer before returning.
     * <p>
     * If not all of the data needed to be written will fit in the provided
     * {@code buffer}, this method can return {@code true} to indicate a desire
     * to write more data. If there is no more data to be written at the time
     * this method is invoked, then {@code false} should be returned from this
-    * method. It is always possible to call {@link NuProcess#wantWrite()} later
-    * if data becomes available to be written.
+    * method. It is always possible to call {@link NuProcess#want(com.zaxxer.nuprocess.NuProcess.Stream)}
+    * later if data becomes available to be written.
     *
     * @param buffer a {@link ByteBuffer} into which your stdin-bound data should
     *        be written

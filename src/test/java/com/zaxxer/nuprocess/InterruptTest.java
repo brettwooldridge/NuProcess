@@ -12,8 +12,8 @@ import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
+import com.zaxxer.nuprocess.NuProcess.Stream;
 import com.zaxxer.nuprocess.internal.BasePosixProcess;
-import com.zaxxer.nuprocess.internal.LibC;
 import com.zaxxer.nuprocess.windows.WindowsProcess;
 
 public class InterruptTest
@@ -51,7 +51,8 @@ public class InterruptTest
          @Override
          public void onStart(NuProcess nuProcess)
          {
-            nuProcess.wantWrite();
+            nuProcess.want(Stream.STDIN);
+            nuProcess.want(Stream.STDOUT);
          }
 
          @Override
@@ -62,16 +63,18 @@ public class InterruptTest
          }
 
          @Override
-         public void onStdout(ByteBuffer buffer, boolean closed)
+         public boolean onStdout(ByteBuffer buffer, boolean closed)
          {
             count.addAndGet(buffer.remaining());
             buffer.position(buffer.limit());
+            return true;
          }
 
          @Override
          public boolean onStdinReady(ByteBuffer buffer)
          {
             buffer.put("This is a test".getBytes());
+            buffer.flip();
             return true;
          }
       };
@@ -99,19 +102,33 @@ public class InterruptTest
          @Override
          public void onStart(NuProcess nuProcess)
          {
-            nuProcess.wantWrite();
+            nuProcess.want(Stream.STDIN);
+            nuProcess.want(Stream.STDOUT);
          }
 
          @Override
-         public void onStdout(ByteBuffer buffer, boolean closed)
+         public boolean onStdout(ByteBuffer buffer, boolean closed)
          {
+            if (closed) {
+               return false;
+            }
+
             buffer.position(buffer.limit());
+            return true;
+         }
+
+         @Override
+         public boolean onStderr(ByteBuffer buffer, boolean closed)
+         {
+             return onStdout(buffer, closed);
          }
 
          @Override
          public boolean onStdinReady(ByteBuffer buffer)
          {
             buffer.put("This is a test".getBytes());
+            buffer.flip();
+
             return true;
          }
 
@@ -121,12 +138,16 @@ public class InterruptTest
       List<NuProcess> processes = new LinkedList<NuProcess>();
       for (int times = 0; times < 1; times++) {
          for (int i = 0; i < 50; i++) {
-            processes.add(pb.start());
+            NuProcess process = pb.start();
+            processes.add(process);
          }
+
+         TimeUnit.MILLISECONDS.sleep(2500);
 
          List<NuProcess> deadProcs = new ArrayList<NuProcess>();
          while (true) {
-            Thread.sleep(20);
+            TimeUnit.MILLISECONDS.sleep(100);
+
             int dead = (int) (Math.random() * processes.size());
             if (!System.getProperty("os.name").toLowerCase().contains("win")) {
                BasePosixProcess bpp = (BasePosixProcess) processes.remove(dead);
@@ -134,7 +155,7 @@ public class InterruptTest
                   continue;
                }
                deadProcs.add(bpp);
-               LibC.kill(bpp.getPid(), LibC.SIGKILL);
+               bpp.destroy(false);
             }
             else {
                WindowsProcess wp = (WindowsProcess) processes.remove(dead);
@@ -147,8 +168,13 @@ public class InterruptTest
 
             if (processes.isEmpty()) {
                for (int i = 0; i < 50; i++) {
-                  int exit = deadProcs.get(i).waitFor(2, TimeUnit.SECONDS);
-                  Assert.assertTrue("Process exit code did not match", (exit != 0 || exit == Integer.MAX_VALUE));
+                  int exit = deadProcs.get(i).waitFor(1, TimeUnit.SECONDS);
+                  if (!System.getProperty("os.name").toLowerCase().contains("win")) {
+                     Assert.assertEquals("Process exit code did not match", 15, exit);
+                  }
+                  else {
+                     Assert.assertTrue("Process exit code did not match", (exit != 0 || exit == Integer.MAX_VALUE));
+                  }
                }
                break;
             }

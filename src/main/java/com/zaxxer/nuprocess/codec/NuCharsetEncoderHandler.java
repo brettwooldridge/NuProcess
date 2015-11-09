@@ -31,18 +31,18 @@ public interface NuCharsetEncoderHandler
 {
    /**
     * This method is invoked after you have expressed a desire to write to stdin
-    * by first calling {@link NuProcess#wantWrite()}. When this method is
-    * invoked, your code should write data to be sent to the stdin of the child
-    * process into the provided {@link CharBuffer}. After writing data into the
-    * {@code buffer} your code <em>must</em> {@link CharBuffer#flip() flip} the
-    * buffer before returning.
+    * by first calling {@link NuProcess#want(com.zaxxer.nuprocess.NuProcess.Stream)}.
+    * When this method is invoked, your code should write data to be sent to the stdin
+    * of the child process into the provided {@link CharBuffer}. After writing data
+    * into the {@code buffer} your code <em>must</em> {@link CharBuffer#flip() flip}
+    * the buffer before returning.
     * <p>
     * If not all of the data needed to be written will fit in the provided
     * {@code buffer}, this method can return {@code true} to indicate a desire
     * to write more data. If there is no more data to be written at the time
     * this method is invoked, then {@code false} should be returned from this
-    * method. It is always possible to call {@link NuProcess#wantWrite()} later
-    * if data becomes available to be written.
+    * method. It is always possible to call {@link NuProcess#want(com.zaxxer.nuprocess.NuProcess.Stream)}
+    * later if data becomes available to be written.
     * <p>
     * Note that this method can be invoked one more time after you return
     * {@code false}, in case the encoded {@link CharBuffer} did not fit inside a

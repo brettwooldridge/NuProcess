@@ -5,10 +5,10 @@ import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.LinkedList;
 import java.util.concurrent.Semaphore;
-import java.util.concurrent.TimeUnit;
 
 import com.zaxxer.nuprocess.NuAbstractProcessHandler;
 import com.zaxxer.nuprocess.NuProcess;
+import com.zaxxer.nuprocess.NuProcess.Stream;
 import com.zaxxer.nuprocess.NuProcessBuilder;
 
 public class SshExample
@@ -38,7 +38,7 @@ public class SshExample
         NuProcessBuilder pb = new NuProcessBuilder(Arrays.asList("ssh", host));
         ProcessHandler processHandler = new ProcessHandler();
         pb.setProcessListener(processHandler);
-        NuProcess np = pb.start();
+        pb.start();
 
         processHandler.write("cd");
         processHandler.write("ls -l");
@@ -86,7 +86,7 @@ public class SshExample
         {
             cmdList.add(stack + "\n");
             //nuProcess.hasPendingWrites();
-            nuProcess.wantWrite();
+            nuProcess.want(Stream.STDIN);
         }
 
         public synchronized Boolean isPending()
@@ -108,7 +108,7 @@ public class SshExample
         }
 
         @Override
-        public void onStdout(ByteBuffer buffer, boolean closed)
+        public boolean onStdout(ByteBuffer buffer, boolean closed)
         {
             int remaining = buffer.remaining();
             byte[] bytes = new byte[remaining];
@@ -125,12 +125,14 @@ public class SshExample
             // nuProcess.wantWrite();
             // We're done, so closing STDIN will cause the "cat" process to exit
             //nuProcess.closeStdin(true);
+            return true;
         }
 
         @Override
-        public void onStderr(ByteBuffer buffer, boolean closed)
+        public boolean onStderr(ByteBuffer buffer, boolean closed)
         {
             this.onStdout(buffer, false);
+            return true;
         }
     }
 }

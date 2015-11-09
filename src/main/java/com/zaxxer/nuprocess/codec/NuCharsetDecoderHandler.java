@@ -51,6 +51,7 @@ public interface NuCharsetDecoderHandler
     * @param closed {@code true} if EOF has been reached
     * @param decoderResult a {@link CoderResult} signifying whether an error was
     *        encountered decoding stdout bytes
+    * @return the method should return {@code true} if more data is desired
     */
-   void onDecode(CharBuffer buffer, boolean closed, CoderResult decoderResult);
+   boolean onDecode(CharBuffer buffer, boolean closed, CoderResult decoderResult);
 }

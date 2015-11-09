@@ -5,7 +5,7 @@
 
     <groupId>com.zaxxer</groupId>
     <artifactId>nuprocess</artifactId>
-    <version>1.0.5-SNAPSHOT</version>
+    <version>2.0.0-SNAPSHOT</version>
     <packaging>bundle</packaging>
 
     <name>NuProcess</name>
@@ -64,15 +64,44 @@
             <version>4.1.0</version>
         </dependency>
         <dependency>
+            <groupId>org.reactivestreams</groupId>
+            <artifactId>reactive-streams</artifactId>
+            <version>1.0.0</version>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-api</artifactId>
+            <version>1.7.13</version>
+        </dependency>
+        <dependency>
+            <groupId>org.slf4j</groupId>
+            <artifactId>slf4j-simple</artifactId>
+            <version>1.7.13</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>
             <version>4.12</version>
             <scope>test</scope>
         </dependency>
         <dependency>
+            <groupId>org.testng</groupId>
+            <artifactId>testng</artifactId>
+            <version>6.9.4</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
             <groupId>org.hamcrest</groupId>
             <artifactId>hamcrest-junit</artifactId>
             <version>2.0.0.0</version>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.reactivestreams</groupId>
+            <artifactId>reactive-streams-tck</artifactId>
+            <version>1.0.0</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
@@ -97,9 +126,10 @@
                <version>2.18.1</version>
                <configuration>
                    <reuseForks>false</reuseForks>
+                   <groups>test</groups>
+                   <excludedGroups>tck</excludedGroups>
                </configuration>
-           </plugin>
-           -->
+           </plugin> -->
            <plugin>
                <groupId>org.apache.felix</groupId>
                <artifactId>maven-bundle-plugin</artifactId>
@@ -110,27 +140,28 @@
                        <Bundle-Name>NuProcess</Bundle-Name>
                        <Export-Package>com.zaxxer.nuprocess</Export-Package>
                        <Export-Package>com.zaxxer.nuprocess.codec</Export-Package>
-                       <Import-Package>com.sun.*,sun.misc.*</Import-Package>
+                       <Export-Package>com.zaxxer.nuprocess.streams</Export-Package>
+                       <Import-Package>com.sun.*,sun.misc.*,org.reactivestreams.*</Import-Package>
                        <Bundle-SymbolicName>${project.groupId}.${project.artifactId}</Bundle-SymbolicName>
                    </instructions>
                </configuration>
-           </plugin>
-           <plugin>
-               <groupId>org.apache.maven.plugins</groupId>
-               <artifactId>maven-source-plugin</artifactId>
-               <version>2.2.1</version>
-               <configuration>
-                   <!-- outputDirectory>/absolute/path/to/the/output/directory</outputDirectory> <finalName>filename-of-generated-jar-file</finalName -->
-                    <attach>true</attach>
-                </configuration>
-                <executions>
-                    <execution>
-                        <id>attach-sources</id>
-                        <goals>
-                            <goal>jar</goal>
-                        </goals>
-                    </execution>
-                </executions>
+            </plugin>
+            <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-source-plugin</artifactId>
+            <version>2.2.1</version>
+            <configuration>
+               <!-- outputDirectory>/absolute/path/to/the/output/directory</outputDirectory> <finalName>filename-of-generated-jar-file</finalName -->
+                <attach>true</attach>
+            </configuration>
+            <executions>
+                <execution>
+                    <id>attach-sources</id>
+                    <goals>
+                        <goal>jar</goal>
+                    </goals>
+                </execution>
+            </executions>
             </plugin>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

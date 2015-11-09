@@ -158,13 +158,19 @@ public final class WindowsProcess implements NuProcess
       return exitCode.get();
    }
 
-   /** {@inheritDoc} */
    @Override
-   public void wantWrite()
+   public void want(Stream stream)
    {
-      if (hStdinWidow != null && !NuWinNT.INVALID_HANDLE_VALUE.getPointer().equals(hStdinWidow.getPointer())) {
-         userWantsWrite.set(true);
-         myProcessor.wantWrite(this);
+      switch (stream) {
+      case STDIN:
+         if (hStdinWidow != null && !NuWinNT.INVALID_HANDLE_VALUE.getPointer().equals(hStdinWidow.getPointer())) {
+            userWantsWrite.set(true);
+            myProcessor.wantWrite(this);
+         }
+         break;
+      case STDOUT:
+      case STDERR:
+         throw new AbstractMethodError("Method not yet implemented");
       }
    }
 
