@@ -90,7 +90,6 @@ pb.setProcessListener(handler);
 NuProcess process = pb.start();
 
 ByteBuffer buffer = ByteBuffer.wrap("Hello, World!".getBytes());
-buffer.flip();
 process.writeStdin(buffer);
 
 process.waitFor(0, TimeUnit.SECONDS); // when 0 is used for waitFor() the wait is infinite
