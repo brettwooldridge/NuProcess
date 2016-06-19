@@ -177,4 +177,6 @@ public interface NuProcess
     * @param processHandler the new {@link NuProcessHandler}
     */
    void setProcessHandler(NuProcessHandler processHandler);
+   
+   public int getPID();
 }

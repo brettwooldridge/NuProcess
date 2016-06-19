@@ -220,6 +220,13 @@ public final class WindowsProcess implements NuProcess
    {
       NuKernel32.TerminateProcess(processInfo.hProcess, Integer.MAX_VALUE);
    }
+   
+   public int getPID(){
+   	   //PointerByReference pointer = new PointerByReference();
+	   //return NuKernel32.User32DLL.GetWindowThreadProcessId(null, null);
+
+       return NuKernel32.GetProcessId(this.getPid());
+   }
 
    /** {@inheritDoc} */
    @Override

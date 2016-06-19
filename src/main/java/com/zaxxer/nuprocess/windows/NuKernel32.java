@@ -17,7 +17,6 @@
 package com.zaxxer.nuprocess.windows;
 
 import java.nio.ByteBuffer;
-
 import java.util.Arrays;
 import java.util.List;
 
@@ -29,7 +28,6 @@ import com.sun.jna.WString;
 import com.sun.jna.ptr.IntByReference;
 import com.sun.jna.ptr.PointerByReference;
 import com.sun.jna.win32.W32APIOptions;
-
 import com.zaxxer.nuprocess.windows.NuWinNT.DWORD;
 import com.zaxxer.nuprocess.windows.NuWinNT.HANDLE;
 import com.zaxxer.nuprocess.windows.NuWinNT.SECURITY_ATTRIBUTES;
@@ -45,6 +43,8 @@ public class NuKernel32
       Native.register(NuKernel32.class, nativeLibrary);
    }
 
+   public static native int GetProcessId(HANDLE hObject);
+   
    public static native boolean CloseHandle(HANDLE hObject);
 
    public static native HANDLE CreateIoCompletionPort(HANDLE fileHandle, HANDLE existingCompletionPort, ULONG_PTR completionKey, int numberOfThreads);
