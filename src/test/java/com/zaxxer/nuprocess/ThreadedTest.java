@@ -6,6 +6,7 @@ import java.util.Arrays;
 import java.util.concurrent.TimeUnit;
 import java.util.zip.Adler32;
 
+import org.junit.Assert;
 import org.junit.Assume;
 import org.junit.Before;
 import org.junit.Test;
@@ -36,6 +37,10 @@ public class ThreadedTest
 
       for (Thread th : threads) {
          th.join(TimeUnit.SECONDS.toMillis(20));
+         MyThread mt = (MyThread) th;
+         if (mt.failure != null) {
+            Assert.fail(mt.failure);
+         }
       }
 
       System.err.println("Completed threadTest1()");
@@ -45,6 +50,7 @@ public class ThreadedTest
    {
       private int procCount;
       private int id;
+      private String failure;
 
       public MyThread(int id, int procCount)
       {
@@ -91,10 +97,13 @@ public class ThreadedTest
             for (LottaProcessHandler handler : handlers) {
                if (handler.getAdler() != 4237270634l) {
                   System.err.println("Adler32 mismatch between written and read");
-                  System.exit(-1);
+                  failure = "Adler32 mismatch between written and read";
+                  break;
                }
                else if (handler.getExitCode() != 0) {
                   System.err.println("Exit code not zero (0)");
+                  failure = "Exit code not zero (0)";
+                  break;
                }
             }
          }
