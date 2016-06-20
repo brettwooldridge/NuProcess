@@ -31,7 +31,7 @@ public class ThreadedTest
 
       ArrayList<Thread> threads = new ArrayList<Thread>();
       int threadCount = 4;
-      int procCount = 25;
+      int procCount = 20;
 
       for (int ii = 0; ii < threadCount; ii++) {
          MyThread mt = new MyThread(ii, procCount);
