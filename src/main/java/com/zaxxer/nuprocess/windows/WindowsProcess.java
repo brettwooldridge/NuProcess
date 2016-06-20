@@ -219,7 +219,7 @@ public final class WindowsProcess implements NuProcess
    	   //PointerByReference pointer = new PointerByReference();
 	   //return NuKernel32.User32DLL.GetWindowThreadProcessId(null, null);
 
-       return NuKernel32.GetProcessId(this.getPid());
+       return NuKernel32.GetProcessId(this.getPidHandle());
    }
 
    /** {@inheritDoc} */
@@ -290,7 +290,7 @@ public final class WindowsProcess implements NuProcess
       return this;
    }
 
-   HANDLE getPid()
+   HANDLE getPidHandle()
    {
       return processInfo.hProcess;
    }

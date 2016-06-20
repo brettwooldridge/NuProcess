@@ -165,5 +165,5 @@ public interface NuProcess
     */
    void setProcessHandler(NuProcessHandler processHandler);
    
-   public int getPID();
+   int getPID();
 }
