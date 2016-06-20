@@ -16,11 +16,17 @@
 
 package com.zaxxer.nuprocess.osx;
 
+import static com.zaxxer.nuprocess.internal.LibC.WEXITSTATUS;
+import static com.zaxxer.nuprocess.internal.LibC.WIFEXITED;
+import static com.zaxxer.nuprocess.internal.LibC.WIFSIGNALED;
+import static com.zaxxer.nuprocess.internal.LibC.WTERMSIG;
+
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
-import java.util.ArrayList;
-import java.util.List;
 
 import com.sun.jna.Native;
 import com.sun.jna.Pointer;
@@ -29,8 +35,6 @@ import com.zaxxer.nuprocess.internal.BaseEventProcessor;
 import com.zaxxer.nuprocess.internal.LibC;
 import com.zaxxer.nuprocess.osx.LibKevent.Kevent;
 import com.zaxxer.nuprocess.osx.LibKevent.TimeSpec;
-
-import static com.zaxxer.nuprocess.internal.LibC.*;
 
 /**
  * @author Brett Wooldridge
@@ -320,5 +324,11 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
 
       // If this is the last process in the map, this thread will cleanly shut down.
       pidToProcessMap.remove(osxProcess.getPid());
+      Iterator<OsxProcess> iterator = wantsWrite.iterator();
+      while (iterator.hasNext()) {
+         if (osxProcess == iterator.next()) {
+            iterator.remove();
+         }
+      }
    }
 }

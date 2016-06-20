@@ -46,7 +46,7 @@ public class DirectWriteTest
       ProcessHandler1 processListener = new ProcessHandler1();
       NuProcessBuilder pb = new NuProcessBuilder(processListener, command);
       NuProcess nuProcess = pb.start();
-      nuProcess.waitFor(0, TimeUnit.SECONDS);
+      nuProcess.waitFor(10, TimeUnit.SECONDS);
       Assert.assertEquals("Results did not match", "This is a test", processListener.result);
    }
 
@@ -58,7 +58,7 @@ public class DirectWriteTest
       ProcessHandler2 processListener = new ProcessHandler2();
       NuProcessBuilder pb = new NuProcessBuilder(processListener, command);
       NuProcess nuProcess = pb.start();
-      nuProcess.waitFor(0, TimeUnit.SECONDS);
+      nuProcess.waitFor(10, TimeUnit.SECONDS);
       Assert.assertEquals("Checksums did not match", processListener.checksum, processListener.checksum2);
    }
 
@@ -69,8 +69,7 @@ public class DirectWriteTest
 
       NuProcessHandler processListener = new NuAbstractProcessHandler() {
          @Override
-         public void onStdout(ByteBuffer buffer, boolean closed)
-         {
+         public void onStdout(ByteBuffer buffer, boolean closed) {
             count.addAndGet(buffer.remaining());
             buffer.position(buffer.limit());
          }
@@ -87,7 +86,7 @@ public class DirectWriteTest
       Thread.sleep(500);
 
       nuProcess.closeStdin(true);
-      nuProcess.waitFor(0, TimeUnit.SECONDS);
+      nuProcess.waitFor(10, TimeUnit.SECONDS);
       Assert.assertEquals("Count did not match", 14, count.get());
    }
 
@@ -100,7 +99,7 @@ public class DirectWriteTest
          @Override
          public void onStdout(ByteBuffer buffer, boolean closed)
          {
-            count.addAndGet(buffer.remaining());
+               count.addAndGet(buffer.remaining());
             buffer.position(buffer.limit());
          }
       };
@@ -120,7 +119,7 @@ public class DirectWriteTest
       Thread.sleep(500);
 
       nuProcess.closeStdin(true);
-      nuProcess.waitFor(0, TimeUnit.SECONDS);
+      nuProcess.waitFor(20, TimeUnit.SECONDS);
       Assert.assertEquals("Count did not match", 14000, count.get());
    }
 
