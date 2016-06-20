@@ -364,6 +364,10 @@ public abstract class BasePosixProcess implements NuProcess
    {
       return pid;
    }
+   public int getPID()
+   {
+      return pid;
+   }
 
    public AtomicInteger getStdin()
    {
