@@ -41,15 +41,11 @@ public class ThreadedTest
       }
 
       for (Thread th : threads) {
-         th.join(TimeUnit.SECONDS.toMillis(30));
-      }
-
-      for (AssertionError error : errors) {
-         System.err.println(error);
-      }
-
-      if (!errors.isEmpty()) {
-         throw errors.iterator().next();
+         th.join(TimeUnit.SECONDS.toMillis(20));
+         MyThread mt = (MyThread) th;
+         if (mt.failure != null) {
+            Assert.fail(mt.failure);
+         }
       }
 
       System.err.println("Completed threadTest1()");
@@ -59,6 +55,7 @@ public class ThreadedTest
    {
       private int procCount;
       private int id;
+      private String failure;
 
       public MyThread(int id, int procCount)
       {
