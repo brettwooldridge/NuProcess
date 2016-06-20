@@ -167,7 +167,7 @@ public final class ProcessCompletions implements Runnable
       shutdown = true;
       Collection<WindowsProcess> processes = completionKeyToProcessMap.values();
       for (WindowsProcess process : processes) {
-         NuKernel32.TerminateProcess(process.getPid(), Integer.MAX_VALUE - 1);
+         NuKernel32.TerminateProcess(process.getPidHandle(), Integer.MAX_VALUE - 1);
          process.onExit(Integer.MAX_VALUE - 1);
       }
    }
@@ -305,7 +305,7 @@ public final class ProcessCompletions implements Runnable
       Iterator<WindowsProcess> iterator = deadPool.iterator();
       while (iterator.hasNext()) {
          WindowsProcess process = iterator.next();
-         if (NuKernel32.GetExitCodeProcess(process.getPid(), exitCode) && exitCode.getValue() != NuWinNT.STILL_ACTIVE) {
+         if (NuKernel32.GetExitCodeProcess(process.getPidHandle(), exitCode) && exitCode.getValue() != NuWinNT.STILL_ACTIVE) {
             iterator.remove();
             process.onExit(exitCode.getValue());
          }
@@ -319,7 +319,7 @@ public final class ProcessCompletions implements Runnable
       completionKeyToProcessMap.remove(process.getStderrPipe().ioCompletionKey);
 
       IntByReference exitCode = new IntByReference();
-      if (NuKernel32.GetExitCodeProcess(process.getPid(), exitCode) && exitCode.getValue() != NuWinNT.STILL_ACTIVE) {
+      if (NuKernel32.GetExitCodeProcess(process.getPidHandle(), exitCode) && exitCode.getValue() != NuWinNT.STILL_ACTIVE) {
          process.onExit(exitCode.getValue());
       }
       else {
