@@ -641,7 +641,7 @@ public final class WindowsProcess implements NuProcess
 
    private char[] getEnvironment(String[] environment)
    {
-      Map<String, String> env = new HashMap<String, String>(System.getenv());
+      Map<String, String> env = new HashMap<String, String>();
       for (String entry : environment) {
          int ndx = entry.indexOf('=');
          if (ndx != -1) {
