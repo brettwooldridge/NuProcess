@@ -21,7 +21,7 @@ import java.nio.CharBuffer;
 import java.nio.charset.Charset;
 import java.nio.charset.CoderResult;
 import java.util.Arrays;
-import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Scanner;
@@ -35,11 +35,12 @@ import com.zaxxer.nuprocess.codec.NuAbstractCharsetHandler;
 
 public class EnvironmentTest {
 	private String[] command;
+	private static boolean isWin = System.getProperty("os.name").toLowerCase().contains("win"); 
 
 	@Before
 	public void setup() 
 	{
-		if (System.getProperty("os.name").toLowerCase().contains("win")) {
+		if (isWin) {
 			command = new String[] { "cmd", "/C", "set" };
 		} else {
 			command = new String[] { "env" };
@@ -49,8 +50,12 @@ public class EnvironmentTest {
 	@Test
 	public void emptyEnv() throws InterruptedException, IOException 
 	{
-		Set<String> javaResult = runJavaProcess(command, Collections.<String, String> emptyMap());
-		Set<String> nuResult = runNuProcess(command, Collections.<String, String> emptyMap());
+		Map<String, String> env = new HashMap<String, String>();
+		if (isWin) {
+			env.put("SystemRoot", System.getenv("SystemRoot"));
+		}
+		Set<String> javaResult = runJavaProcess(command, env);
+		Set<String> nuResult = runNuProcess(command, env);
 		Assert.assertEquals(javaResult, nuResult);
 	}
 	
