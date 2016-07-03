@@ -32,6 +32,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 import com.sun.jna.Memory;
 import com.sun.jna.Native;
 import com.sun.jna.WString;
@@ -49,6 +52,8 @@ import com.zaxxer.nuprocess.windows.NuWinNT.STARTUPINFO;
  */
 public final class WindowsProcess implements NuProcess
 {
+   Logger logger = LoggerFactory.getLogger(NuProcess.class);
+	   
    public static final int PROCESSOR_THREADS;
 
    private static final boolean IS_SOFTEXIT_DETECTION;
@@ -278,7 +283,7 @@ public final class WindowsProcess implements NuProcess
          NuKernel32.ResumeThread(processInfo.hThread);
       }
       catch (Throwable e) {
-         e.printStackTrace();
+    	 logger.error("Throwable at NuProcess start", e);
          onExit(Integer.MIN_VALUE);
       }
       finally {
@@ -335,7 +340,7 @@ public final class WindowsProcess implements NuProcess
       }
       catch (Exception e) {
          // Don't let an exception thrown from the user's handler interrupt us
-         e.printStackTrace();
+         logger.error("Exception thrown from the user's handler", e);
       }
       if (!stdoutPipe.buffer.hasRemaining()) {
          // The caller's onStdout() callback must set the buffer's position
@@ -370,7 +375,8 @@ public final class WindowsProcess implements NuProcess
       }
       catch (Exception e) {
          // Don't let an exception thrown from the user's handler interrupt us
-         e.printStackTrace();
+    	  logger.error("Exception thrown from the user's handler", e);
+         
       }
       if (!stderrPipe.buffer.hasRemaining()) {
          // The caller's onStdout() callback must set the buffer's position
@@ -434,7 +440,7 @@ public final class WindowsProcess implements NuProcess
          }
          catch (Exception e) {
             // Don't let an exception thrown from the user's handler interrupt us
-            e.printStackTrace();
+        	logger.error("Exception thrown from the user's handler", e);
             return false;
          }
       }
@@ -465,7 +471,7 @@ public final class WindowsProcess implements NuProcess
       }
       catch (Exception e) {
          // Don't let an exception thrown from the user's handler interrupt us
-         e.printStackTrace();
+    	 logger.error("Exception thrown from the user's handler", e);
       }
       finally {
          exitPending.countDown();
@@ -530,7 +536,7 @@ public final class WindowsProcess implements NuProcess
       }
       catch (Exception e) {
          // Don't let an exception thrown from the user's handler interrupt us
-         e.printStackTrace();
+    	 logger.error("Exception thrown from the user's handler", e);
       }
    }
 
