@@ -115,7 +115,7 @@
                        <Bundle-Name>NuProcess</Bundle-Name>
                        <Export-Package>com.zaxxer.nuprocess</Export-Package>
                        <Export-Package>com.zaxxer.nuprocess.codec</Export-Package>
-                       <Import-Package>com.sun.*,sun.misc.*</Import-Package>
+                       <Import-Package>com.sun.*,sun.misc.*,org.slf4j</Import-Package>
                        <Bundle-SymbolicName>${project.groupId}.${project.artifactId}</Bundle-SymbolicName>
                    </instructions>
                </configuration>
