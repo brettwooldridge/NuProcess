@@ -1,0 +1,47 @@
+Changes in 1.1.0
+
+ * Expose new NuProcess.getPID() method on all platforms.
+
+ * Fix wrong position and limit value on inBuffer caused by incorrect inBuffer clear.
+
+ * Fix source of memory leak and DirectWriteTest failure on MacOS X; clear wantsWrite 
+   queue on process exit.
+
+ * Remove System.exit() call from unit test.
+ 
+Changes in 1.0.4
+
+ * Update OSGi manifest with correct exports.
+
+ * Fix moar Windows argument escaping.
+
+ * Introduce 'force' parameter to NuProcess.closeStdin(), and enqueue special
+   tombstone marker into the pendingWrites queue for non-forced closes.
+
+ * Remove use of sun.misc.Unsafe.
+
+Changes in 1.0.3
+
+ * Remove dependency on jna-platform.
+
+ * Handle fast-exiting processes on Linux.
+
+ * Fix Windows argument escaping.
+
+ * Handle race condition in named pipe creation on Windows.
+
+Changes in 1.0.2
+
+ * Process cwd support for Mac, Linux, and Win32.
+
+ * Remove ThreadLocal usage for MacOS X.
+
+Changes in 1.0.1
+
+ * Performance improvements for OS X kqueue / kevent.
+
+ * Fix issue where stdout and stderr are empty for quick exiting processes.
+
+Changes in 1.0.0
+
+ * Genesis.  See the git history for previous evolution.
