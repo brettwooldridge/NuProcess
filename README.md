@@ -1,6 +1,8 @@
 NuProcess&nbsp;[![Build Status](https://travis-ci.org/brettwooldridge/NuProcess.svg?branch=master)](https://travis-ci.org/brettwooldridge/NuProcess)
 =========
 
+NuProcess is proud to power Facebook's [Buck](https://buckbuild.com) build. &nbsp; <img  src="https://github.com/facebook/buck/blob/45845c06ad807c4cee245237613e8143be11c11b/docs/presentations/droidcon-nyc-2014/images/logo.png?raw=true" height=40px/>
+
 A low-overhead, non-blocking I/O, external Process execution implementation for Java.  It is a replacement for
 ``java.lang.ProcessBuilder`` and ``java.lang.Process``.
 
