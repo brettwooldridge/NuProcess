@@ -19,7 +19,7 @@ Java process and the spawned processes:
     <dependency>
         <groupId>com.zaxxer</groupId>
         <artifactId>nuprocess</artifactId>
-        <version>1.0.4</version>
+        <version>1.1.0</version>
         <scope>compile</scope>
     </dependency>
 
