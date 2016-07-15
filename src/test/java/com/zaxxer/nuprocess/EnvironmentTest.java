@@ -73,11 +73,12 @@ public class EnvironmentTest {
 		Process process = pb.start();		
 		System.out.println("Waited for Java Process");
 		Set<String> result = new HashSet<String>();
-		Scanner s = new Scanner(process.getInputStream()).useDelimiter("\\n");		
+		Scanner s = new Scanner(process.getInputStream()).useDelimiter(System.lineSeparator());
 		while (s.hasNext()) {
 			result.add(s.next());
 		}
 		Assert.assertEquals(0, process.waitFor());
+		System.out.println("env: " + result);
 		return result;
 	}
 
@@ -90,11 +91,12 @@ public class EnvironmentTest {
 		System.out.println("Started Nu Process");
 		process.waitFor(10, TimeUnit.SECONDS);
 		System.out.println("Waited for Nu Process");
-		Scanner s = new Scanner(processListener.getStdOut()).useDelimiter("\\n");
+		Scanner s = new Scanner(processListener.getStdOut()).useDelimiter(System.lineSeparator());
 		Set<String> result = new HashSet<String>();
 		while (s.hasNext()) {
 			result.add(s.next());
 		}
+		System.out.println("env: " + result);
 		return result;
 	}
 
