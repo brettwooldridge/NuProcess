@@ -654,7 +654,14 @@ public final class WindowsProcess implements NuProcess
 
    private char[] getEnvironment(String[] environment)
    {
-      Map<String, String> env = new HashMap<String, String>(System.getenv());
+      Map<String, String> env = new HashMap<String, String>();
+
+      final String SYSTEMROOT = "SystemRoot";
+      String systemRootValue = System.getenv(SYSTEMROOT);
+      if (systemRootValue != null) {
+         env.put(SYSTEMROOT, systemRootValue);
+      }
+      
       for (String entry : environment) {
          int ndx = entry.indexOf('=');
          if (ndx != -1) {
