@@ -51,9 +51,6 @@ public class EnvironmentTest {
 	public void emptyEnv() throws InterruptedException, IOException 
 	{
 		Map<String, String> env = new HashMap<String, String>();
-		if (isWin) {
-			env.put("SystemRoot", System.getenv("SystemRoot"));
-		}
 		Set<String> javaResult = runJavaProcess(command, env);
 		Set<String> nuResult = runNuProcess(command, env);
 		Assert.assertEquals(javaResult, nuResult);
