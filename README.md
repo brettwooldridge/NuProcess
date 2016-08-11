@@ -70,14 +70,17 @@ class ProcessHandler extends NuAbstractProcessHandler {
 
    @Override
    public void onStdout(ByteBuffer buffer, boolean closed) {
-      byte[] bytes = new byte[buffer.remaining()];
-      // You must update buffer.position() before returning (either implicitly,
-      // like this, or explicitly) to indicate how many bytes your handler has consumed.
-      buffer.get(bytes);
-      System.out.println(new String(bytes));
+      if (!closed) {
+         byte[] bytes = new byte[buffer.remaining()];
+         // You must update buffer.position() before returning (either implicitly,
+         // like this, or explicitly) to indicate how many bytes your handler has consumed.
+         buffer.get(bytes);
+         System.out.println(new String(bytes));
 
-      // We're done, so closing STDIN will cause the "cat" process to exit
-      nuProcess.closeStdin(true);
+         // For this example, we're done, so closing STDIN will cause the "cat" process to exit
+         nuProcess.closeStdin(true);
+      }
+   }
 }
 ```
 
