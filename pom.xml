@@ -108,8 +108,7 @@
                <configuration>
                    <instructions>
                        <Bundle-Name>NuProcess</Bundle-Name>
-                       <Export-Package>com.zaxxer.nuprocess</Export-Package>
-                       <Export-Package>com.zaxxer.nuprocess.codec</Export-Package>
+                       <Export-Package>com.zaxxer.nuprocess, com.zaxxer.nuprocess.codec</Export-Package>
                        <Import-Package>com.sun.*,sun.misc.*</Import-Package>
                        <Bundle-SymbolicName>${project.groupId}.${project.artifactId}</Bundle-SymbolicName>
                    </instructions>
