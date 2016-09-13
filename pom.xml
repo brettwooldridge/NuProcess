@@ -138,9 +138,11 @@
                <configuration>
                    <instructions>
                        <Bundle-Name>NuProcess</Bundle-Name>
-                       <Export-Package>com.zaxxer.nuprocess</Export-Package>
-                       <Export-Package>com.zaxxer.nuprocess.codec</Export-Package>
-                       <Export-Package>com.zaxxer.nuprocess.streams</Export-Package>
+                       <Export-Package>
+							com.zaxxer.nuprocess;version="${project.version}", 
+							com.zaxxer.nuprocess.codec;version="${project.version}"
+							com.zaxxer.nuprocess.streams;version="${project.version}"
+					   </Export-Package>
                        <Import-Package>com.sun.*,sun.misc.*,org.reactivestreams.*</Import-Package>
                        <Bundle-SymbolicName>${project.groupId}.${project.artifactId}</Bundle-SymbolicName>
                    </instructions>
