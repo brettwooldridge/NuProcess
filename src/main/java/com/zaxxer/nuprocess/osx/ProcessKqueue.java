@@ -91,19 +91,37 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
 
       pidToProcessMap.put(pid, process);
 
-      // We don't use the processEvents array here, since this method is not
-      // called on the event processor thread.
-      Kevent[] events = (Kevent[]) new Kevent().toArray(4);
-      // Listen for process exit (one-shot event)
-      events[0].EV_SET((long) pid, Kevent.EVFILT_PROC, Kevent.EV_ADD | Kevent.EV_RECEIPT | Kevent.EV_ONESHOT,
-                       Kevent.NOTE_EXIT | Kevent.NOTE_EXITSTATUS | Kevent.NOTE_REAP, 0l, pidPointer);
-      // Listen for stdout and stderr data availability (events deleted automatically when file descriptors closed)
-      events[1].EV_SET(process.getStdout().get(), Kevent.EVFILT_READ, Kevent.EV_ADD | Kevent.EV_RECEIPT, 0, 0l, pidPointer);
-      events[2].EV_SET(process.getStderr().get(), Kevent.EVFILT_READ, Kevent.EV_ADD | Kevent.EV_RECEIPT, 0, 0l, pidPointer);
-      // Listen for stdin data availability (initially disabled until user wants read, deleted automatically when file descriptor closed)
-      events[3].EV_SET(process.getStdin().get(), Kevent.EVFILT_WRITE, Kevent.EV_ADD | Kevent.EV_DISABLE | Kevent.EV_RECEIPT, 0, 0l, pidPointer);
+      Integer stdinFd = null;
+      Integer stdoutFd = null;
+      Integer stderrFd = null;
+      try {
+         stdinFd = process.getStdin().acquire();
+         stdoutFd = process.getStdout().acquire();
+         stderrFd = process.getStderr().acquire();
+         // We don't use the processEvents array here, since this method is not
+         // called on the event processor thread.
+         Kevent[] events = (Kevent[]) new Kevent().toArray(4);
+         // Listen for process exit (one-shot event)
+         events[0].EV_SET((long) pid, Kevent.EVFILT_PROC, Kevent.EV_ADD | Kevent.EV_RECEIPT | Kevent.EV_ONESHOT,
+                          Kevent.NOTE_EXIT | Kevent.NOTE_EXITSTATUS | Kevent.NOTE_REAP, 0l, pidPointer);
+         // Listen for stdout and stderr data availability (events deleted automatically when file descriptors closed)
+         events[1].EV_SET(stdoutFd, Kevent.EVFILT_READ, Kevent.EV_ADD | Kevent.EV_RECEIPT, 0, 0l, pidPointer);
+         events[2].EV_SET(stderrFd, Kevent.EVFILT_READ, Kevent.EV_ADD | Kevent.EV_RECEIPT, 0, 0l, pidPointer);
+         // Listen for stdin data availability (initially disabled until user wants read, deleted automatically when file descriptor closed)
+         events[3].EV_SET(stdinFd, Kevent.EVFILT_WRITE, Kevent.EV_ADD | Kevent.EV_DISABLE | Kevent.EV_RECEIPT, 0, 0l, pidPointer);
 
-      registerEvents(events, 4);
+         registerEvents(events, 4);
+      } finally {
+         if (stdinFd != null) {
+            process.getStdin().release();
+         }
+         if (stdoutFd != null) {
+            process.getStdout().release();
+         }
+         if (stderrFd != null) {
+            process.getStderr().release();
+         }
+      }
    }
 
    private void registerEvents(Kevent[] keventArray, int numEvents)
@@ -224,38 +242,57 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
       if (filter == Kevent.EVFILT_READ) // stdout/stderr data available to read
       {
          int available = kevent.data.intValue();
-         if (ident == osxProcess.getStdout().get()) {
-            osxProcess.readStdout(available);
-            if ((kevent.flags & Kevent.EV_EOF) != 0) {
-               osxProcess.readStdout(-1);
+         try {
+            int stdoutFd = osxProcess.getStdout().acquire();
+            if (ident == stdoutFd) {
+               osxProcess.readStdout(available, stdoutFd);
+               if ((kevent.flags & Kevent.EV_EOF) != 0) {
+                  osxProcess.readStdout(-1, stdoutFd);
+               }
+               return;
             }
+         } finally {
+            osxProcess.getStdout().release();
          }
-         else if (ident == osxProcess.getStderr().get()) {
-            osxProcess.readStderr(available);
-            if ((kevent.flags & Kevent.EV_EOF) != 0) {
-               osxProcess.readStderr(-1);
+
+         try {
+            int stderrFd = osxProcess.getStderr().acquire();
+            if (ident == stderrFd) {
+               osxProcess.readStderr(available, stderrFd);
+               if ((kevent.flags & Kevent.EV_EOF) != 0) {
+                  osxProcess.readStderr(-1, stderrFd);
+               }
+               return;
             }
+         } finally {
+            osxProcess.getStderr().release();
          }
       }
-      else if (filter == Kevent.EVFILT_WRITE && ident == osxProcess.getStdin().get()) // Room in stdin pipe available to write
+      else if (filter == Kevent.EVFILT_WRITE) // Room in stdin pipe available to write
       {
-         int available = kevent.data.intValue();
-         boolean userWantsMore;
-         if (available > 0) {
-            userWantsMore = osxProcess.writeStdin(available);
-         }
-         else {
-            userWantsMore = true;
-         }
-         int stdinFd = osxProcess.getStdin().get();
-         if (!userWantsMore && stdinFd != -1) {
-            // No more stdin for now. Disable the event.
-            // We could use processEvents here and overwrite just the first entry, but this probably doesn't happen
-            // enough to warrant that optimization.
-            Kevent[] events = (Kevent[]) new Kevent().toArray(1);
-            events[0].EV_SET(osxProcess.getStdin().get(), Kevent.EVFILT_WRITE, Kevent.EV_DISABLE | Kevent.EV_RECEIPT, 0, 0l,
-                             Pointer.createConstant(osxProcess.getPid()));
-            registerEvents(events, 1);
+         try {
+            int stdinFd = osxProcess.getStdin().acquire();
+            if (ident == stdinFd) {
+               int available = kevent.data.intValue();
+               boolean userWantsMore;
+               if (available > 0) {
+                  userWantsMore = osxProcess.writeStdin(available, stdinFd);
+               }
+               else {
+                  userWantsMore = true;
+               }
+               if (!userWantsMore) {
+                  // No more stdin for now. Disable the event.
+                  // We could use processEvents here and overwrite just the first entry, but this probably doesn't happen
+                  // enough to warrant that optimization.
+                  Kevent[] events = (Kevent[]) new Kevent().toArray(1);
+                  events[0].EV_SET(stdinFd, Kevent.EVFILT_WRITE, Kevent.EV_DISABLE | Kevent.EV_RECEIPT, 0, 0l,
+                                   Pointer.createConstant(osxProcess.getPid()));
+                  registerEvents(events, 1);
+               }
+            }
+         } finally {
+            osxProcess.getStdin().release();
          }
       }
       else if ((kevent.fflags & Kevent.NOTE_EXIT) != 0) // process has exited System.gc()
@@ -290,7 +327,7 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
       // drainTo() is known to be atomic for ArrayBlockingQueue
       closeQueue.drainTo(processes);
       for (OsxProcess process : processes) {
-         process.stdinClose();
+         process.getStdin().close();
       }
    }
 
@@ -307,11 +344,15 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
          int numKevents = 0;
          for (int i = 0; i < processes.size(); i++) {
             OsxProcess process = processes.get(i);
-            int fd = process.getStdin().get();
-            if (fd != -1) {
-              kevents[numKevents].EV_SET(fd, Kevent.EVFILT_WRITE, Kevent.EV_ENABLE | Kevent.EV_RECEIPT, 0, 0l,
-                                         Pointer.createConstant(process.getPid()));
-              numKevents++;
+            try {
+               int fd = process.getStdin().acquire();
+               if (fd != -1) {
+                  kevents[numKevents].EV_SET(fd, Kevent.EVFILT_WRITE, Kevent.EV_ENABLE | Kevent.EV_RECEIPT, 0, 0l,
+                                             Pointer.createConstant(process.getPid()));
+                  numKevents++;
+               }
+            } finally {
+               process.getStdin().release();
             }
          }
          registerEvents(kevents, numKevents);

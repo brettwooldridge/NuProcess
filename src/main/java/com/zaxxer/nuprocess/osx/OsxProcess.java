@@ -46,14 +46,6 @@ public class OsxProcess extends BasePosixProcess
       super(processListener);
    }
 
-   void stdinClose()
-   {
-      int fd = stdin.getAndSet(-1);
-      if (fd != -1) {
-         LibC.close(fd);
-      }
-   }
-
    @Override
    protected short getSpawnFlags()
    {
