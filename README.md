@@ -166,7 +166,7 @@ for the processing thread to remain (linger) for some amount of time (default 25
 
 #### Related Projects
 Charles Duffy has developed a Clojure wrapper library [here](https://github.com/threatgrid/asynp).
-Julien Viet has developed a Vert.x 3 library [here](https://github.com/vietj/vertx-childprocess].
+Julien Viet has developed a Vert.x 3 library [here](https://github.com/vietj/vertx-childprocess).
 
 #### Limitations
 The following limitations exist in NuProcess:
