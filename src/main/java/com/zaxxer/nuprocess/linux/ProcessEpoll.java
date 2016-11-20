@@ -39,13 +39,20 @@ import static com.zaxxer.nuprocess.internal.LibC.WTERMSIG;
  */
 class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
 {
-   private static final int EVENT_POOL_SIZE = 32;
+   private static final int EVENT_POOL_SIZE = 64;
+   private static final BlockingQueue<EpollEvent> eventPool;
 
    private int epoll;
    private EpollEvent triggeredEvent;
    private List<LinuxProcess> deadPool;
 
-   private static BlockingQueue<EpollEvent> eventPool;
+   static
+   {
+      eventPool = new ArrayBlockingQueue<EpollEvent>(EVENT_POOL_SIZE);
+      for (int i = 0; i < EVENT_POOL_SIZE; i++) {
+         eventPool.add(new EpollEvent());
+      }
+   }
 
    ProcessEpoll()
    {
@@ -56,10 +63,6 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
 
       triggeredEvent = new EpollEvent();
       deadPool = new LinkedList<LinuxProcess>();
-      eventPool = new ArrayBlockingQueue<EpollEvent>(EVENT_POOL_SIZE);
-      for (int i = 0; i < EVENT_POOL_SIZE; i++) {
-         eventPool.add(new EpollEvent());
-      }
    }
 
    // ************************************************************************
