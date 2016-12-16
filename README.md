@@ -145,7 +145,7 @@ constant stream of data, a single thread may provide equivalent performance even
 ##### ``com.zaxxer.nuprocess.softExitDetection``
 On Linux and Windows there is no method by which you can be notified in an asynchronous manner that a child process has
 exited.  Rather than polling all child processes constantly NuProcess uses what we call "Soft Exit Detection".  When a
-child process exits, the OS automatically closes all of it's open file handles; which *is* something about we can be
+child process exits, the OS automatically closes all of it's open file handles; which *is* something about which we can be
 notified.  So, on Linux and Windows when NuProcess determines that both the STDOUT and STDERR streams have been closed
 in the child process, that child process is put into a "dead pool".  The processes in the dead pool are polled to 
 determine when they have truly exited and what their exit status was.  See ``com.zaxxer.nuprocess.deadPoolPollMs``
