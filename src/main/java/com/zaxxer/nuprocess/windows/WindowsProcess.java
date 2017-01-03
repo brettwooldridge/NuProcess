@@ -52,6 +52,7 @@ public final class WindowsProcess implements NuProcess
    public static final int PROCESSOR_THREADS;
 
    private static final boolean IS_SOFTEXIT_DETECTION;
+   private static final boolean IS_ENABLE_WINDOWS_CMD_ARG_QUOTING;
 
    private static final int BUFFER_SIZE = 65536;
 
@@ -94,6 +95,7 @@ public final class WindowsProcess implements NuProcess
       namedPipeCounter = new AtomicInteger(100);
 
       IS_SOFTEXIT_DETECTION = Boolean.valueOf(System.getProperty("com.zaxxer.nuprocess.softExitDetection", "true"));
+      IS_ENABLE_WINDOWS_CMD_ARG_QUOTING = Boolean.valueOf(System.getProperty("com.zaxxer.nuprocess.enableWindowsCmdArgQuoting", "true"));
 
       String threads = System.getProperty("com.zaxxer.nuprocess.threads", "auto");
       if ("auto".equals(threads)) {
@@ -641,8 +643,21 @@ public final class WindowsProcess implements NuProcess
          // list (the path to execute). Since Windows paths cannot contain double-quotes
          // (really!), the logic in WindowsCreateProcessEscape.quote() will either do nothing
          // or simply add double-quotes around the path.
-         WindowsCreateProcessEscape.quote(sb, command);
+         if (IS_ENABLE_WINDOWS_CMD_ARG_QUOTING) {
+            WindowsCreateProcessEscape.quote(sb, command);
+         } else {
+            sb.append(command);
+            sb.append(' ');
+         }
       }
+
+      if (!IS_ENABLE_WINDOWS_CMD_ARG_QUOTING) {
+          if (sb.length() > 0) {
+              sb.setLength(sb.length() - 1);
+          }
+          sb.append('\0');
+      }
+
       return Native.toCharArray(sb.toString());
    }
 
