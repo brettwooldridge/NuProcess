@@ -17,20 +17,23 @@
 package com.zaxxer.nuprocess;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.CharBuffer;
 import java.nio.charset.Charset;
 import java.nio.charset.CoderResult;
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
 import java.util.Scanner;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.concurrent.TimeUnit;
+
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
 
+import com.zaxxer.nuprocess.NuProcess.Stream;
 import com.zaxxer.nuprocess.codec.NuAbstractCharsetHandler;
 
 public class EnvironmentTest {
@@ -69,17 +72,24 @@ public class EnvironmentTest {
 		ProcessBuilder pb = new ProcessBuilder(command);
 		pb.environment().clear();
 		pb.environment().putAll(env);
+
 		System.out.println("Started Java Process");
-		Process process = pb.start();		
-		System.out.println("Waited for Java Process");
-		Set<String> result = new HashSet<String>();
-		Scanner s = new Scanner(process.getInputStream()).useDelimiter(System.lineSeparator());
-		while (s.hasNext()) {
-			result.add(s.next());
+		Process process = pb.start();
+
+		try (InputStream is = process.getInputStream();
+		     Scanner s = new Scanner(is);) {
+		   Scanner scanner = s.useDelimiter(System.lineSeparator());
+		   Set<String> result = new TreeSet<String>();
+   		while (scanner.hasNext()) {
+   			result.add(scanner.next());
+   		}
+
+   		System.out.println("Waited for Java Process");
+   		Assert.assertEquals(0, process.waitFor());
+
+   		System.out.println("Process env: " + result);
+   		return result;
 		}
-		Assert.assertEquals(0, process.waitFor());
-		System.out.println("env: " + result);
-		return result;
 	}
 
 	private Set<String> runNuProcess(String[] command, Map<String, String> env) throws InterruptedException 
@@ -88,16 +98,22 @@ public class EnvironmentTest {
 		NuProcessBuilder pb = new NuProcessBuilder(Arrays.asList(command), env);
 		pb.setProcessListener(processListener);
 		NuProcess process = pb.start();
-		System.out.println("Started Nu Process");
-		process.waitFor(10, TimeUnit.SECONDS);
-		System.out.println("Waited for Nu Process");
-		Scanner s = new Scanner(processListener.getStdOut()).useDelimiter(System.lineSeparator());
-		Set<String> result = new HashSet<String>();
-		while (s.hasNext()) {
-			result.add(s.next());
-		}
-		System.out.println("env: " + result);
-		return result;
+		process.want(Stream.STDOUT);
+		System.out.println("Started NuProcess");
+
+		System.out.println("Waited for NuProcess");
+		Assert.assertEquals(0, process.waitFor(10, TimeUnit.SECONDS));
+
+      try (Scanner s = new Scanner(processListener.getStdOut())) {
+         Scanner scanner = s.useDelimiter(System.lineSeparator());
+         Set<String> result = new TreeSet<String>();
+   		while (scanner.hasNext()) {
+   			result.add(scanner.next());
+   		}
+
+   		System.out.println("NuProcess env: " + result);
+   		return result;
+      }
 	}
 
 	private static class ProcessHandler extends NuAbstractCharsetHandler 
@@ -110,10 +126,11 @@ public class EnvironmentTest {
 		private StringBuilder stdOut = new StringBuilder();
 
 		@Override
-		public void onStdoutChars(CharBuffer buffer, boolean closed, CoderResult coderResult) 
+		public boolean onStdoutChars(CharBuffer buffer, boolean closed, CoderResult coderResult) 
 		{
 			stdOut.append(buffer);
 			buffer.position(buffer.limit());
+			return !closed;
 		}
 
 		public String getStdOut() 

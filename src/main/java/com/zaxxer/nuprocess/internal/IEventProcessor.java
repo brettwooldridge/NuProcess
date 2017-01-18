@@ -71,7 +71,7 @@ public interface IEventProcessor<T extends BasePosixProcess> extends Runnable
     *
     * @param process the process whose STDIN pipe should be closed
     */
-   void closeStdin(T process);
+   void queueCloseStdin(T process);
 
    /**
     * Called by the event-loop to process asynchronous I/O events.

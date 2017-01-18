@@ -60,9 +60,9 @@ public class CatStreamTest
          }
          
          @Override
-         public void onNext(ByteBuffer buffer)
+         public void onNext(final ByteBuffer buffer)
          {
-            int available = buffer.remaining();
+            final int available = buffer.remaining();
             if (buffer.hasRemaining()) {
                buffer.get(bytes, 0, available);
                readAdler32.update(bytes, 0, available);
@@ -81,7 +81,7 @@ public class CatStreamTest
          }
          
          @Override
-         public void onSubscribe(Subscription sub)
+         public void onSubscribe(final Subscription sub)
          {
             subscription = sub;
             timer.schedule(new TimerTask() {
@@ -93,13 +93,13 @@ public class CatStreamTest
          }
       }
 
-      NuProcessBuilder builder = new NuProcessBuilder(command, "src/test/resources/chunk.txt");
-      NuStreamProcessBuilder streamBuilder = new NuStreamProcessBuilder(builder);
-      NuStreamProcess process = streamBuilder.start();
+      final NuProcessBuilder builder = new NuProcessBuilder(command, "src/test/resources/chunk.txt");
+      final NuStreamProcessBuilder streamBuilder = new NuStreamProcessBuilder(builder);
+      final NuStreamProcess process = streamBuilder.start();
 
-      NuStreamPublisher stdoutPublisher = process.getStdoutPublisher();
+      final NuStreamPublisher stdoutPublisher = process.getStdoutPublisher();
 
-      NaiveSubscriber subscriber = new NaiveSubscriber();
+      final NaiveSubscriber subscriber = new NaiveSubscriber();
       stdoutPublisher.subscribe(subscriber);
 
       process.waitFor(0, TimeUnit.SECONDS); // wait until the process exists

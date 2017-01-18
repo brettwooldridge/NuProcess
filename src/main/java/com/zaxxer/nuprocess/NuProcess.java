@@ -79,7 +79,7 @@ public interface NuProcess
     *
     * @param stream the {@link Stream} that the caller wants to read/write
     */
-   void want(Stream stream);
+   NuProcess want(Stream stream);
 
    /**
     * Performs a "direct write" rather than expressing a desire to write using
@@ -106,7 +106,7 @@ public interface NuProcess
     * @param buffer the {@link ByteBuffer} to write to the STDIN stream of the
     *        process
     */
-   void writeStdin(ByteBuffer buffer);
+   NuProcess writeStdin(ByteBuffer buffer);
 
    /**
     * This method is used to close the STDIN pipe between the Java process and
@@ -118,6 +118,8 @@ public interface NuProcess
     * <p>
     * Otherwise, STDIN will be closed only after all pending writes
     * have completed.
+    *
+    * @param force {@code true} to force the pipe closed immediately
     */
    void closeStdin(boolean force);
 
@@ -176,7 +178,7 @@ public interface NuProcess
     *
     * @param processHandler the new {@link NuProcessHandler}
     */
-   void setProcessHandler(NuProcessHandler processHandler);
+   NuProcess setProcessHandler(NuProcessHandler processHandler);
    
    int getPID();
 }

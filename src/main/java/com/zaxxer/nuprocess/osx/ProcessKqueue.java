@@ -26,9 +26,7 @@ import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import java.util.logging.Logger;
 
 import com.sun.jna.Pointer;
 import com.sun.jna.ptr.IntByReference;
@@ -44,7 +42,7 @@ import com.zaxxer.nuprocess.osx.LibKevent.TimeSpec;
  */
 final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
 {
-   private static final Logger LOGGER = LoggerFactory.getLogger(ProcessKqueue.class);
+   private static final Logger LOGGER = Logger.getLogger(ProcessKqueue.class.getName());
 
    private static final int NUM_KEVENTS = 64;
    private static final int JAVA_PID;
@@ -157,7 +155,7 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
 
       try {
          wantsStdin.put(process);
-         
+
          LibC.kill(JAVA_PID, LibC.SIGUSR2);
       }
       catch (InterruptedException e) {
@@ -166,10 +164,20 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
    }
 
    @Override
-   public void closeStdin(OsxProcess process)
+   public void queueCloseStdin(OsxProcess process)
    {
-      process.getStdin().getAndSet(-1);
-      closeQueue.add(process);
+      if (shutdown) {
+         return;
+      }
+
+      try {
+         closeQueue.put(process);
+
+         LibC.kill(JAVA_PID, LibC.SIGUSR2);
+      }
+      catch (InterruptedException e) {
+         return;
+      }
    }
 
    @Override
@@ -228,76 +236,19 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
 
       OsxProcess osxProcess = pidToProcessMap.get(udata);
       if (osxProcess == null) {
-         osxProcess = pidToProcessMap.get(ident);
-         if (osxProcess == null) {
-            return;
-         }
+         throw new IllegalStateException("Event triggered for unknown process with identity " + ident);
       }
 
       if (filter == Kevent.EVFILT_READ) // stdout/stderr data available to read
       {
-         final int available = kevent.data.intValue();
-         boolean userWantsMore = false;
-         if (ident == osxProcess.getStdout().get()) {
-            userWantsMore = osxProcess.readStdout(available);
-            if ((kevent.flags & Kevent.EV_EOF) != 0) {
-               LOGGER.debug("process(): EV_EOF on stdout({}) detected for {}", ident, osxProcess.getUid());
-               userWantsMore = osxProcess.readStdout(-1);
-            }
-         }
-         else if (ident == osxProcess.getStderr().get()) {
-            userWantsMore = osxProcess.readStderr(available);
-            if ((kevent.flags & Kevent.EV_EOF) != 0) {
-               userWantsMore = osxProcess.readStderr(-1);
-            }
-         }
-
-         if (userWantsMore) {
-            LOGGER.debug("process(): action(EVFILT_READ) EV_ADD | EV_ONESHOT on stdout({}) for {}", ident, osxProcess.getUid());
-            processEvents[0].EV_SET(osxProcess.getStdout().get(), Kevent.EVFILT_READ, Kevent.EV_ADD | Kevent.EV_ONESHOT, 0, 0L, Pointer.createConstant(osxProcess.getUid()));
-            registerEvents(processEvents, 1);               
-         }
-         else {
-            LOGGER.debug("process(): process for {} requested no more data on stdout({})", osxProcess.getUid(), ident);
-         }
+         processRead(kevent, ident, osxProcess);
       }
       else if (filter == Kevent.EVFILT_WRITE && ident == osxProcess.getStdin().get()) // Room in stdin pipe available to write
       {
-         int available = kevent.data.intValue();
-         boolean userWantsMore;
-         if (available > 0) {
-            userWantsMore = osxProcess.writeStdin(available);
-         }
-         else {
-            userWantsMore = true;
-         }
-         int stdinFd = osxProcess.getStdin().get();
-         if (userWantsMore && stdinFd != -1) {
-            // Kevent[] events = (Kevent[]) new Kevent().toArray(1);
-            processEvents[0].EV_SET(osxProcess.getStdin().get(), Kevent.EVFILT_WRITE, Kevent.EV_ADD | Kevent.EV_ONESHOT | Kevent.EV_RECEIPT, 0, 0l,
-                                    Pointer.createConstant(osxProcess.getUid()));
-            registerEvents(processEvents, 1);
-         }
+         processWrite(kevent, osxProcess);
       }
       else if ((kevent.fflags & Kevent.NOTE_EXIT) != 0) { // process has exited
-         int status = kevent.data.intValue();
-         LOGGER.debug("Process {} exited with status {}", osxProcess.getUid(), status);
-         osxProcess.markProcessExited();
-         if (WIFEXITED(status)) {
-            status = WEXITSTATUS(status);
-            if (status == 127) {
-               osxProcess.setExitCode(Integer.MIN_VALUE);
-            }
-            else {
-               osxProcess.setExitCode(status);
-            }
-         }
-         else if (WIFSIGNALED(status)) {
-            osxProcess.setExitCode(WTERMSIG(status));
-         }
-         else {
-            osxProcess.setExitCode(status);
-         }
+         processExit(kevent, osxProcess);
       }
 
       if (osxProcess.isProcessExited() &&
@@ -311,12 +262,82 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
    //                             Private methods
    // ************************************************************************
 
+   private void processRead(final Kevent kevent, final int ident, final OsxProcess osxProcess)
+   {
+      final int available = kevent.data.intValue();
+      boolean userWantsMore = false;
+      if (ident == osxProcess.getStdout().get()) {
+         userWantsMore = osxProcess.readStdout(available);
+         if ((kevent.flags & Kevent.EV_EOF) != 0) {
+            LOGGER.finest("process(): EV_EOF on stdout(" + ident + ") detected for " + osxProcess.getUid());
+            userWantsMore = osxProcess.readStdout(-1);
+         }
+      }
+      else if (ident == osxProcess.getStderr().get()) {
+         userWantsMore = osxProcess.readStderr(available);
+         if ((kevent.flags & Kevent.EV_EOF) != 0) {
+            userWantsMore = osxProcess.readStderr(-1);
+         }
+      }
+
+      if (userWantsMore) {
+         LOGGER.finest("process(): action(EVFILT_READ) EV_ADD | EV_ONESHOT on stdout(" + ident + ") for " + osxProcess.getUid());
+         processEvents[0].EV_SET(osxProcess.getStdout().get(), Kevent.EVFILT_READ, Kevent.EV_ADD | Kevent.EV_ONESHOT, 0, 0L, Pointer.createConstant(osxProcess.getUid()));
+         registerEvents(processEvents, 1);               
+      }
+      else {
+         LOGGER.finest("process(): process for " + osxProcess.getUid() + " requested no more data on stdout(" + ident + ")");
+      }
+   }
+
+   private void processWrite(final Kevent kevent, final OsxProcess osxProcess)
+   {
+      final int available = kevent.data.intValue();
+      boolean userWantsMore;
+      if (available > 0) {
+         userWantsMore = osxProcess.writeStdin(available);
+      }
+      else {
+         userWantsMore = true;
+      }
+
+      final int stdinFd = osxProcess.getStdin().get();
+      if (userWantsMore && stdinFd != -1) {
+         processEvents[0].EV_SET(osxProcess.getStdin().get(), Kevent.EVFILT_WRITE, Kevent.EV_ADD | Kevent.EV_ONESHOT | Kevent.EV_RECEIPT, 0, 0l,
+                                 Pointer.createConstant(osxProcess.getUid()));
+         registerEvents(processEvents, 1);
+      }
+   }
+
+   private void processExit(final Kevent kevent, final OsxProcess osxProcess)
+   {
+      int status = kevent.data.intValue();
+      LOGGER.finest("Process " + osxProcess.getUid() + " exited with status " + status);
+      osxProcess.markProcessExited();
+      if (WIFEXITED(status)) {
+         status = WEXITSTATUS(status);
+         if (status == 127) {
+            osxProcess.setExitCode(Integer.MIN_VALUE);
+         }
+         else {
+            osxProcess.setExitCode(status);
+         }
+      }
+      else if (WIFSIGNALED(status)) {
+         osxProcess.setExitCode(WTERMSIG(status));
+      }
+      else {
+         osxProcess.setExitCode(status);
+      }
+   }
+
    private void checkStdinCloses()
    {
       List<OsxProcess> processes = new ArrayList<OsxProcess>();
       // drainTo() is known to be atomic for ArrayBlockingQueue
       closeQueue.drainTo(processes);
       for (OsxProcess process : processes) {
+         wantsStdin.remove(process);
          process.stdinClose();
       }
    }
@@ -333,7 +354,7 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
 
          for (OsxProcess process : processes) {
             // Listen for process exit (one-shot event)
-            LOGGER.debug("action(EVFILT_PROC) EV_ADD | EV_ONESHOT | NOTE_EXIT | NOTE_EXITSTATUS for process with ident {}", process.getUid());
+            LOGGER.finest("action(EVFILT_PROC) EV_ADD | EV_ONESHOT | NOTE_EXIT | NOTE_EXITSTATUS for process with ident " + process.getUid());
 
             events[0].EV_SET((long) process.getPid(), Kevent.EVFILT_PROC, Kevent.EV_ADD | Kevent.EV_ONESHOT, Kevent.NOTE_EXIT | Kevent.NOTE_EXITSTATUS, 0l,
                              Pointer.createConstant(process.getUid()));

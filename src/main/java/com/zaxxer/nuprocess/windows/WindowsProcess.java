@@ -159,7 +159,7 @@ public final class WindowsProcess implements NuProcess
    }
 
    @Override
-   public void want(Stream stream)
+   public NuProcess want(Stream stream)
    {
       switch (stream) {
       case STDIN:
@@ -172,11 +172,13 @@ public final class WindowsProcess implements NuProcess
       case STDERR:
          throw new AbstractMethodError("Method not yet implemented");
       }
+
+      return this;
    }
 
    /** {@inheritDoc} */
    @Override
-   public synchronized void writeStdin(ByteBuffer buffer)
+   public synchronized NuProcess writeStdin(ByteBuffer buffer)
    {
       if (hStdinWidow != null && !NuWinNT.INVALID_HANDLE_VALUE.getPointer().equals(hStdinWidow.getPointer())) {
          pendingWrites.add(buffer);
@@ -187,6 +189,8 @@ public final class WindowsProcess implements NuProcess
       else {
          throw new IllegalStateException("closeStdin() method has already been called.");
       }
+
+      return this;
    }
 
    /** {@inheritDoc} */
@@ -237,9 +241,10 @@ public final class WindowsProcess implements NuProcess
 
    /** {@inheritDoc} */
    @Override
-   public void setProcessHandler(NuProcessHandler processHandler)
+   public NuProcess setProcessHandler(NuProcessHandler processHandler)
    {
       this.processHandler = processHandler;
+      return this;
    }
 
    // ************************************************************************

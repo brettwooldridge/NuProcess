@@ -2,13 +2,13 @@ package com.zaxxer.nuprocess.streams;
 
 import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
+import java.util.logging.Logger;
 
 import org.reactivestreams.Publisher;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
 import org.reactivestreams.tck.PublisherVerification;
 import org.reactivestreams.tck.TestEnvironment;
-import org.slf4j.LoggerFactory;
 import org.testng.SkipException;
 import org.testng.annotations.BeforeMethod;
 import org.testng.annotations.Test;
@@ -34,7 +34,7 @@ public class TckFiniteStdoutPublisherTest extends PublisherVerification<ByteBuff
    @BeforeMethod
    protected void startSession(Method method) throws Exception
    {
-      LoggerFactory.getLogger(this.getClass()).info("Test: {}", method.getName());
+      Logger.getLogger(this.getClass().getName()).info("Test: " + method.getName());
    }
 
    @Override public Publisher<ByteBuffer> createPublisher(long elements)

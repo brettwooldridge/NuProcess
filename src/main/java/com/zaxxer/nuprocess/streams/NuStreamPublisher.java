@@ -17,24 +17,23 @@
 package com.zaxxer.nuprocess.streams;
 
 import java.nio.ByteBuffer;
+import java.util.logging.Logger;
 
 import org.reactivestreams.Publisher;
 import org.reactivestreams.Subscriber;
 import org.reactivestreams.Subscription;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import com.zaxxer.nuprocess.NuProcess.Stream;
 import com.zaxxer.nuprocess.streams.NuStreamProcessBuilder.BridgeProcessHandler;
 
-public class NuStreamPublisher implements Publisher<ByteBuffer>
+public final class NuStreamPublisher implements Publisher<ByteBuffer>
 {
-   private static final Logger LOGGER = LoggerFactory.getLogger(NuStreamPublisher.class);
+   private static final Logger LOGGER = Logger.getLogger(NuStreamPublisher.class.getName());
 
-   final BridgeProcessHandler processHandler;
+   private final BridgeProcessHandler processHandler;
+   private final Stream stream;
 
    private Subscriber<? super ByteBuffer> subscriber;
-   private Stream stream;
 
    NuStreamPublisher(final BridgeProcessHandler processHandler, final Stream stream)
    {
@@ -49,19 +48,33 @@ public class NuStreamPublisher implements Publisher<ByteBuffer>
          throw new NullPointerException("Subscriber cannot be null");
       }
 
+      if (this.subscriber != null) {
+         NuStreamSubscription subscription = new NuStreamSubscription(null);
+         subscriber.onSubscribe(subscription);
+         subscriber.onError(new IllegalStateException());
+         return;
+      }
+
       this.subscriber = subscriber;
       processHandler.setSubscriber(stream, subscriber);
 
-      NuStreamSubscription subscription = new NuStreamSubscription();
+      NuStreamSubscription subscription = new NuStreamSubscription(stream);
       subscriber.onSubscribe(subscription);
    }
 
    class NuStreamSubscription implements Subscription
    {
+      private Stream stream;
+
+      NuStreamSubscription(Stream stream)
+      {
+         this.stream = stream;
+      }
+
       @Override
       public void cancel()
       {
-         LOGGER.debug("NuStreamSubscription.cancel() called on subscription {}", this);
+         LOGGER.finest("NuStreamSubscription.cancel() called on subscription " + this);
          if (stream != null) {
             final Stream s = stream;
             stream = null;
@@ -73,13 +86,13 @@ public class NuStreamPublisher implements Publisher<ByteBuffer>
       @Override
       public void request(long n)
       {
-         if (n <= 0) {
+         if (n <= 0 && stream != null) {
             IllegalArgumentException e = new IllegalArgumentException("Subscription.request() value cannot be less than 1, rule 3.9");
             subscriber.onError(e);
          }
 
          if (stream != null) {
-            LOGGER.debug("NuStreamSubscription.request({}) called on subscription {}", n, this);
+            LOGGER.finest("NuStreamSubscription.request(" + n  + ") called on subscription " + this);
             processHandler.request(stream, n);
          }
       }

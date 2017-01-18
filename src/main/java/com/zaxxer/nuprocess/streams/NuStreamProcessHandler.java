@@ -16,7 +16,11 @@
 
 package com.zaxxer.nuprocess.streams;
 
-public interface NuStreamProcessHandler
+import java.nio.ByteBuffer;
+
+import org.reactivestreams.Publisher;
+
+public interface NuStreamProcessHandler extends Publisher<ByteBuffer>
 {
    /**
     * This method is invoked when you call the {@link NuStreamProcessBuilder#start()}

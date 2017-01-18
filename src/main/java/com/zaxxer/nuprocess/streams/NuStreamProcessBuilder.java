@@ -18,10 +18,9 @@ package com.zaxxer.nuprocess.streams;
 
 import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.logging.Logger;
 
 import org.reactivestreams.Subscriber;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import com.zaxxer.nuprocess.NuAbstractProcessHandler;
 import com.zaxxer.nuprocess.NuProcess;
@@ -30,7 +29,7 @@ import com.zaxxer.nuprocess.NuProcessBuilder;
 
 public class NuStreamProcessBuilder
 {
-   private static final Logger LOGGER = LoggerFactory.getLogger(NuStreamProcessBuilder.class);
+   private static final Logger LOGGER = Logger.getLogger(NuStreamProcessBuilder.class.getName());
 
    private final NuProcessBuilder builder;
 
@@ -105,7 +104,7 @@ public class NuStreamProcessBuilder
       @Override
       public void onExit(int statusCode)
       {
-         LOGGER.debug("{}.onExit() was called", this.getClass().getSimpleName());
+         LOGGER.finest(this.getClass().getSimpleName() + ".onExit() was called");
          // TODO do we ever need to call stdinSubscriber.onError() ?
          if (stdinSubscriber != null) {
             if (!stdinComplete) {
@@ -156,13 +155,13 @@ public class NuStreamProcessBuilder
 
          final Subscriber<? super ByteBuffer> subscriber = stdoutSubscriber;
          if (buffer.hasRemaining() && subscriber != null) {
-            LOGGER.debug("{} calling {}.onNext()", this.getClass().getSimpleName(), subscriber.getClass().getSimpleName());
+            LOGGER.finest("calling onNext() on " + subscriber.getClass().getSimpleName());
             subscriber.onNext(buffer);
          }
 
          if (closed) {
             if (subscriber != null) {
-               LOGGER.debug("{} calling {}.onComplete()", this.getClass().getSimpleName(), subscriber.getClass().getSimpleName());               
+               LOGGER.finest("calling onComplete() on " + subscriber.getClass().getSimpleName());               
                stdoutSubscriber = null;
                if (!stdoutComplete) {
                   stdoutComplete = true;
@@ -174,7 +173,7 @@ public class NuStreamProcessBuilder
          }
 
          boolean more = !closed && stdoutRequests.decrementAndGet() > 0;
-         LOGGER.debug("{} requesting more data: {}", this.getClass().getSimpleName(), more);
+         LOGGER.finest("requesting more data");
          
          return more;
       }
@@ -188,13 +187,13 @@ public class NuStreamProcessBuilder
 
          final Subscriber<? super ByteBuffer> subscriber = stderrSubscriber;
          if (buffer.hasRemaining() && subscriber != null) {
-            LOGGER.debug("{} calling {}.onNext()", this.getClass().getSimpleName(), subscriber.getClass().getSimpleName());
+            LOGGER.finest("calling onNext() on " + subscriber.getClass().getSimpleName());
             subscriber.onNext(buffer);
          }
 
          if (closed) {
             if (subscriber != null) {
-               LOGGER.debug("{} calling {}.onComplete()", this.getClass().getSimpleName(), subscriber.getClass().getSimpleName());               
+               LOGGER.finest("calling onComplete() on " + subscriber.getClass().getSimpleName());               
                stderrSubscriber = null;
                if (!stderrComplete) {
                   stderrComplete = true;
@@ -206,7 +205,7 @@ public class NuStreamProcessBuilder
          }
 
          boolean more = !closed && stderrRequests.decrementAndGet() > 0;
-         LOGGER.debug("{} requesting more data: {}", this.getClass().getSimpleName(), more);
+         LOGGER.finest("requesting more data");
 
          return more;
       }
@@ -239,11 +238,11 @@ public class NuStreamProcessBuilder
                   nuProcess.want(stream);
                }
                else {
-                  LOGGER.debug("NuProcess.want({}) elided for request({}) because there were already pending requests", stream, n);
+                  LOGGER.finest("NuProcess.want(" + stream + ") elided for request(" + n + ") because there were already pending requests");
                }
             }
             else {
-               LOGGER.debug("request({}) ignored (subscriber={}, requests={})", n, stdoutSubscriber, stdoutRequests);
+               LOGGER.finest("request(" + n + ") ignored (subscriber=" + stdoutSubscriber + ", requests=" + stdoutRequests + ")");
             }
             break;
          case STDIN:

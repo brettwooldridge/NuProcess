@@ -16,7 +16,10 @@
 
 package com.zaxxer.nuprocess.streams;
 
+import java.nio.ByteBuffer;
 import java.util.concurrent.TimeUnit;
+
+import org.reactivestreams.Publisher;
 
 import com.zaxxer.nuprocess.NuProcess;
 import com.zaxxer.nuprocess.streams.NuStreamProcessBuilder.BridgeProcessHandler;
@@ -37,6 +40,11 @@ public class NuStreamProcessImpl implements NuStreamProcess
       stdinPublisher = new NuStreamPublisher(processHandler, NuProcess.Stream.STDIN);
       stdoutPublisher = new NuStreamPublisher(processHandler, NuProcess.Stream.STDOUT);
       stderrPublisher = new NuStreamPublisher(processHandler, NuProcess.Stream.STDERR);
+   }
+
+   @Override
+   public void setStdinPublisher(Publisher<ByteBuffer> publisher)
+   {
    }
 
    @Override

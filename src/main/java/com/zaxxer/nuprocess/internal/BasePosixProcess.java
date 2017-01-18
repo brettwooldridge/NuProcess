@@ -30,9 +30,7 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import java.util.logging.Logger;
 
 import com.sun.jna.Native;
 import com.sun.jna.Pointer;
@@ -51,7 +49,7 @@ public abstract class BasePosixProcess implements NuProcess
 
    protected static AtomicInteger uidSequence = new AtomicInteger();
 
-   protected Logger LOGGER = LoggerFactory.getLogger(this.getClass());
+   protected Logger LOGGER = Logger.getLogger(this.getClass().getName());
 
    protected IEventProcessor<? super BasePosixProcess> myProcessor;
    protected volatile NuProcessHandler processHandler;
@@ -316,7 +314,7 @@ public abstract class BasePosixProcess implements NuProcess
 
    /** {@inheritDoc} */
    @Override
-   public void want(Stream stream)
+   public NuProcess want(Stream stream)
    {
       int fd;
       switch (stream) {
@@ -345,6 +343,8 @@ public abstract class BasePosixProcess implements NuProcess
          }
          break;
       }
+
+      return this;
    }
 
    /** {@inheritDoc} */
@@ -355,9 +355,11 @@ public abstract class BasePosixProcess implements NuProcess
          int fd = stdin.get();
          if (fd != -1) {
             if (myProcessor != null) {
-               myProcessor.closeStdin(this);
+               myProcessor.queueCloseStdin(this);
             }
-            LibC.close(fd);
+            else {
+               LibC.close(fd);
+            }
          }
       } else {
          if (stdinClosing.compareAndSet(false, true)) {
@@ -371,7 +373,7 @@ public abstract class BasePosixProcess implements NuProcess
 
    /** {@inheritDoc} */
    @Override
-   public void writeStdin(ByteBuffer buffer)
+   public NuProcess writeStdin(ByteBuffer buffer)
    {
       int fd = stdin.get();
       boolean closing = stdinClosing.get();
@@ -382,6 +384,8 @@ public abstract class BasePosixProcess implements NuProcess
       else {
          throw new IllegalStateException("closeStdin() method has already been called.");
       }
+
+      return this;
    }
 
    /** {@inheritDoc} */
@@ -393,9 +397,10 @@ public abstract class BasePosixProcess implements NuProcess
 
    /** {@inheritDoc} */
    @Override
-   public void setProcessHandler(NuProcessHandler processHandler)
+   public NuProcess setProcessHandler(NuProcessHandler processHandler)
    {
       this.processHandler = processHandler;
+      return this;
    }
 
    // ************************************************************************
@@ -496,7 +501,7 @@ public abstract class BasePosixProcess implements NuProcess
          isRunning = false;
 
          if (outBuffer != null && !outClosed) {
-            LOGGER.debug("onExit(): outBuffer != null && !outClosed, calling onStdout() with closed=true");
+            LOGGER.finest("onExit(): outBuffer != null && !outClosed, calling onStdout() with closed=true");
             outBuffer.flip();
             processHandler.onStdout(outBuffer, true);
          }
@@ -542,7 +547,7 @@ public abstract class BasePosixProcess implements NuProcess
 
          int read = LibC.read(stdout.get(), outBuffer, Math.min(availability, outBuffer.remaining()));
          if (read == 0) {  // EOF
-            LOGGER.debug("Read 0 bytes, calling onStdout() with closed=true");
+            LOGGER.finest("Read 0 bytes, calling onStdout() with closed=true");
             outClosed = true;
             outBuffer.limit(outBuffer.position());
             processHandler.onStdout(outBuffer, true);
@@ -550,7 +555,7 @@ public abstract class BasePosixProcess implements NuProcess
          }
 
          if (read == -1) {  // Unknown error
-            LOGGER.debug("Unexpected error during read ({})", Native.getLastError());
+            LOGGER.finest("Unexpected error during read " + Native.getLastError());
             close(stdout);
             outClosed = true;
             return false;
@@ -589,7 +594,7 @@ public abstract class BasePosixProcess implements NuProcess
 
          int read = LibC.read(stderr.get(), errBuffer, Math.min(availability, errBuffer.remaining()));
          if (read == 0) {  // EOF
-            LOGGER.debug("Read 0 bytes, calling onStderr() with closed=true");
+            LOGGER.finest("Read 0 bytes, calling onStderr() with closed=true");
             errClosed = true;
             errBuffer.limit(errBuffer.position());
             processHandler.onStderr(errBuffer, true);
@@ -597,7 +602,7 @@ public abstract class BasePosixProcess implements NuProcess
          }
 
          if (read == -1) {  // Unknown error
-            LOGGER.debug("Unexpected error during read ({})", Native.getLastError());
+            LOGGER.finest("Unexpected error during read " + Native.getLastError());
             close(stderr);
             errClosed = true;
             return false;

@@ -16,7 +16,10 @@
 
 package com.zaxxer.nuprocess.streams;
 
+import java.nio.ByteBuffer;
 import java.util.concurrent.TimeUnit;
+
+import org.reactivestreams.Publisher;
 
 import com.zaxxer.nuprocess.NuProcessHandler;
 
@@ -74,6 +77,8 @@ public interface NuStreamProcess
     * @return true if the process is still running, false if it has exited
     */
    boolean isRunning();
+
+   void setStdinPublisher(Publisher<ByteBuffer> publisher);
 
    NuStreamPublisher getStdinPublisher();
 
