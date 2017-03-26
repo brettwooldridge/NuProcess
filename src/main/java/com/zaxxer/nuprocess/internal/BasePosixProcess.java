@@ -284,6 +284,13 @@ public abstract class BasePosixProcess implements NuProcess
 
    /** {@inheritDoc} */
    @Override
+   public int getExitCode()
+   {
+      return exitCode.get();
+   }
+
+   /** {@inheritDoc} */
+   @Override
    public boolean isRunning()
    {
       return isRunning;

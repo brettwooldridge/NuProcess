@@ -18,7 +18,7 @@ import com.zaxxer.nuprocess.NuProcessBuilder;
 @Test(singleThreaded = true, threadPoolSize = 1, groups = "test")
 public class TckFiniteStdoutPublisherTest extends PublisherVerification<ByteBuffer>
 {
-   private static final long DEFAULT_TIMEOUT = 300L;
+   private static final long DEFAULT_TIMEOUT = 1000 * 1;
    private static final long DEFAULT_GC_TIMEOUT = 1000L;
    private String command;
 
@@ -50,13 +50,19 @@ public class TckFiniteStdoutPublisherTest extends PublisherVerification<ByteBuff
 
    @Override public Publisher<ByteBuffer> createFailedPublisher()
    {
-      return null;
+      NuProcessBuilder builder = new NuProcessBuilder(command, "/tmp/egdirdloow");
+      NuStreamProcessBuilder streamBuilder = new NuStreamProcessBuilder(builder);
+      NuStreamProcess process = streamBuilder.start();
+
+      NuStreamPublisher nuStreamPublisher = process.getStdoutPublisher();
+
+      return new TckFiniteStdoutPublisher(nuStreamPublisher, 0);
    }
 
-   @Override public long maxElementsFromPublisher()
-   {
-      return publisherUnableToSignalOnComplete(); // == Long.MAX_VALUE == unbounded
-   }
+//   @Override public long maxElementsFromPublisher()
+//   {
+//      return publisherUnableToSignalOnComplete(); // == Long.MAX_VALUE == unbounded
+//   }
 
    private static class TckFiniteStdoutPublisher implements Publisher<ByteBuffer>
    {

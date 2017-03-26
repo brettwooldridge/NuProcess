@@ -181,4 +181,6 @@ public interface NuProcess
    NuProcess setProcessHandler(NuProcessHandler processHandler);
    
    int getPID();
+
+   int getExitCode();
 }

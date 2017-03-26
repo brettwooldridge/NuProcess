@@ -144,6 +144,12 @@ public final class WindowsProcess implements NuProcess
    //                        NuProcess interface methods
    // ************************************************************************
 
+   @Override
+   public int getExitCode()
+   {
+      return exitCode.get();
+   }
+
    /** {@inheritDoc} */
    @Override
    public int waitFor(long timeout, TimeUnit unit) throws InterruptedException
