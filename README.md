@@ -1,5 +1,10 @@
-NuProcess&nbsp;[![Build Status](https://travis-ci.org/brettwooldridge/NuProcess.svg?branch=master)](https://travis-ci.org/brettwooldridge/NuProcess)
+NuProcess
 =========
+
+[![][Build Status img]][Build Status]
+[![][license img]][license]
+[![][Maven Central img]][Maven Central]
+[![][Javadocs img]][Javadocs]
 
 NuProcess is proud to power Facebook's [Buck](https://buckbuild.com) build. &nbsp; <img  src="https://github.com/facebook/buck/blob/45845c06ad807c4cee245237613e8143be11c11b/docs/presentations/droidcon-nyc-2014/images/logo.png?raw=true" height=40px/>
 
@@ -173,3 +178,15 @@ The following limitations exist in NuProcess:
  * Currently only supports Linux, Windows, and MacOS X.
  * Java 7 and above
  * Linux support requires at least kernel version 2.6.17 or higher (kernels after June 2006)
+
+[Build Status]:https://travis-ci.org/brettwooldridge/NuProcess
+[Build Status img]:https://travis-ci.org/brettwooldridge/NuProcess.svg?branch=master
+
+[license]:LICENSE
+[license img]:https://img.shields.io/badge/license-Apache%202-blue.svg
+   
+[Maven Central]:https://maven-badges.herokuapp.com/maven-central/com.zaxxer/nuprocess
+[Maven Central img]:https://maven-badges.herokuapp.com/maven-central/com.zaxxer/nuprocess/badge.svg
+   
+[Javadocs]:http://javadoc.io/doc/com.zaxxer/nuprocess
+[Javadocs img]:http://javadoc.io/badge/com.zaxxer/nuprocess.svg
