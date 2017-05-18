@@ -29,6 +29,8 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import com.sun.jna.Native;
 import com.sun.jna.Pointer;
@@ -575,6 +577,11 @@ public abstract class BasePosixProcess implements NuProcess
          inBuffer.flip();
          // Recurse
          if (inBuffer.hasRemaining()) {
+            if (availability <= 0) {
+               // We can't write now, so we want to be called back again once there is more availability.
+               return true;
+            }
+
             return writeStdin(availability, fd);
          }
       }
@@ -595,6 +602,8 @@ public abstract class BasePosixProcess implements NuProcess
          }
       }
       catch (Exception e) {
+         Logger.getLogger(getClass().getName()).log(Level.SEVERE, "Exception thrown handling writes to stdin " + processHandler, e);
+
          // Don't let an exception thrown from the user's handler interrupt us
          return false;
       }

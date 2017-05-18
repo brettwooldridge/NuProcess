@@ -299,6 +299,21 @@ public class CatTest
       System.err.println("Completed test softCloseStdinAfterWrite()");
    }
 
+   private static byte[] getLotsOfBytes()
+   {
+      return getLotsOfBytes(6000);
+   }
+
+   static byte[] getLotsOfBytes(int size)
+   {
+      StringBuilder sb = new StringBuilder();
+      for (int i = 0; i < size; i++) {
+         sb.append("1234567890");
+      }
+
+      return sb.toString().getBytes();
+   }
+
    private static class LottaProcessListener extends NuAbstractProcessHandler
    {
       private static final int WRITES = 10;
@@ -319,12 +334,7 @@ public class CatTest
          this.readAdler32 = new Adler32();
          this.writeAdler32 = new Adler32();
 
-         StringBuffer sb = new StringBuffer();
-         for (int i = 0; i < 6000; i++) {
-            sb.append("1234567890");
-         }
-
-         bytes = sb.toString().getBytes();
+         bytes = getLotsOfBytes();
       }
 
       @Override

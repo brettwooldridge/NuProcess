@@ -17,12 +17,16 @@
 package com.zaxxer.nuprocess;
 
 import java.nio.ByteBuffer;
+import java.util.concurrent.Semaphore;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.zip.Adler32;
 
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
+
+import static com.zaxxer.nuprocess.CatTest.getLotsOfBytes;
 
 /**
  * @author Brett Wooldridge
@@ -50,9 +54,7 @@ public class DirectWriteTest
       Assert.assertEquals("Results did not match", "This is a test", processListener.result);
    }
 
-   // TODO: DirectWriteBig will explore a bug when using writeStdin at onStart()
-   //       (has problem on Mac OS X and Linux, but works on Win32)
-   //@Test
+   @Test
    public void testDirectWriteBig() throws InterruptedException
    {
       ProcessHandler2 processListener = new ProcessHandler2();
@@ -99,7 +101,7 @@ public class DirectWriteTest
          @Override
          public void onStdout(ByteBuffer buffer, boolean closed)
          {
-               count.addAndGet(buffer.remaining());
+            count.addAndGet(buffer.remaining());
             buffer.position(buffer.limit());
          }
       };
@@ -121,6 +123,53 @@ public class DirectWriteTest
       nuProcess.closeStdin(true);
       nuProcess.waitFor(20, TimeUnit.SECONDS);
       Assert.assertEquals("Count did not match", 14000, count.get());
+   }
+
+
+   @Test
+   public void lotOfDataSync() throws Exception
+   {
+      System.err.println("Starting test lotOfDataSync()");
+      final byte[] bytes = getLotsOfBytes(34632);
+      Adler32 adler = new Adler32();
+      adler.update(bytes);
+      long expectedHash = adler.getValue();
+
+      for (int i = 0; i < 100; i++) {
+         final Semaphore semaphore = new Semaphore(0);
+
+         final AtomicInteger readLength = new AtomicInteger();
+
+         final Adler32 readAdler = new Adler32();
+         NuAbstractProcessHandler processListener = new NuAbstractProcessHandler() {
+
+            @Override
+            public void onStdout(ByteBuffer buffer, boolean closed) {
+               byte[] buf = new byte[buffer.remaining()];
+               buffer.get(buf);
+               readAdler.update(buf);
+
+               if (readLength.addAndGet(buf.length) >= bytes.length) {
+                  semaphore.release();
+               }
+            }
+         };
+
+         NuProcessBuilder pb = new NuProcessBuilder(processListener, command);
+         NuProcess process = pb.start();
+
+         process.writeStdin(ByteBuffer.wrap(bytes));
+         process.closeStdin(false);
+
+         if (!semaphore.tryAcquire(10, TimeUnit.SECONDS))
+         {
+            Assert.fail("Timed out waiting for process (iteration " + i + "), " + readLength.get() + " bytes read");
+         }
+
+         Assert.assertEquals("Adler32 mismatch between written and read (iteration " + i + ")", expectedHash, readAdler.getValue());
+      }
+
+      System.err.println("Completed test lotOfDataSync()");
    }
 
    private static class ProcessHandler1 extends NuAbstractProcessHandler
