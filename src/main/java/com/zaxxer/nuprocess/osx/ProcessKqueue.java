@@ -175,7 +175,14 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
    @Override
    public void closeStdin(OsxProcess process)
    {
-      closeQueue.add(process);
+      try {
+         closeQueue.put(process);
+      }
+      catch (InterruptedException e) {
+         // ignore
+      }
+
+      LibC.kill(JAVA_PID, LibC.SIGUSR2);
    }
 
    @Override
