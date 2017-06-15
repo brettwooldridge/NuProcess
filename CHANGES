@@ -1,3 +1,11 @@
+Changes in 1.1.2
+
+ * Fix issue on Mac OS X where pipes would leak after many calls to closeStdin
+
+Changes in 1.1.1
+
+ * Fixed issue where calling writeStdin with a buffer larger than 65kb would hang.
+
 Changes in 1.1.0
 
  * Expose new NuProcess.getPID() method on all platforms.
