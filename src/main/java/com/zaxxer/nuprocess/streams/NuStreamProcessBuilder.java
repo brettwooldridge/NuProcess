@@ -16,10 +16,7 @@
 
 package com.zaxxer.nuprocess.streams;
 
-import static com.zaxxer.nuprocess.NuProcess.Stream.STDOUT;
-
 import java.nio.ByteBuffer;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.logging.Logger;
 
@@ -108,6 +105,7 @@ public class NuStreamProcessBuilder
       public void onExit(int statusCode)
       {
          LOGGER.finest(this.getClass().getSimpleName() + ".onExit() was called");
+         // TODO do we ever need to call stdinSubscriber.onError() ?
          if (stdinSubscriber != null) {
             if (!stdinComplete) {
                stdinComplete = true;
@@ -116,25 +114,20 @@ public class NuStreamProcessBuilder
             stdinRequests.set(-1);
          }
 
-         if (!stdoutComplete && stdoutSubscriber != null) {
-            onExit(statusCode, stdoutSubscriber);
-            stdoutComplete = true;
+         if (stdoutSubscriber != null) {
+            if (!stdoutComplete) {
+               stdoutComplete = true;
+               stdoutSubscriber.onComplete();
+            }
             stdoutRequests.set(-1);
          }
 
-         if (!stderrComplete && stderrSubscriber != null) {
-            onExit(statusCode, stdoutSubscriber);
-            stderrComplete = true;
+         if (stderrSubscriber != null) {
+            if (!stdoutComplete) {
+               stdoutComplete = true;
+               stderrSubscriber.onComplete();
+            }
             stderrRequests.set(-1);
-         }
-      }
-
-      private void onExit(final int statusCode, Subscriber<? super ByteBuffer> subscriber) {
-         if (statusCode == 0) {
-            subscriber.onComplete();
-         }
-         else {
-            subscriber.onError(new RuntimeException("Process failure. Exit code: " + statusCode));
          }
       }
 
@@ -156,26 +149,31 @@ public class NuStreamProcessBuilder
       @Override
       public boolean onStdout(final ByteBuffer buffer, final boolean closed)
       {
-         final Subscriber<? super ByteBuffer> subscriber = stdoutSubscriber;
-         if (stdoutRequests.get() > 0 && closed) {
-            close(STDOUT, subscriber);
+         if (stdoutRequests.get() <= 0) {
             return false;
          }
 
-         if (buffer.hasRemaining() && subscriber != null && !closed) {
+         final Subscriber<? super ByteBuffer> subscriber = stdoutSubscriber;
+         if (buffer.hasRemaining() && subscriber != null) {
             LOGGER.finest("calling onNext() on " + subscriber.getClass().getSimpleName());
             subscriber.onNext(buffer);
          }
 
-         if (stdoutRequests.decrementAndGet() == 0) {
-            close(STDOUT, subscriber);
-            return false;            
+         if (closed) {
+            if (subscriber != null) {
+               LOGGER.finest("calling onComplete() on " + subscriber.getClass().getSimpleName());               
+               stdoutSubscriber = null;
+               if (!stdoutComplete) {
+                  stdoutComplete = true;
+                  subscriber.onComplete();
+               }
+            }
+
+            stdoutRequests.set(-1);
          }
 
-         final boolean more = stdoutRequests.get() > 0;
-         if (more) {
-            LOGGER.finest("requesting more data");
-         }
+         boolean more = !closed && stdoutRequests.decrementAndGet() > 0;
+         LOGGER.finest("requesting more data");
          
          return more;
       }
@@ -230,35 +228,7 @@ public class NuStreamProcessBuilder
                break;
          }
       }
-
-      void close(final Stream stream, final Subscriber<? super ByteBuffer> subscriber)
-      {
-         try {
-            switch (stream) {
-            case STDOUT:
-               if (!stdoutComplete) {
-                  stdoutComplete = true;
-                  stdoutRequests.set(-1);
-                  if (subscriber != null) {
-                     LOGGER.finest("calling onComplete() on " + subscriber.getClass().getSimpleName());
-                     subscriber.onComplete();
-                     stdoutSubscriber = null;
-                     nuProcess.destroy(true);
-                     nuProcess.waitFor(1, TimeUnit.MICROSECONDS);
-                  }
-               }
-               break;
-            case STDIN:
-               break;
-            case STDERR:
-               break;
-            }
-         }
-         catch (InterruptedException e) {
-            // ignore
-         }
-      }
-
+      
       void request(Stream stream, long n)
       {
          switch (stream) {
