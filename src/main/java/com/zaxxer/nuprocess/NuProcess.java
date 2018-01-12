@@ -105,6 +105,10 @@ public interface NuProcess
     * <p>
     * Otherwise, STDIN will be closed only after all pending writes
     * have completed.
+    *
+    * @param force if <code>true</code> is passed, STDIN will be immediately closed
+    *              even if there are pending writes; otherwise, it will be closed
+    *              after all pending writes are completed
     */
    void closeStdin(boolean force);
 
