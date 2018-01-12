@@ -1,6 +1,6 @@
 language: java
-sudo: true
-dist: precise
+sudo: required
+dist: trusty
 cache:
   directories:
     - $HOME/.m2/repository
