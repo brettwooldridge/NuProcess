@@ -1,5 +1,6 @@
 language: java
-sudo: false
+sudo: true
+dist: precise
 cache:
   directories:
     - $HOME/.m2/repository
