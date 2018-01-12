@@ -21,7 +21,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.atomic.AtomicInteger;
 
 import com.sun.jna.Native;
 import com.sun.jna.ptr.IntByReference;
@@ -48,9 +47,12 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
 
    static
    {
-      eventPool = new ArrayBlockingQueue<EpollEvent>(EVENT_POOL_SIZE);
+      eventPool = new ArrayBlockingQueue<>(EVENT_POOL_SIZE);
       for (int i = 0; i < EVENT_POOL_SIZE; i++) {
-         eventPool.add(new EpollEvent());
+         EpollEvent event = new EpollEvent();
+         // disable auto-read for these events, because they're only used to call epoll_ctl
+         event.setAutoRead(false);
+         eventPool.add(event);
       }
    }
 
@@ -62,7 +64,11 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
       }
 
       triggeredEvent = new EpollEvent();
-      deadPool = new LinkedList<LinuxProcess>();
+      // disable auto-read and auto-write for triggeredEvent; process() will explicitly call read()
+      // only if epoll_wait returns 1, and only call write() before invoking epoll_ctl
+      triggeredEvent.setAutoSynch(false);
+
+      deadPool = new LinkedList<>();
    }
 
    // ************************************************************************
@@ -76,9 +82,9 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
          return;
       }
 
-      Integer stdinFd = null;
-      Integer stdoutFd = null;
-      Integer stderrFd = null;
+      int stdinFd = Integer.MIN_VALUE;
+      int stdoutFd = Integer.MIN_VALUE;
+      int stderrFd = Integer.MIN_VALUE;
       try {
          stdinFd = process.getStdin().acquire();
          stdoutFd = process.getStdout().acquire();
@@ -115,14 +121,15 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
          catch (InterruptedException ie) {
             throw new RuntimeException(ie);
          }
-      } finally {
-         if (stdinFd != null) {
+      }
+      finally {
+         if (stdinFd != Integer.MIN_VALUE) {
             process.getStdin().release();
          }
-         if (stdoutFd != null) {
+         if (stdoutFd != Integer.MIN_VALUE) {
             process.getStdout().release();
          }
-         if (stderrFd != null) {
+         if (stderrFd != Integer.MIN_VALUE) {
             process.getStderr().release();
          }
       }
@@ -145,7 +152,7 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
          event.data.fd = stdin;
          int rc = LibEpoll.epoll_ctl(epoll, LibEpoll.EPOLL_CTL_MOD, stdin, event);
          if (rc == -1) {
-            rc = LibEpoll.epoll_ctl(epoll, LibEpoll.EPOLL_CTL_DEL, stdin, event);
+            LibEpoll.epoll_ctl(epoll, LibEpoll.EPOLL_CTL_DEL, stdin, event);
             rc = LibEpoll.epoll_ctl(epoll, LibEpoll.EPOLL_CTL_ADD, stdin, event);
          }
 
@@ -156,7 +163,8 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
       }
       catch (InterruptedException ie) {
          throw new RuntimeException(ie);
-      } finally {
+      }
+      finally {
          process.getStdin().release();
       }
    }
@@ -178,9 +186,9 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
    @Override
    public boolean process()
    {
-      Integer stdinFd = null;
-      Integer stdoutFd = null;
-      Integer stderrFd = null;
+      int stdinFd = Integer.MIN_VALUE;
+      int stdoutFd = Integer.MIN_VALUE;
+      int stderrFd = Integer.MIN_VALUE;
       LinuxProcess linuxProcess = null;
       try {
          int nev = LibEpoll.epoll_wait(epoll, triggeredEvent, 1, DEADPOOL_POLL_INTERVAL);
@@ -193,6 +201,7 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
          }
 
          EpollEvent epEvent = triggeredEvent;
+         epEvent.read(); // read the data from native memory to populate the struct
          int ident = epEvent.data.fd;
          int events = epEvent.events;
 
@@ -205,8 +214,7 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
          stdoutFd = linuxProcess.getStdout().acquire();
          stderrFd = linuxProcess.getStderr().acquire();
 
-         if ((events & LibEpoll.EPOLLIN) != 0) // stdout/stderr data available to read
-         {
+         if ((events & LibEpoll.EPOLLIN) != 0) { // stdout/stderr data available to read
             if (ident == stdoutFd) {
                linuxProcess.readStdout(NuProcess.BUFFER_CAPACITY, stdoutFd);
             }
@@ -214,11 +222,11 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
                linuxProcess.readStderr(NuProcess.BUFFER_CAPACITY, stderrFd);
             }
          }
-         else if ((events & LibEpoll.EPOLLOUT) != 0) // Room in stdin pipe available to write
-         {
+         else if ((events & LibEpoll.EPOLLOUT) != 0) { // Room in stdin pipe available to write
             if (stdinFd != -1) {
                if (linuxProcess.writeStdin(NuProcess.BUFFER_CAPACITY, stdinFd)) {
                   epEvent.events = LibEpoll.EPOLLOUT | LibEpoll.EPOLLONESHOT | LibEpoll.EPOLLRDHUP | LibEpoll.EPOLLHUP;
+                  epEvent.write(); // write the data to native memory prior to the call
                   LibEpoll.epoll_ctl(epoll, LibEpoll.EPOLL_CTL_MOD, ident, epEvent);
                }
             }
@@ -245,17 +253,16 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
       }
       finally {
          if (linuxProcess != null) {
-            if (stdinFd != null) {
+            if (stdinFd != Integer.MIN_VALUE) {
                linuxProcess.getStdin().release();
             }
-            if (stdoutFd != null) {
+            if (stdoutFd != Integer.MIN_VALUE) {
                linuxProcess.getStdout().release();
             }
-            if (stderrFd != null) {
+            if (stderrFd != Integer.MIN_VALUE) {
                linuxProcess.getStderr().release();
             }
          }
-         triggeredEvent.clear();
          checkDeadPool();
       }
    }
@@ -263,10 +270,8 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
    // ************************************************************************
    //                             Private methods
    // ************************************************************************
-   AtomicInteger count = new AtomicInteger();
 
-   private void cleanupProcess(
-         LinuxProcess linuxProcess, Integer stdinFd, Integer stdoutFd, Integer stderrFd)
+   private void cleanupProcess(LinuxProcess linuxProcess, int stdinFd, int stdoutFd, int stderrFd)
    {
       pidToProcessMap.remove(linuxProcess.getPid());
       fildesToProcessMap.remove(stdinFd);
