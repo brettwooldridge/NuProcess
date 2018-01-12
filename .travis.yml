@@ -4,4 +4,4 @@ cache:
   directories:
     - $HOME/.m2/repository
 jdk:
-  - oraclejdk7
+  - openjdk7
