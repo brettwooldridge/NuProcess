@@ -19,12 +19,45 @@ package com.zaxxer.nuprocess.linux;
 import java.util.Arrays;
 import java.util.List;
 
-import com.sun.jna.Pointer;
 import com.sun.jna.Structure;
 import com.sun.jna.Union;
 
 public class EpollEvent extends Structure
 {
+
+   /*
+       struct epoll_event
+       {
+         uint32_t events;   // Epoll events
+         epoll_data_t data; // User data variable
+       } __EPOLL_PACKED;
+
+       On x86, __EPOLL_PACKED is:    #define __EPOLL_PACKED
+       On x86_64, __EPOLL_PACKED is: #define __EPOLL_PACKED __attribute__ ((__packed__))
+
+       sizeof(struct epoll_event) is 12 on x86 and x86_64
+   */
+
+   public int events;
+   public EpollData data;
+
+   EpollEvent()
+   {
+      // per bits/epoll.h, epoll_event is created with __attribute__ ((__packed__)), which disables
+      // applying padding to optimize alignment. epoll_event is memory-aligned on 32-bit platforms,
+      // but not on 64-bit platforms (i.e. it uses 32-bit alignment on 64-bit platforms)
+      super(ALIGN_NONE);
+
+      data = new EpollData();
+      data.setType("fd");
+   }
+
+   @SuppressWarnings("rawtypes")
+   @Override
+   protected List<String> getFieldOrder()
+   {
+      return Arrays.asList("events", "data");
+   }
 
    /*
        typedef union epoll_data
@@ -34,39 +67,18 @@ public class EpollEvent extends Structure
          uint32_t u32;
          uint64_t u64;
        } epoll_data_t;
-    
-       struct epoll_event
-       {
-         uint32_t events;   // Epoll events
-         epoll_data_t data; // User data variable
-       };
    */
 
-   public int events;
-   public EpollData data;
-
-   EpollEvent()
-   {
-      // per eventpoll.h, x86_64 has the same alignment as 32-bit
-      super(ALIGN_GNUC);
-
-      data = new EpollData();
-      data.setType("fd");
-   }
-
-   @SuppressWarnings("rawtypes")
-   @Override
-   protected List getFieldOrder()
-   {
-      return Arrays.asList("events", "data");
-   }
-
+   @SuppressWarnings("unused") // unused fields are part of the union's C definition
    public static class EpollData extends Union
    {
-      public Pointer ptr;
+      // technically this union should have a "Pointer ptr" field, but, for how EpollData is actually
+      // used, only referencing the "fd" field, it's nothing but overhead. JNA will end up constructing
+      // them as part of ProcessEpoll's execution, but they never get used
+      //public Pointer ptr;
       public int fd;
       public int u32;
-      public long u64;
+      public long u64; // must be included to make this union's size 8 bytes
    }
 
 }
