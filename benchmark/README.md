@@ -7,7 +7,7 @@ mvn clean install
 
 Simple execution of the benchmark is as follows:
 ```cli
-cd ./benchmark.sh
+cd ./benchmark
 ./benchmark.sh quick
 ```
 
