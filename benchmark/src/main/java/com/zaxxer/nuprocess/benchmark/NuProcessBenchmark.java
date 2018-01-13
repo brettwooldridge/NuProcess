@@ -10,7 +10,11 @@ import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.concurrent.TimeUnit;
 import java.util.zip.CRC32;
 
@@ -37,8 +41,27 @@ import java.util.zip.CRC32;
  */
 public class NuProcessBenchmark {
 
-    private static final long TEST_CRC32 = 3407529827L;
+    private static final long TEST_CRC32;
     private static final String TEST_FILE = "/tmp/random.dat";
+    private static final String CRC_FILE = "/tmp/random.crc";
+
+    static {
+        Path path = Paths.get(TEST_FILE);
+        if (!Files.exists(path)) {
+            throw new IllegalStateException(TEST_FILE + " does not exist.");
+        }
+
+        path = Paths.get(CRC_FILE);
+        if (!Files.exists(path)) {
+            throw new IllegalStateException(CRC_FILE + " does not exist.");
+        }
+
+        try {
+            TEST_CRC32 = Long.parseLong(Files.readAllLines(path).get(0));
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
 
     public static void main(String[] args) throws Exception {
         //System.setProperty("com.zaxxer.nuprocess.threads", "cores"); // set when running with forks(0) below
