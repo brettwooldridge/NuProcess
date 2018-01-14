@@ -18,6 +18,7 @@ package com.zaxxer.nuprocess.linux;
 
 import com.sun.jna.Native;
 import com.sun.jna.Platform;
+import com.sun.jna.Pointer;
 
 /**
  * @author Brett Wooldridge
@@ -32,11 +33,11 @@ public class LibEpoll
 
    public static native int epoll_create(int size);
 
-   public static native int epoll_ctl(int epfd, int op, int fd, EpollEvent event);
+   public static native int epoll_ctl(int epfd, int op, int fd, Pointer event);
 
    // when passing "maxevents" >1, the first element in an EpollEvent[] of matching length should be
    // passed as "events". create the array with new EpollEvent().toArray (and cast the result)
-   public static native int epoll_wait(int epfd, EpollEvent events, int maxevents, int timeout);
+   public static native int epoll_wait(int epfd, Pointer events, int maxevents, int timeout);
 
    public static final int SIGPIPE = 13;
 

@@ -11,6 +11,7 @@ import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -43,22 +44,26 @@ public class NuProcessBenchmark {
 
     private static final long TEST_CRC32;
     private static final String TEST_FILE = "/tmp/random.dat";
-    private static final String CRC_FILE = "/tmp/random.crc";
 
     static {
-        Path path = Paths.get(TEST_FILE);
+        final Path path = Paths.get(TEST_FILE);
         if (!Files.exists(path)) {
             throw new IllegalStateException(TEST_FILE + " does not exist.");
         }
 
-        path = Paths.get(CRC_FILE);
-        if (!Files.exists(path)) {
-            throw new IllegalStateException(CRC_FILE + " does not exist.");
+        final CRC32 crc32 = new CRC32();
+        final byte[] buf = new byte[8192];
+        try (InputStream is = Files.newInputStream(path)) {
+            do {
+                int rc = is.read(buf);
+                if (rc < 0) {
+                    break;
+                }
+                crc32.update(buf, 0, rc);
+            } while (true);
+            TEST_CRC32 = crc32.getValue();
         }
-
-        try {
-            TEST_CRC32 = Long.parseLong(Files.readAllLines(path).get(0));
-        } catch (IOException e) {
+        catch (IOException e) {
             throw new RuntimeException(e);
         }
     }

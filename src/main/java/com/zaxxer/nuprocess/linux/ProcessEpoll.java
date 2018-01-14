@@ -50,8 +50,6 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
       eventPool = new ArrayBlockingQueue<>(EVENT_POOL_SIZE);
       for (int i = 0; i < EVENT_POOL_SIZE; i++) {
          EpollEvent event = new EpollEvent();
-         // disable auto-read for these events, because they're only used to call epoll_ctl
-         event.setAutoRead(false);
          eventPool.add(event);
       }
    }
@@ -64,9 +62,6 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
       }
 
       triggeredEvent = new EpollEvent();
-      // disable auto-read and auto-write for triggeredEvent; process() will explicitly call read()
-      // only if epoll_wait returns 1, and only call write() before invoking epoll_ctl
-      triggeredEvent.setAutoSynch(false);
 
       deadPool = new LinkedList<>();
    }
@@ -97,9 +92,9 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
 
          try {
             EpollEvent event = eventPool.take();
-            event.events = LibEpoll.EPOLLIN;
-            event.data.fd = stdoutFd;
-            int rc = LibEpoll.epoll_ctl(epoll, LibEpoll.EPOLL_CTL_ADD, stdoutFd, event);
+            event.setEvents(LibEpoll.EPOLLIN);
+            event.setFileDescriptor(stdoutFd);
+            int rc = LibEpoll.epoll_ctl(epoll, LibEpoll.EPOLL_CTL_ADD, stdoutFd, event.getPointer());
             if (rc == -1) {
                rc = Native.getLastError();
                eventPool.put(event);
@@ -108,9 +103,9 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
             eventPool.put(event);
 
             event = eventPool.take();
-            event.events = LibEpoll.EPOLLIN;
-            event.data.fd = stderrFd;
-            rc = LibEpoll.epoll_ctl(epoll, LibEpoll.EPOLL_CTL_ADD, stderrFd, event);
+            event.setEvents(LibEpoll.EPOLLIN);
+            event.setFileDescriptor(stderrFd);
+            rc = LibEpoll.epoll_ctl(epoll, LibEpoll.EPOLL_CTL_ADD, stderrFd, event.getPointer());
             if (rc == -1) {
                rc = Native.getLastError();
                eventPool.put(event);
@@ -148,12 +143,12 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
            return;
          }
          EpollEvent event = eventPool.take();
-         event.events = LibEpoll.EPOLLOUT | LibEpoll.EPOLLONESHOT | LibEpoll.EPOLLRDHUP | LibEpoll.EPOLLHUP;
-         event.data.fd = stdin;
-         int rc = LibEpoll.epoll_ctl(epoll, LibEpoll.EPOLL_CTL_MOD, stdin, event);
+         event.setEvents(LibEpoll.EPOLLOUT | LibEpoll.EPOLLONESHOT | LibEpoll.EPOLLRDHUP | LibEpoll.EPOLLHUP);
+         event.setFileDescriptor(stdin);
+         int rc = LibEpoll.epoll_ctl(epoll, LibEpoll.EPOLL_CTL_MOD, stdin, event.getPointer());
          if (rc == -1) {
-            LibEpoll.epoll_ctl(epoll, LibEpoll.EPOLL_CTL_DEL, stdin, event);
-            rc = LibEpoll.epoll_ctl(epoll, LibEpoll.EPOLL_CTL_ADD, stdin, event);
+            LibEpoll.epoll_ctl(epoll, LibEpoll.EPOLL_CTL_DEL, stdin, event.getPointer());
+            rc = LibEpoll.epoll_ctl(epoll, LibEpoll.EPOLL_CTL_ADD, stdin, event.getPointer());
          }
 
          eventPool.put(event);
@@ -191,7 +186,7 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
       int stderrFd = Integer.MIN_VALUE;
       LinuxProcess linuxProcess = null;
       try {
-         int nev = LibEpoll.epoll_wait(epoll, triggeredEvent, 1, DEADPOOL_POLL_INTERVAL);
+         int nev = LibEpoll.epoll_wait(epoll, triggeredEvent.getPointer(), 1, DEADPOOL_POLL_INTERVAL);
          if (nev == -1) {
             throw new RuntimeException("Error waiting for epoll");
          }
@@ -201,9 +196,8 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
          }
 
          EpollEvent epEvent = triggeredEvent;
-         epEvent.read(); // read the data from native memory to populate the struct
-         int ident = epEvent.data.fd;
-         int events = epEvent.events;
+         int ident = epEvent.getFileDescriptor();
+         int events = epEvent.getEvents();
 
          linuxProcess = fildesToProcessMap.get(ident);
          if (linuxProcess == null) {
@@ -225,9 +219,8 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
          else if ((events & LibEpoll.EPOLLOUT) != 0) { // Room in stdin pipe available to write
             if (stdinFd != -1) {
                if (linuxProcess.writeStdin(NuProcess.BUFFER_CAPACITY, stdinFd)) {
-                  epEvent.events = LibEpoll.EPOLLOUT | LibEpoll.EPOLLONESHOT | LibEpoll.EPOLLRDHUP | LibEpoll.EPOLLHUP;
-                  epEvent.write(); // write the data to native memory prior to the call
-                  LibEpoll.epoll_ctl(epoll, LibEpoll.EPOLL_CTL_MOD, ident, epEvent);
+                  epEvent.setEvents(LibEpoll.EPOLLOUT | LibEpoll.EPOLLONESHOT | LibEpoll.EPOLLRDHUP | LibEpoll.EPOLLHUP);
+                  LibEpoll.epoll_ctl(epoll, LibEpoll.EPOLL_CTL_MOD, ident, epEvent.getPointer());
                }
             }
          }
@@ -297,22 +290,7 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
          linuxProcess.onExit((Native.getLastError() == LibC.ECHILD) ? Integer.MAX_VALUE : Integer.MIN_VALUE);
       }
       else {
-         int status = ret.getValue();
-         if (WIFEXITED(status)) {
-            status = WEXITSTATUS(status);
-            if (status == 127) {
-               linuxProcess.onExit(Integer.MIN_VALUE);
-            }
-            else {
-               linuxProcess.onExit(status);
-            }
-         }
-         else if (WIFSIGNALED(status)) {
-            linuxProcess.onExit(WTERMSIG(status));
-         }
-         else {
-            linuxProcess.onExit(Integer.MIN_VALUE);
-         }
+         handleExit(linuxProcess, ret.getValue());
       }
    }
 
@@ -337,22 +315,26 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
             continue;
          }
 
-         int status = ret.getValue();
-         if (WIFEXITED(status)) {
-            status = WEXITSTATUS(status);
-            if (status == 127) {
-               process.onExit(Integer.MIN_VALUE);
-            }
-            else {
-               process.onExit(status);
-            }
-         }
-         else if (WIFSIGNALED(status)) {
-            process.onExit(WTERMSIG(status));
-         }
-         else {
+         handleExit(process, ret.getValue());
+      }
+   }
+
+   private void handleExit(final LinuxProcess process, int status)
+   {
+      if (WIFEXITED(status)) {
+         status = WEXITSTATUS(status);
+         if (status == 127) {
             process.onExit(Integer.MIN_VALUE);
          }
+         else {
+            process.onExit(status);
+         }
+      }
+      else if (WIFSIGNALED(status)) {
+         process.onExit(WTERMSIG(status));
+      }
+      else {
+         process.onExit(Integer.MIN_VALUE);
       }
    }
 }

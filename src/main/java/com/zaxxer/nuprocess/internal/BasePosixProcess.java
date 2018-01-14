@@ -17,6 +17,7 @@
 package com.zaxxer.nuprocess.internal;
 
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.file.Path;
 import java.util.HashSet;
 import java.util.List;
@@ -32,6 +33,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import com.sun.jna.Memory;
 import com.sun.jna.Native;
 import com.sun.jna.Pointer;
 import com.sun.jna.StringArray;
@@ -59,6 +61,10 @@ public abstract class BasePosixProcess implements NuProcess
    protected AtomicBoolean userWantsWrite;
 
    // ******* Input/Output Buffers
+   private Memory outBufferMemory;
+   private Memory errBufferMemory;
+   private Memory inBufferMemory;
+
    protected ByteBuffer outBuffer;
    protected ByteBuffer errBuffer;
    protected ByteBuffer inBuffer;
@@ -439,10 +445,14 @@ public abstract class BasePosixProcess implements NuProcess
          exitPending.countDown();
          // Once the last reference to the buffer is gone, Java will finalize the buffer
          // and release the native memory we allocated in initializeBuffers().
+         outBufferMemory = null;
+         errBufferMemory = null;
+         inBufferMemory = null;
          outBuffer = null;
          errBuffer = null;
          inBuffer = null;
          processHandler = null;
+         Memory.purge();
       }
    }
 
@@ -625,8 +635,13 @@ public abstract class BasePosixProcess implements NuProcess
 
       pendingWrites = new ConcurrentLinkedQueue<ByteBuffer>();
 
-      outBuffer = ByteBuffer.allocateDirect(BUFFER_CAPACITY);
+      outBufferMemory = new Memory(BUFFER_CAPACITY);
+      outBuffer = outBufferMemory.getByteBuffer(0, outBufferMemory.size()).order(ByteOrder.nativeOrder());
+
+      errBufferMemory = new Memory(BUFFER_CAPACITY);
       errBuffer = ByteBuffer.allocateDirect(BUFFER_CAPACITY);
+
+      inBufferMemory = new Memory(BUFFER_CAPACITY);
       inBuffer = ByteBuffer.allocateDirect(BUFFER_CAPACITY);
 
       // Ensure stdin initially has 0 bytes pending write. We'll

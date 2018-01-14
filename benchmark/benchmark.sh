@@ -17,8 +17,6 @@ fi
 if [[ ! -f "/tmp/random.dat" ]]; then
    echo "" ; echo "Generating 250MB random data file into /tmp/random.dat ... this might take 15-30s."
    dd bs=1048576 count=250 </dev/urandom >/tmp/random.dat
-   echo "Calculating crc32 ... just a sec."
-   cksum -o 3 /tmp/random.dat | cut -d ' ' -f 1 >/tmp/random.crc
 fi
 
 if [[ "quick" == "$1" ]]; then
