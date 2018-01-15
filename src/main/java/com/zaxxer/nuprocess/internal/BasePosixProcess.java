@@ -633,16 +633,16 @@ public abstract class BasePosixProcess implements NuProcess
       outClosed = false;
       errClosed = false;
 
-      pendingWrites = new ConcurrentLinkedQueue<ByteBuffer>();
+      pendingWrites = new ConcurrentLinkedQueue<>();
 
       outBufferMemory = new Memory(BUFFER_CAPACITY);
       outBuffer = outBufferMemory.getByteBuffer(0, outBufferMemory.size()).order(ByteOrder.nativeOrder());
 
       errBufferMemory = new Memory(BUFFER_CAPACITY);
-      errBuffer = ByteBuffer.allocateDirect(BUFFER_CAPACITY);
+      errBuffer = errBufferMemory.getByteBuffer(0, outBufferMemory.size()).order(ByteOrder.nativeOrder());
 
       inBufferMemory = new Memory(BUFFER_CAPACITY);
-      inBuffer = ByteBuffer.allocateDirect(BUFFER_CAPACITY);
+      inBuffer = inBufferMemory.getByteBuffer(0, outBufferMemory.size()).order(ByteOrder.nativeOrder());
 
       // Ensure stdin initially has 0 bytes pending write. We'll
       // update this before invoking onStdinReady.

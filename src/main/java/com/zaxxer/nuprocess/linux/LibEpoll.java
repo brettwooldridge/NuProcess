@@ -35,8 +35,14 @@ public class LibEpoll
 
    public static native int epoll_ctl(int epfd, int op, int fd, Pointer event);
 
-   // when passing "maxevents" >1, the first element in an EpollEvent[] of matching length should be
-   // passed as "events". create the array with new EpollEvent().toArray (and cast the result)
+   // We only ever call this API with maxevents=1.  However, if calling with maxevents > 1,
+   // care must be taken to ensure that the "events" Pointer actually points to a
+   // contiguous block of memory large enough to handle maxevents number of EpollEvent
+   // mappings.
+   //
+   // EpollEvent would likely need to be updated to add a convenience method that
+   // allocates a block of memory and returns an array of EpollEvents mapped into it.  The
+   // EpollEvent.getPointer() of the first array element could then be passed to this API.
    public static native int epoll_wait(int epfd, Pointer events, int maxevents, int timeout);
 
    public static final int SIGPIPE = 13;
