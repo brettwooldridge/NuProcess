@@ -60,6 +60,14 @@ public class LibKevent
       public NativeLong data;
       public Pointer udata;
 
+      public Kevent() {
+          super();
+      }
+
+      public Kevent(Pointer p) {
+          super(p);
+      }
+
       @SuppressWarnings("rawtypes")
       @Override
       protected List getFieldOrder()
