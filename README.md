@@ -26,7 +26,7 @@ Java process and the spawned processes:
     <dependency>
         <groupId>com.zaxxer</groupId>
         <artifactId>nuprocess</artifactId>
-        <version>1.1.2</version>
+        <version>1.1.3</version>
         <scope>compile</scope>
     </dependency>
 
