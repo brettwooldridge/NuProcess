@@ -22,26 +22,40 @@ import com.sun.jna.StringArray;
 import com.sun.jna.ptr.IntByReference;
 import com.zaxxer.nuprocess.NuProcess;
 import com.zaxxer.nuprocess.NuProcessHandler;
-import com.zaxxer.nuprocess.internal.BasePosixProcess;
-import com.zaxxer.nuprocess.internal.LibC;
-import com.zaxxer.nuprocess.internal.ReferenceCountedFileDescriptor;
+import com.zaxxer.nuprocess.internal.*;
 
 import java.nio.file.Path;
 import java.util.List;
 
 import static com.zaxxer.nuprocess.internal.LibC.*;
-import static com.zaxxer.nuprocess.internal.LinuxLibC.Java_java_lang_UNIXProcess_forkAndExec;
-import static com.zaxxer.nuprocess.internal.LinuxLibC.Java_java_lang_UNIXProcess_init;
 
 /**
  * @author Brett Wooldridge
  */
 public class LinuxProcess extends BasePosixProcess
 {
+   private static final int JVM_MAJOR_VERSION;
+
+   @SuppressWarnings("unused")
+   private int exitcode;  // set from native code in JDK 7
+
    static {
+      String version = System.getProperty("java.vm.specification.version");
+      if (version.equals("1.7")) {
+         JVM_MAJOR_VERSION = 7;
+      }
+      else {
+         JVM_MAJOR_VERSION = 8;
+      }
+
       LibEpoll.sigignore(LibEpoll.SIGPIPE);
 
-      Java_java_lang_UNIXProcess_init(JNIEnv.CURRENT, LinuxProcess.class);
+      if (JVM_MAJOR_VERSION == 8) {
+         LinuxLibC8.Java_java_lang_UNIXProcess_init(JNIEnv.CURRENT, LinuxProcess.class);
+      }
+      else {
+         LinuxLibC7.Java_java_lang_UNIXProcess_initIDs(JNIEnv.CURRENT, LinuxProcess.class);
+      }
 
       // TODO: install signal handler for SIGCHLD, and call onExit() when received, call the default (JVM) hook if the PID is not ours
 
@@ -92,17 +106,30 @@ public class LinuxProcess extends BasePosixProcess
       try {
          // See https://github.com/JetBrains/jdk8u_jdk/blob/master/src/solaris/classes/java/lang/UNIXProcess.java#L247
          // Native source code: https://github.com/JetBrains/jdk8u_jdk/blob/master/src/solaris/native/java/lang/UNIXProcess_md.c#L566
-         pid = Java_java_lang_UNIXProcess_forkAndExec(
-                 JNIEnv.CURRENT,
-                 null,
-                 LaunchMechanism.VFORK.ordinal() + 1,
-                 toCString(System.getProperty("java.home") + "/lib/jspawnhelper"), // used on Linux
-                 toCString(cmdarray[0]),
-                 argBlock, args.length,
-                 envBlock, environment.length,
-                 (cwd != null ? toCString(cwd.toString()) : null),
-                 std_fds,
-                 (byte) 0 /*redirectErrorStream*/);
+         if (JVM_MAJOR_VERSION == 8) {
+            pid = LinuxLibC8.Java_java_lang_UNIXProcess_forkAndExec(
+                    JNIEnv.CURRENT,
+                    null,
+                    LaunchMechanism.VFORK.ordinal() + 1,
+                    toCString(System.getProperty("java.home") + "/lib/jspawnhelper"), // used on Linux
+                    toCString(cmdarray[0]),
+                    argBlock, args.length,
+                    envBlock, environment.length,
+                    (cwd != null ? toCString(cwd.toString()) : null),
+                    std_fds,
+                    (byte) 0 /*redirectErrorStream*/);
+         }
+         else {
+            pid = LinuxLibC7.Java_java_lang_UNIXProcess_forkAndExec(
+                    JNIEnv.CURRENT,
+                    this,
+                    toCString(cmdarray[0]),
+                    argBlock, args.length,
+                    envBlock, environment.length,
+                    (cwd != null ? toCString(cwd.toString()) : null),
+                    std_fds,
+                    (byte) 0 /*redirectErrorStream*/);
+         }
 
          initializeBuffers();
 

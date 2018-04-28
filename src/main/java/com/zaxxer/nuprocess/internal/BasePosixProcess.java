@@ -16,6 +16,14 @@
 
 package com.zaxxer.nuprocess.internal;
 
+import com.sun.jna.Memory;
+import com.sun.jna.Native;
+import com.sun.jna.Pointer;
+import com.sun.jna.StringArray;
+import com.sun.jna.ptr.IntByReference;
+import com.zaxxer.nuprocess.NuProcess;
+import com.zaxxer.nuprocess.NuProcessHandler;
+
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.file.Path;
@@ -25,21 +33,11 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-
-import com.sun.jna.Memory;
-import com.sun.jna.Native;
-import com.sun.jna.Pointer;
-import com.sun.jna.StringArray;
-import com.sun.jna.ptr.IntByReference;
-import com.zaxxer.nuprocess.NuProcess;
-import com.zaxxer.nuprocess.NuProcessHandler;
 
 @SuppressWarnings("WeakerAccess")
 public abstract class BasePosixProcess implements NuProcess
@@ -83,33 +81,6 @@ public abstract class BasePosixProcess implements NuProcess
    protected boolean errClosed;
 
    private ConcurrentLinkedQueue<ByteBuffer> pendingWrites;
-
-   // Launches threads under which changes to cwd do not affect the cwd of the process.
-   public static class LinuxCwdThreadFactory implements ThreadFactory
-   {
-      private final AtomicInteger threadCount = new AtomicInteger(0);
-
-      @Override
-      public Thread newThread(final Runnable r)
-      {
-         Runnable unshareCwdThenSpawn = new Runnable() {
-            @Override
-            public void run()
-            {
-               // This makes a copy of the process's chroot, cwd, and umask and
-               // allows the thread to change any of those in a way that doesn't
-               // affect the rest of the process.
-               int rc = LinuxLibC.unshare(LinuxLibC.CLONE_FS);
-               // If this throws, then it bubbles up to whomever called ExecutorService.submit().
-               checkReturnCode(rc, "unshare(CLONE_FS) failed");
-               r.run();
-            }
-         };
-         Thread newThread = Executors.defaultThreadFactory().newThread(unshareCwdThenSpawn);
-         newThread.setName(String.format("NuProcessLinuxCwdChangeable-%d", threadCount.incrementAndGet()));
-         return newThread;
-      }
-   }
 
    static {
       IS_SOFTEXIT_DETECTION = Boolean.valueOf(System.getProperty("com.zaxxer.nuprocess.softExitDetection", "true"));

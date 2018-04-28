@@ -20,20 +20,18 @@ import com.sun.jna.JNIEnv;
 import com.sun.jna.Native;
 import com.sun.jna.Platform;
 
-public class LinuxLibC
+public class LinuxLibC7
 {
    static {
       Native.register(Platform.C_LIBRARY_NAME);
    }
 
-   public static native void Java_java_lang_UNIXProcess_init(JNIEnv jniEnv, Object clazz);
+   public static native void Java_java_lang_UNIXProcess_initIDs(JNIEnv jniEnv, Object clazz);
 
    /**
     * JNIEXPORT jint JNICALL
     * Java_java_lang_UNIXProcess_forkAndExec(JNIEnv *env,
     *                                        jobject process,
-    *                                        jint mode,
-    *                                        jbyteArray helperpath,
     *                                        jbyteArray prog,
     *                                        jbyteArray argBlock, jint argc,
     *                                        jbyteArray envBlock, jint envc,
@@ -46,8 +44,6 @@ public class LinuxLibC
    public static native int Java_java_lang_UNIXProcess_forkAndExec(
            JNIEnv jniEnv,
            Object process,
-           int mode,
-           Object helperpath,
            Object prog,
            Object argBlock, int argc,
            Object envBlock, int envc,
@@ -55,10 +51,4 @@ public class LinuxLibC
            Object fds,
            byte redirectErrorStream
    );
-
-   // from /usr/include/sched.h
-   public static native int unshare(int flags);
-
-   // from /usr/include/bits/sched.h
-   public static final int CLONE_FS = 0x00000200; /* Share or unshare cwd between threads / processes */
 }
