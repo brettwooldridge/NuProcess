@@ -24,6 +24,7 @@ import com.zaxxer.nuprocess.NuProcess;
 import com.zaxxer.nuprocess.NuProcessHandler;
 import com.zaxxer.nuprocess.internal.*;
 
+import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
 
@@ -109,7 +110,7 @@ public class LinuxProcess extends BasePosixProcess
          if (JVM_MAJOR_VERSION == 8) {
             pid = LinuxLibC8.Java_java_lang_UNIXProcess_forkAndExec(
                     JNIEnv.CURRENT,
-                    null,
+                    this,
                     LaunchMechanism.VFORK.ordinal() + 1,
                     toCString(System.getProperty("java.home") + "/lib/jspawnhelper"), // used on Linux
                     toCString(cmdarray[0]),
@@ -155,7 +156,7 @@ public class LinuxProcess extends BasePosixProcess
 
          signalProcessContinue();
       }
-      catch (RuntimeException re) {
+      catch (Exception re) {
          // TODO remove from event processor pid map?
          re.printStackTrace(System.err);
          onExit(Integer.MIN_VALUE);
