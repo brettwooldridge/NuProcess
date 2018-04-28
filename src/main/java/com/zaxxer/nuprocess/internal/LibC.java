@@ -20,8 +20,6 @@ import com.sun.jna.*;
 import com.sun.jna.ptr.IntByReference;
 
 import java.nio.ByteBuffer;
-import java.util.HashMap;
-import java.util.Map;
 
 public class LibC
 {
@@ -34,10 +32,7 @@ public class LibC
       else {
          O_NONBLOCK = 2048; // Linux
 
-         Map<String, Object> options = new HashMap<>();
-         options.put(Library.OPTION_ALLOW_OBJECTS, Boolean.TRUE);
-         Native.register(NativeLibrary.getInstance("java", options));
-         Native.register(NativeLibrary.getProcess(options));
+         Native.register(NativeLibrary.getProcess());
       }
    }
 

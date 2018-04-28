@@ -16,14 +16,17 @@
 
 package com.zaxxer.nuprocess.internal;
 
-import com.sun.jna.JNIEnv;
-import com.sun.jna.Native;
-import com.sun.jna.Platform;
+import com.sun.jna.*;
+
+import java.util.HashMap;
+import java.util.Map;
 
 public class LinuxLibC8
 {
    static {
-      Native.register(Platform.C_LIBRARY_NAME);
+      Map<String, Object> options = new HashMap<>();
+      options.put(Library.OPTION_ALLOW_OBJECTS, Boolean.TRUE);
+      Native.register(NativeLibrary.getInstance("java", options));
    }
 
    public static native void Java_java_lang_UNIXProcess_init(JNIEnv jniEnv, Object clazz);
