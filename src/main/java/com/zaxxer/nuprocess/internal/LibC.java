@@ -37,7 +37,7 @@ public class LibC
          Map<String, Object> options = new HashMap<>();
          options.put(Library.OPTION_ALLOW_OBJECTS, Boolean.TRUE);
          Native.register(NativeLibrary.getInstance("java", options));
-         Native.register(NativeLibrary.getProcess());
+         Native.register(NativeLibrary.getProcess(options));
       }
    }
 
