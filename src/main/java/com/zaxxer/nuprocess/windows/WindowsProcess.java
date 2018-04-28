@@ -16,15 +16,17 @@
 
 package com.zaxxer.nuprocess.windows;
 
+import com.sun.jna.Memory;
+import com.sun.jna.Native;
+import com.sun.jna.WString;
+import com.zaxxer.nuprocess.NuProcess;
+import com.zaxxer.nuprocess.NuProcessHandler;
+import com.zaxxer.nuprocess.windows.NuKernel32.OVERLAPPED;
+import com.zaxxer.nuprocess.windows.NuWinNT.*;
+
 import java.nio.ByteBuffer;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
@@ -32,25 +34,13 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
-import com.sun.jna.Memory;
-import com.sun.jna.Native;
-import com.sun.jna.WString;
-import com.zaxxer.nuprocess.NuProcess;
-import com.zaxxer.nuprocess.NuProcessHandler;
-import com.zaxxer.nuprocess.windows.NuKernel32.OVERLAPPED;
-import com.zaxxer.nuprocess.windows.NuWinNT.DWORD;
-import com.zaxxer.nuprocess.windows.NuWinNT.HANDLE;
-import com.zaxxer.nuprocess.windows.NuWinNT.PROCESS_INFORMATION;
-import com.zaxxer.nuprocess.windows.NuWinNT.SECURITY_ATTRIBUTES;
-import com.zaxxer.nuprocess.windows.NuWinNT.STARTUPINFO;
+import static com.zaxxer.nuprocess.internal.Constants.NUMBER_OF_THREADS;
 
 /**
  * @author Brett Wooldridge
  */
 public final class WindowsProcess implements NuProcess
 {
-   public static final int PROCESSOR_THREADS;
-
    private static final boolean IS_SOFTEXIT_DETECTION;
 
    private static final int BUFFER_SIZE = 65536;
@@ -95,19 +85,8 @@ public final class WindowsProcess implements NuProcess
 
       IS_SOFTEXIT_DETECTION = Boolean.valueOf(System.getProperty("com.zaxxer.nuprocess.softExitDetection", "true"));
 
-      String threads = System.getProperty("com.zaxxer.nuprocess.threads", "auto");
-      if ("auto".equals(threads)) {
-         PROCESSOR_THREADS = Math.max(1, Runtime.getRuntime().availableProcessors() / 2);
-      }
-      else if ("cores".equals(threads)) {
-         PROCESSOR_THREADS = Runtime.getRuntime().availableProcessors();
-      }
-      else {
-         PROCESSOR_THREADS = Math.max(1, Integer.parseInt(threads));
-      }
-
-      processors = new ProcessCompletions[PROCESSOR_THREADS];
-      for (int i = 0; i < PROCESSOR_THREADS; i++) {
+      processors = new ProcessCompletions[NUMBER_OF_THREADS];
+      for (int i = 0; i < NUMBER_OF_THREADS; i++) {
          processors[i] = new ProcessCompletions();
       }
 
@@ -126,7 +105,7 @@ public final class WindowsProcess implements NuProcess
       }
    }
 
-   public WindowsProcess(NuProcessHandler processListener)
+   WindowsProcess(NuProcessHandler processListener)
    {
       this.processHandler = processListener;
 

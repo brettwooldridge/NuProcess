@@ -31,6 +31,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import com.sun.jna.Native;
 import com.sun.jna.ptr.IntByReference;
 import com.sun.jna.ptr.PointerByReference;
+import com.zaxxer.nuprocess.internal.Constants;
 import com.zaxxer.nuprocess.windows.NuWinNT.HANDLE;
 import com.zaxxer.nuprocess.windows.NuWinNT.ULONG_PTR;
 import com.zaxxer.nuprocess.windows.NuWinNT.ULONG_PTRByReference;
@@ -66,12 +67,12 @@ public final class ProcessCompletions implements Runnable
       LINGER_ITERATIONS = lingerTimeMs / DEADPOOL_POLL_INTERVAL;
    }
 
-   public ProcessCompletions()
+   ProcessCompletions()
    {
-      completionKeyToProcessMap = new HashMap<Long, WindowsProcess>();
-      wantsWrite = new ArrayBlockingQueue<WindowsProcess>(512);
-      pendingPool = new LinkedBlockingQueue<WindowsProcess>();
-      deadPool = new LinkedList<WindowsProcess>();
+      completionKeyToProcessMap = new HashMap<>();
+      wantsWrite = new ArrayBlockingQueue<>(512);
+      pendingPool = new LinkedBlockingQueue<>();
+      deadPool = new LinkedList<>();
       isRunning = new AtomicBoolean();
 
       numberOfBytes = new IntByReference();
@@ -190,11 +191,11 @@ public final class ProcessCompletions implements Runnable
          NuKernel32.PostQueuedCompletionStatus(ioCompletionPort, 0, new ULONG_PTR(0), null);
       }
       catch (InterruptedException e) {
-         return;
+         // ignore
       }
    }
 
-   public void registerProcess(final WindowsProcess process)
+   void registerProcess(final WindowsProcess process)
    {
       if (shutdown) {
          return;
@@ -205,7 +206,7 @@ public final class ProcessCompletions implements Runnable
          NuKernel32.PostQueuedCompletionStatus(ioCompletionPort, 0, new ULONG_PTR(0), null);
       }
       catch (InterruptedException e) {
-         return;
+         // ignore
       }
    }
 
@@ -218,8 +219,10 @@ public final class ProcessCompletions implements Runnable
       final PipeBundle stdinPipe = process.getStdinPipe();
 
       if (!stdinPipe.registered) {
-         HANDLE completionPort = NuKernel32.CreateIoCompletionPort(stdinPipe.pipeHandle, ioCompletionPort, new ULONG_PTR(stdinPipe.ioCompletionKey),
-                                                                   WindowsProcess.PROCESSOR_THREADS);
+         HANDLE completionPort = NuKernel32.CreateIoCompletionPort(
+                 stdinPipe.pipeHandle, ioCompletionPort,
+                 new ULONG_PTR(stdinPipe.ioCompletionKey),
+                 Constants.NUMBER_OF_THREADS);
          if (!ioCompletionPort.equals(completionPort)) {
             throw new RuntimeException("CreateIoCompletionPort() failed, error code: " + Native.getLastError());
          }
@@ -267,14 +270,18 @@ public final class ProcessCompletions implements Runnable
    {
       WindowsProcess process;
       while ((process = pendingPool.poll()) != null) {
-         HANDLE completionPort1 = NuKernel32.CreateIoCompletionPort(process.getStdoutPipe().pipeHandle, ioCompletionPort,
-                                                                    new ULONG_PTR(process.getStdoutPipe().ioCompletionKey), WindowsProcess.PROCESSOR_THREADS);
+         HANDLE completionPort1 = NuKernel32.CreateIoCompletionPort(
+                 process.getStdoutPipe().pipeHandle, ioCompletionPort,
+                 new ULONG_PTR(process.getStdoutPipe().ioCompletionKey),
+                 Constants.NUMBER_OF_THREADS);
          if (!ioCompletionPort.equals(completionPort1)) {
             throw new RuntimeException("CreateIoCompletionPort() failed, error code: " + Native.getLastError());
          }
 
-         HANDLE completionPort2 = NuKernel32.CreateIoCompletionPort(process.getStderrPipe().pipeHandle, ioCompletionPort,
-                                                                    new ULONG_PTR(process.getStderrPipe().ioCompletionKey), WindowsProcess.PROCESSOR_THREADS);
+         HANDLE completionPort2 = NuKernel32.CreateIoCompletionPort(
+                 process.getStderrPipe().pipeHandle, ioCompletionPort,
+                 new ULONG_PTR(process.getStderrPipe().ioCompletionKey),
+                 Constants.NUMBER_OF_THREADS);
          if (!ioCompletionPort.equals(completionPort2)) {
             throw new RuntimeException("CreateIoCompletionPort() failed, error code: " + Native.getLastError());
          }
@@ -329,7 +336,8 @@ public final class ProcessCompletions implements Runnable
 
    private void initCompletionPort()
    {
-      ioCompletionPort = NuKernel32.CreateIoCompletionPort(NuWinNT.INVALID_HANDLE_VALUE, null, new ULONG_PTR(0), WindowsProcess.PROCESSOR_THREADS);
+      ioCompletionPort = NuKernel32.CreateIoCompletionPort(
+              NuWinNT.INVALID_HANDLE_VALUE, null, new ULONG_PTR(0), Constants.NUMBER_OF_THREADS);
       if (ioCompletionPort == null) {
          throw new RuntimeException("CreateIoCompletionPort() failed, error code: " + Native.getLastError());
       }

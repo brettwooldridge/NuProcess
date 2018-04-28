@@ -16,17 +16,10 @@
 
 package com.zaxxer.nuprocess.linux;
 
-import com.sun.jna.JNIEnv;
-import com.sun.jna.Pointer;
-import com.sun.jna.StringArray;
 import com.sun.jna.ptr.IntByReference;
-import com.zaxxer.nuprocess.NuProcess;
 import com.zaxxer.nuprocess.NuProcessHandler;
-import com.zaxxer.nuprocess.internal.*;
-
-import java.io.IOException;
-import java.nio.file.Path;
-import java.util.List;
+import com.zaxxer.nuprocess.internal.BasePosixProcess;
+import com.zaxxer.nuprocess.internal.LibC;
 
 import static com.zaxxer.nuprocess.internal.LibC.*;
 
@@ -35,28 +28,8 @@ import static com.zaxxer.nuprocess.internal.LibC.*;
  */
 public class LinuxProcess extends BasePosixProcess
 {
-   private static final int JVM_MAJOR_VERSION;
-
-   @SuppressWarnings("unused")
-   private int exitcode;  // set from native code in JDK 7
-
    static {
-      String version = System.getProperty("java.vm.specification.version");
-      if (version.equals("1.7")) {
-         JVM_MAJOR_VERSION = 7;
-      }
-      else {
-         JVM_MAJOR_VERSION = 8;
-      }
-
       LibEpoll.sigignore(LibEpoll.SIGPIPE);
-
-      if (JVM_MAJOR_VERSION == 8) {
-         LinuxLibC8.Java_java_lang_UNIXProcess_init(JNIEnv.CURRENT, LinuxProcess.class);
-      }
-      else {
-         LinuxLibC7.Java_java_lang_UNIXProcess_initIDs(JNIEnv.CURRENT, LinuxProcess.class);
-      }
 
       // TODO: install signal handler for SIGCHLD, and call onExit() when received, call the default (JVM) hook if the PID is not ours
 
@@ -65,105 +38,8 @@ public class LinuxProcess extends BasePosixProcess
       }
    }
 
-   @SuppressWarnings("unused")
-   private enum LaunchMechanism {
-      // order IS important!
-      FORK,
-      POSIX_SPAWN,
-      VFORK
-   }
-
    LinuxProcess(NuProcessHandler processListener) {
       super(processListener);
-   }
-
-   @Override
-   public NuProcess start(List<String> command, String[] environment, Path cwd) {
-      callPreStart();
-
-      String[] cmdarray = command.toArray(new String[0]);
-
-      // See https://github.com/JetBrains/jdk8u_jdk/blob/master/src/solaris/classes/java/lang/ProcessImpl.java#L71-L83
-      byte[][] args = new byte[cmdarray.length - 1][];
-      int size = args.length; // For added NUL bytes
-      for (int i = 0; i < args.length; i++) {
-         args[i] = cmdarray[i + 1].getBytes();
-         size += args[i].length;
-      }
-      byte[] argBlock = new byte[size];
-      int i = 0;
-      for (byte[] arg : args) {
-         System.arraycopy(arg, 0, argBlock, i, arg.length);
-         i += arg.length + 1;
-         // No need to write NUL bytes explicitly
-      }
-
-      // See https://github.com/JetBrains/jdk8u_jdk/blob/master/src/solaris/classes/java/lang/ProcessImpl.java#L86
-      byte[] envBlock = toEnvironmentBlock(environment);
-
-      // See https://github.com/JetBrains/jdk8u_jdk/blob/master/src/solaris/classes/java/lang/ProcessImpl.java#L96
-      int[] std_fds = new int[] { -1, -1, -1 };
-
-      try {
-         // See https://github.com/JetBrains/jdk8u_jdk/blob/master/src/solaris/classes/java/lang/UNIXProcess.java#L247
-         // Native source code: https://github.com/JetBrains/jdk8u_jdk/blob/master/src/solaris/native/java/lang/UNIXProcess_md.c#L566
-         if (JVM_MAJOR_VERSION == 8) {
-            pid = LinuxLibC8.Java_java_lang_UNIXProcess_forkAndExec(
-                    JNIEnv.CURRENT,
-                    this,
-                    LaunchMechanism.VFORK.ordinal() + 1,
-                    toCString(System.getProperty("java.home") + "/lib/jspawnhelper"), // used on Linux
-                    toCString(cmdarray[0]),
-                    argBlock, args.length,
-                    envBlock, environment.length,
-                    (cwd != null ? toCString(cwd.toString()) : null),
-                    std_fds,
-                    (byte) 0 /*redirectErrorStream*/);
-         }
-         else {
-            pid = LinuxLibC7.Java_java_lang_UNIXProcess_forkAndExec(
-                    JNIEnv.CURRENT,
-                    this,
-                    toCString(cmdarray[0]),
-                    argBlock, args.length,
-                    envBlock, environment.length,
-                    (cwd != null ? toCString(cwd.toString()) : null),
-                    std_fds,
-                    (byte) 0 /*redirectErrorStream*/);
-         }
-
-         initializeBuffers();
-
-         if (pid == -1 || !checkLaunch()) {
-            return null;
-         }
-
-         stdin = new ReferenceCountedFileDescriptor(std_fds[0]);
-         stdout = new ReferenceCountedFileDescriptor(std_fds[1]);
-         stderr = new ReferenceCountedFileDescriptor(std_fds[2]);
-
-         int[] in = {-1, std_fds[0]};
-         int[] out = {std_fds[1], -1};
-         int[] err = {std_fds[2], -1};
-
-         setNonBlocking(in, out, err);
-
-         afterStart();
-
-         registerProcess();
-
-         callStart();
-
-         signalProcessContinue();
-      }
-      catch (Exception re) {
-         // TODO remove from event processor pid map?
-         re.printStackTrace(System.err);
-         onExit(Integer.MIN_VALUE);
-         return null;
-      }
-
-      return this;
    }
 
    @Override
@@ -199,57 +75,5 @@ public class LinuxProcess extends BasePosixProcess
       }
 
       return true;
-   }
-
-   @Override
-   protected short getSpawnFlags() {
-      throw new RuntimeException("This method should not be invoked on Linux");
-   }
-
-   @Override
-   protected int spawnWithCwd(IntByReference a, String b, Pointer c, Pointer d, StringArray e, Pointer f, Path g) {
-      throw new RuntimeException("This method should not be invoked on Linux");
-   }
-
-   @Override
-   protected Pointer createPosixSpawnFileActions() {
-      throw new RuntimeException("This method should not be invoked on Linux");
-   }
-
-   @Override
-   protected Pointer createPosixSpawnAttributes() {
-      throw new RuntimeException("This method should not be invoked on Linux");
-   }
-
-   private static byte[] toCString(String s) {
-      if (s == null)
-         return null;
-      byte[] bytes = s.getBytes();
-      byte[] result = new byte[bytes.length + 1];
-      System.arraycopy(bytes, 0,
-              result, 0,
-              bytes.length);
-      result[result.length-1] = (byte)0;
-      return result;
-   }
-
-   private static byte[] toEnvironmentBlock(String[] environment) {
-      int count = environment.length;
-      for (String entry : environment) {
-         count += entry.getBytes().length;
-      }
-
-      byte[] block = new byte[count];
-
-      int i = 0;
-      for (String entry : environment) {
-         byte[] bytes = entry.getBytes();
-         System.arraycopy(bytes, 0, block, i, bytes.length);
-         i += bytes.length + 1;
-         // No need to write NUL byte explicitly
-         //block[i++] = (byte) '\u0000';
-      }
-
-      return block;
    }
 }

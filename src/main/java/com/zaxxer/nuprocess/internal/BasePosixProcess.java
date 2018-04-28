@@ -16,20 +16,16 @@
 
 package com.zaxxer.nuprocess.internal;
 
+import com.sun.jna.JNIEnv;
 import com.sun.jna.Memory;
 import com.sun.jna.Native;
-import com.sun.jna.Pointer;
-import com.sun.jna.StringArray;
-import com.sun.jna.ptr.IntByReference;
 import com.zaxxer.nuprocess.NuProcess;
 import com.zaxxer.nuprocess.NuProcessHandler;
 
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.file.Path;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
@@ -39,6 +35,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import static com.zaxxer.nuprocess.internal.Constants.*;
+import static com.zaxxer.nuprocess.internal.Constants.OperatingSystem.MAC;
+
 @SuppressWarnings("WeakerAccess")
 public abstract class BasePosixProcess implements NuProcess
 {
@@ -47,6 +46,9 @@ public abstract class BasePosixProcess implements NuProcess
 
    protected static final IEventProcessor<? extends BasePosixProcess>[] processors;
    protected static int processorRoundRobin;
+
+   @SuppressWarnings("unused")
+   private int exitcode;  // set from native code in JDK 7
 
    protected IEventProcessor<? super BasePosixProcess> myProcessor;
    protected volatile NuProcessHandler processHandler;
@@ -72,9 +74,6 @@ public abstract class BasePosixProcess implements NuProcess
    protected ReferenceCountedFileDescriptor stdin;
    protected ReferenceCountedFileDescriptor stdout;
    protected ReferenceCountedFileDescriptor stderr;
-   protected volatile int stdinWidow;
-   protected volatile int stdoutWidow;
-   protected volatile int stderrWidow;
 
    protected AtomicBoolean stdinClosing;
    protected boolean outClosed;
@@ -85,19 +84,7 @@ public abstract class BasePosixProcess implements NuProcess
    static {
       IS_SOFTEXIT_DETECTION = Boolean.valueOf(System.getProperty("com.zaxxer.nuprocess.softExitDetection", "true"));
 
-      int numThreads;
-      String threads = System.getProperty("com.zaxxer.nuprocess.threads", "auto");
-      if ("auto".equals(threads)) {
-         numThreads = Math.max(1, Runtime.getRuntime().availableProcessors() / 2);
-      }
-      else if ("cores".equals(threads)) {
-         numThreads = Runtime.getRuntime().availableProcessors();
-      }
-      else {
-         numThreads = Math.max(1, Integer.parseInt(threads));
-      }
-
-      processors = new IEventProcessor<?>[numThreads];
+      processors = new IEventProcessor<?>[NUMBER_OF_THREADS];
 
       if (Boolean.valueOf(System.getProperty("com.zaxxer.nuprocess.enableShutdownHook", "true"))) {
          Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
@@ -112,6 +99,14 @@ public abstract class BasePosixProcess implements NuProcess
             }
          }));
       }
+   }
+
+   @SuppressWarnings("unused")
+   private enum LaunchMechanism {
+      // order IS important!
+      FORK,
+      POSIX_SPAWN,
+      VFORK
    }
 
    protected BasePosixProcess(NuProcessHandler processListener)
@@ -133,80 +128,90 @@ public abstract class BasePosixProcess implements NuProcess
    //                        NuProcess interface methods
    // ************************************************************************
 
-   public NuProcess start(List<String> command, String[] environment, Path cwd)
-   {
+   public NuProcess start(List<String> command, String[] environment, Path cwd) {
       callPreStart();
 
-      String[] commands = command.toArray(new String[0]);
+      String[] cmdarray = command.toArray(new String[0]);
 
-      Pointer posix_spawn_file_actions = createPipes();
-      Pointer posix_spawnattr = createPosixSpawnAttributes();
+      // See https://github.com/JetBrains/jdk8u_jdk/blob/master/src/solaris/classes/java/lang/ProcessImpl.java#L71-L83
+      byte[][] args = new byte[cmdarray.length - 1][];
+      int size = args.length; // For added NUL bytes
+      for (int i = 0; i < args.length; i++) {
+         args[i] = cmdarray[i + 1].getBytes();
+         size += args[i].length;
+      }
+      byte[] argBlock = new byte[size];
+      int i = 0;
+      for (byte[] arg : args) {
+         System.arraycopy(arg, 0, argBlock, i, arg.length);
+         i += arg.length + 1;
+         // No need to write NUL bytes explicitly
+      }
+
+      // See https://github.com/JetBrains/jdk8u_jdk/blob/master/src/solaris/classes/java/lang/ProcessImpl.java#L86
+      byte[] envBlock = toEnvironmentBlock(environment);
+
+      // See https://github.com/JetBrains/jdk8u_jdk/blob/master/src/solaris/classes/java/lang/ProcessImpl.java#L96
+      int[] std_fds = new int[] { -1, -1, -1 };
 
       try {
-         int rc = LibC.posix_spawnattr_init(posix_spawnattr);
-         checkReturnCode(rc, "Internal call to posix_spawnattr_init() failed");
+         // See https://github.com/JetBrains/jdk8u_jdk/blob/master/src/solaris/classes/java/lang/UNIXProcess.java#L247
+         // Native source code: https://github.com/JetBrains/jdk8u_jdk/blob/master/src/solaris/native/java/lang/UNIXProcess_md.c#L566
+         if (JVM_MAJOR_VERSION == 8) {
+            final LaunchMechanism launchMechanism = OS == MAC ? LaunchMechanism.POSIX_SPAWN : LaunchMechanism.VFORK;
 
-         LibC.posix_spawnattr_setflags(posix_spawnattr, getSpawnFlags());
-
-         IntByReference restrict_pid = new IntByReference();
-         StringArray commandsArray = new StringArray(commands);
-         StringArray environmentArray = new StringArray(environment);
-         if (cwd != null) {
-            rc = spawnWithCwd(restrict_pid, commands[0], posix_spawn_file_actions, posix_spawnattr, commandsArray, environmentArray, cwd);
+            pid = LibJava8.Java_java_lang_UNIXProcess_forkAndExec(
+                    JNIEnv.CURRENT,
+                    this,
+                    launchMechanism.ordinal() + 1,
+                    toCString(System.getProperty("java.home") + "/lib/jspawnhelper"), // used on Linux
+                    toCString(cmdarray[0]),
+                    argBlock, args.length,
+                    envBlock, environment.length,
+                    (cwd != null ? toCString(cwd.toString()) : null),
+                    std_fds,
+                    (byte) 0 /*redirectErrorStream*/);
          }
          else {
-            rc = LibC.posix_spawnp(restrict_pid, commands[0], posix_spawn_file_actions, posix_spawnattr, commandsArray, environmentArray);
+            pid = LibJava7.Java_java_lang_UNIXProcess_forkAndExec(
+                    JNIEnv.CURRENT,
+                    this,
+                    toCString(cmdarray[0]),
+                    argBlock, args.length,
+                    envBlock, environment.length,
+                    (cwd != null ? toCString(cwd.toString()) : null),
+                    std_fds,
+                    (byte) 0 /*redirectErrorStream*/);
          }
-
-         pid = restrict_pid.getValue();
 
          initializeBuffers();
 
-         if (!checkLaunch()) {
+         if (pid == -1 || !checkLaunch()) {
             return null;
          }
- 
-         checkReturnCode(rc, "Invocation of posix_spawn() failed");
+
+         stdin = new ReferenceCountedFileDescriptor(std_fds[0]);
+         stdout = new ReferenceCountedFileDescriptor(std_fds[1]);
+         stderr = new ReferenceCountedFileDescriptor(std_fds[2]);
+
+         setNonBlocking(std_fds[0], std_fds[1], std_fds[2]);
 
          afterStart();
 
          registerProcess();
 
          callStart();
-
-         signalProcessContinue();
       }
-      catch (RuntimeException re) {
+      catch (Exception re) {
          // TODO remove from event processor pid map?
          re.printStackTrace(System.err);
          onExit(Integer.MIN_VALUE);
          return null;
       }
-      finally {
-         LibC.posix_spawnattr_destroy(posix_spawnattr);
-         LibC.posix_spawn_file_actions_destroy(posix_spawn_file_actions);
-
-         // After we've spawned, close the unused ends of our pipes (that were dup'd into the child process space)
-         LibC.close(stdinWidow);
-         LibC.close(stdoutWidow);
-         LibC.close(stderrWidow);
-
-         deallocateStructures(posix_spawn_file_actions, posix_spawnattr);
-      }
 
       return this;
    }
    
-   protected abstract short getSpawnFlags();
-
-   protected abstract int spawnWithCwd(IntByReference restrict_pid,
-                                       String restrict_path,
-                                       Pointer posix_spawn_file_actions,
-                                       Pointer posix_spawnattr,
-                                       StringArray commandsArray,
-                                       Pointer environmentArray,
-                                       Path cwd);
-
    /**
     * Check the launched process and return {@code true} if launch was successful,
     * or {@code false} if there was an error in launch.
@@ -217,28 +222,6 @@ public abstract class BasePosixProcess implements NuProcess
    {
       // Can be overridden by subclasses for post-launch checks
       return true;
-   }
-
-   /**
-    * Deallocate the memory associated with these structures if the Java process is
-    * responsible for freeing them.
-    *
-    * @param posix_spawn_file_actions a pointer to the posix_spawn_file_actions structure
-    * @param posix_spawnattr a pointer to the posix_spawnattr structure
-    */
-   protected void deallocateStructures(Pointer posix_spawn_file_actions, Pointer posix_spawnattr)
-   {
-      // Can be overridden by subclasses
-   }
-
-   /**
-    * For OS's that support launching a process in suspended mode, this is the chance to
-    * signal the process to continue.
-    *
-    */
-   protected void signalProcessContinue()
-   {
-      // Can be overridden by subclasses
    }
 
    /** {@inheritDoc} */
@@ -669,109 +652,14 @@ public abstract class BasePosixProcess implements NuProcess
       }
    }
 
-   protected Pointer createPipes()
+   protected void setNonBlocking(int in, int out, int err)
    {
-      int rc;
-
-      int[] in = new int[2];
-      int[] out = new int[2];
-      int[] err = new int[2];
-
-      Pointer posix_spawn_file_actions = createPosixSpawnFileActions();
-
-      try {
-         rc = LibC.pipe(in);
-         checkReturnCode(rc, "Create stdin pipe() failed");
-         rc = LibC.pipe(out);
-         checkReturnCode(rc, "Create stdout pipe() failed");
-
-         rc = LibC.pipe(err);
-         checkReturnCode(rc, "Create stderr pipe() failed");
-
-         // Create spawn file actions
-         rc = LibC.posix_spawn_file_actions_init(posix_spawn_file_actions);
-         checkReturnCode(rc, "Internal call to posix_spawn_file_actions_init() failed");
-
-         // Dup the reading end of the pipe into the sub-process, and close our end
-         rc = LibC.posix_spawn_file_actions_adddup2(posix_spawn_file_actions, in[0], 0);
-         checkReturnCode(rc, "Internal call to posix_spawn_file_actions_adddup2() failed");
-
-         rc = LibC.posix_spawn_file_actions_addclose(posix_spawn_file_actions, in[1]);
-         checkReturnCode(rc, "Internal call to posix_spawn_file_actions_addclose() failed");
-
-         stdin = new ReferenceCountedFileDescriptor(in[1]);
-         stdinWidow = in[0];
-
-         // Dup the writing end of the pipe into the sub-process, and close our end
-         rc = LibC.posix_spawn_file_actions_adddup2(posix_spawn_file_actions, out[1], 1);
-         checkReturnCode(rc, "Internal call to posix_spawn_file_actions_adddup2() failed");
-
-         rc = LibC.posix_spawn_file_actions_addclose(posix_spawn_file_actions, out[0]);
-         checkReturnCode(rc, "Internal call to posix_spawn_file_actions_addclose() failed");
-
-         stdout = new ReferenceCountedFileDescriptor(out[0]);
-         stdoutWidow = out[1];
-
-         // Dup the writing end of the pipe into the sub-process, and close our end
-         rc = LibC.posix_spawn_file_actions_adddup2(posix_spawn_file_actions, err[1], 2);
-         checkReturnCode(rc, "Internal call to posix_spawn_file_actions_adddup2() failed");
-
-         rc = LibC.posix_spawn_file_actions_addclose(posix_spawn_file_actions, err[0]);
-         checkReturnCode(rc, "Internal call to posix_spawn_file_actions_addclose() failed");
-
-         stderr = new ReferenceCountedFileDescriptor(err[0]);
-         stderrWidow = err[1];
-
-         setNonBlocking(in, out, err);
-
-         return posix_spawn_file_actions;
-      }
-      catch (RuntimeException e) {
-         e.printStackTrace(System.err);
-
-         LibC.posix_spawn_file_actions_destroy(posix_spawn_file_actions);
-         initFailureCleanup(in, out, err);
-         throw e;
-      }
-   }
-
-   protected abstract Pointer createPosixSpawnFileActions();
-
-   protected abstract Pointer createPosixSpawnAttributes();
-
-   protected void setNonBlocking(int[] in, int[] out, int[] err)
-   {
-      int rc = LibC.fcntl(in[1], LibC.F_SETFL, LibC.fcntl(in[1], LibC.F_GETFL) | LibC.O_NONBLOCK);
+      int rc = LibC.fcntl(in, LibC.F_SETFL, LibC.fcntl(in, LibC.F_GETFL) | LibC.O_NONBLOCK);
       checkReturnCode(rc, "fnctl on stdin handle failed");
-      rc = LibC.fcntl(out[0], LibC.F_SETFL, LibC.fcntl(out[0], LibC.F_GETFL) | LibC.O_NONBLOCK);
+      rc = LibC.fcntl(out, LibC.F_SETFL, LibC.fcntl(out, LibC.F_GETFL) | LibC.O_NONBLOCK);
       checkReturnCode(rc, "fnctl on stdout handle failed");
-      rc = LibC.fcntl(err[0], LibC.F_SETFL, LibC.fcntl(err[0], LibC.F_GETFL) | LibC.O_NONBLOCK);
+      rc = LibC.fcntl(err, LibC.F_SETFL, LibC.fcntl(err, LibC.F_GETFL) | LibC.O_NONBLOCK);
       checkReturnCode(rc, "fnctl on stderr handle failed");
-   }
-   
-   private void initFailureCleanup(int[] in, int[] out, int[] err)
-   {
-      Set<Integer> unique = new HashSet<Integer>();
-      if (in != null) {
-         unique.add(in[0]);
-         unique.add(in[1]);
-      }
-
-      if (out != null) {
-         unique.add(out[0]);
-         unique.add(out[1]);
-      }
-
-      if (err != null) {
-         unique.add(err[0]);
-         unique.add(err[1]);
-      }
-
-      for (int fildes : unique) {
-         if (fildes != 0) {
-            LibC.close(fildes);
-         }
-      }
    }
 
    protected static void checkReturnCode(int rc, String failureMessage)
@@ -779,5 +667,37 @@ public abstract class BasePosixProcess implements NuProcess
       if (rc != 0) {
          throw new RuntimeException(failureMessage + ", return code: " + rc + ", last error: " + Native.getLastError());
       }
+   }
+
+   private static byte[] toCString(String s) {
+      if (s == null)
+         return null;
+      byte[] bytes = s.getBytes();
+      byte[] result = new byte[bytes.length + 1];
+      System.arraycopy(bytes, 0,
+              result, 0,
+              bytes.length);
+      result[result.length-1] = (byte)0;
+      return result;
+   }
+
+   private static byte[] toEnvironmentBlock(String[] environment) {
+      int count = environment.length;
+      for (String entry : environment) {
+         count += entry.getBytes().length;
+      }
+
+      byte[] block = new byte[count];
+
+      int i = 0;
+      for (String entry : environment) {
+         byte[] bytes = entry.getBytes();
+         System.arraycopy(bytes, 0, block, i, bytes.length);
+         i += bytes.length + 1;
+         // No need to write NUL byte explicitly
+         //block[i++] = (byte) '\u0000';
+      }
+
+      return block;
    }
 }
