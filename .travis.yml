@@ -4,8 +4,12 @@ dist: trusty
 cache:
   directories:
     - $HOME/.m2/repository
-jdk:
-  - oraclejdk8
+
+matrix:
+  fast_finish: true
+  include:
+    - jdk: openjdk7
+    - jdk: oraclejdk8
 
 script:
   - mvn -e package -V
