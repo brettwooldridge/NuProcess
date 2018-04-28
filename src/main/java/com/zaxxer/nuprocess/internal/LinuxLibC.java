@@ -16,6 +16,7 @@
 
 package com.zaxxer.nuprocess.internal;
 
+import com.sun.jna.JNIEnv;
 import com.sun.jna.Native;
 import com.sun.jna.Platform;
 
@@ -24,6 +25,36 @@ public class LinuxLibC
    static {
       Native.register(Platform.C_LIBRARY_NAME);
    }
+
+   public static native void Java_java_lang_UNIXProcess_init(JNIEnv jniEnv, Object clazz);
+
+   /**
+    * JNIEXPORT jint JNICALL
+    * Java_java_lang_UNIXProcess_forkAndExec(JNIEnv *env,
+    *                                        jobject process,
+    *                                        jint mode,
+    *                                        jbyteArray helperpath,
+    *                                        jbyteArray prog,
+    *                                        jbyteArray argBlock, jint argc,
+    *                                        jbyteArray envBlock, jint envc,
+    *                                        jbyteArray dir,
+    *                                        jintArray std_fds,
+    *                                        jboolean redirectErrorStream)
+    *
+    * @return the PID of the process
+    */
+   public static native int Java_java_lang_UNIXProcess_forkAndExec(
+           JNIEnv jniEnv,
+           Object process,
+           int mode,
+           Object helperpath,
+           Object prog,
+           Object argBlock, int argc,
+           Object envBlock, int envc,
+           Object dir,
+           Object fds,
+           byte redirectErrorStream
+   );
 
    // from /usr/include/sched.h
    public static native int unshare(int flags);

@@ -113,7 +113,7 @@
 							com.zaxxer.nuprocess;version="${project.version}", 
 							com.zaxxer.nuprocess.codec;version="${project.version}"
 					   </Export-Package>
-                       <Import-Package>com.sun.*,sun.misc.*</Import-Package>
+                       <Import-Package>com.sun.*</Import-Package>
                        <Bundle-SymbolicName>${project.groupId}.${project.artifactId}</Bundle-SymbolicName>
                    </instructions>
                </configuration>

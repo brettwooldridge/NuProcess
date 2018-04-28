@@ -41,6 +41,7 @@ import com.sun.jna.ptr.IntByReference;
 import com.zaxxer.nuprocess.NuProcess;
 import com.zaxxer.nuprocess.NuProcessHandler;
 
+@SuppressWarnings("WeakerAccess")
 public abstract class BasePosixProcess implements NuProcess
 {
    private static final boolean IS_SOFTEXIT_DETECTION;
@@ -165,7 +166,7 @@ public abstract class BasePosixProcess implements NuProcess
    {
       callPreStart();
 
-      String[] commands = command.toArray(new String[command.size()]);
+      String[] commands = command.toArray(new String[0]);
 
       Pointer posix_spawn_file_actions = createPipes();
       Pointer posix_spawnattr = createPosixSpawnAttributes();
@@ -202,7 +203,7 @@ public abstract class BasePosixProcess implements NuProcess
 
          callStart();
 
-         singleProcessContinue();
+         signalProcessContinue();
       }
       catch (RuntimeException re) {
          // TODO remove from event processor pid map?
@@ -264,7 +265,7 @@ public abstract class BasePosixProcess implements NuProcess
     * signal the process to continue.
     *
     */
-   protected void singleProcessContinue()
+   protected void signalProcessContinue()
    {
       // Can be overridden by subclasses
    }

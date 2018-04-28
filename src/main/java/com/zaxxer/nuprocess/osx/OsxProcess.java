@@ -93,7 +93,7 @@ public class OsxProcess extends BasePosixProcess
    }
 
    @Override
-   protected void singleProcessContinue()
+   protected void signalProcessContinue()
    {
       // Signal the spawned process to continue (unsuspend)
       LibC.kill(pid, LibC.SIGCONT);

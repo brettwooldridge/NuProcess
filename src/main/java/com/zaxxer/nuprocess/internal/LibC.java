@@ -16,27 +16,27 @@
 
 package com.zaxxer.nuprocess.internal;
 
-import com.sun.jna.Callback;
-import com.sun.jna.Library;
-import com.sun.jna.Native;
-import com.sun.jna.NativeLibrary;
-import com.sun.jna.Platform;
-import com.sun.jna.Pointer;
-import com.sun.jna.StringArray;
+import com.sun.jna.*;
 import com.sun.jna.ptr.IntByReference;
 
 import java.nio.ByteBuffer;
+import java.util.HashMap;
+import java.util.Map;
 
 public class LibC
 {
    static {
-      Native.register(NativeLibrary.getProcess());
-
       if (System.getProperty("os.name").toLowerCase().contains("mac") || System.getProperty("os.name").toLowerCase().contains("freebsd")) {
          O_NONBLOCK = 0x0004; // MacOS X, Freebsd
+
+         Native.register(NativeLibrary.getProcess());
       }
       else {
          O_NONBLOCK = 2048; // Linux
+
+         Map<String, Object> options = new HashMap<>();
+         options.put(Library.OPTION_ALLOW_OBJECTS, Boolean.TRUE);
+         Native.register(NativeLibrary.getProcess(options));
       }
    }
 
