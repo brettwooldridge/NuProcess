@@ -157,32 +157,20 @@ public abstract class BasePosixProcess implements NuProcess
       try {
          // See https://github.com/JetBrains/jdk8u_jdk/blob/master/src/solaris/classes/java/lang/UNIXProcess.java#L247
          // Native source code: https://github.com/JetBrains/jdk8u_jdk/blob/master/src/solaris/native/java/lang/UNIXProcess_md.c#L566
-         if (JVM_MAJOR_VERSION == 8) {
-            final LaunchMechanism launchMechanism = OS == MAC ? LaunchMechanism.POSIX_SPAWN : LaunchMechanism.VFORK;
 
-            pid = LibJava8.Java_java_lang_UNIXProcess_forkAndExec(
-                    JNIEnv.CURRENT,
-                    this,
-                    launchMechanism.ordinal() + 1,
-                    toCString(System.getProperty("java.home") + "/lib/jspawnhelper"), // used on Linux
-                    toCString(cmdarray[0]),
-                    argBlock, args.length,
-                    envBlock, environment.length,
-                    (cwd != null ? toCString(cwd.toString()) : null),
-                    std_fds,
-                    (byte) 0 /*redirectErrorStream*/);
-         }
-         else {
-            pid = LibJava7.Java_java_lang_UNIXProcess_forkAndExec(
-                    JNIEnv.CURRENT,
-                    this,
-                    toCString(cmdarray[0]),
-                    argBlock, args.length,
-                    envBlock, environment.length,
-                    (cwd != null ? toCString(cwd.toString()) : null),
-                    std_fds,
-                    (byte) 0 /*redirectErrorStream*/);
-         }
+         final LaunchMechanism launchMechanism = OS == MAC ? LaunchMechanism.POSIX_SPAWN : LaunchMechanism.VFORK;
+
+         pid = LibJava8.Java_java_lang_UNIXProcess_forkAndExec(
+                 JNIEnv.CURRENT,
+                 this,
+                 launchMechanism.ordinal() + 1,
+                 toCString(System.getProperty("java.home") + "/lib/jspawnhelper"), // used on Linux
+                 toCString(cmdarray[0]),
+                 argBlock, args.length,
+                 envBlock, environment.length,
+                 (cwd != null ? toCString(cwd.toString()) : null),
+                 std_fds,
+                 (byte) 0 /*redirectErrorStream*/);
 
          initializeBuffers();
 

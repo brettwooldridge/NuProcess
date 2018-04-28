@@ -22,19 +22,13 @@ import com.zaxxer.nuprocess.internal.Constants.OperatingSystem;
 
 import java.nio.ByteBuffer;
 
-import static com.zaxxer.nuprocess.internal.Constants.JVM_MAJOR_VERSION;
 import static com.zaxxer.nuprocess.internal.Constants.OS;
 
 @SuppressWarnings("WeakerAccess")
 public class LibC
 {
    static {
-      if (JVM_MAJOR_VERSION == 8) {
-         LibJava8.Java_java_lang_UNIXProcess_init(JNIEnv.CURRENT, BasePosixProcess.class);
-      }
-      else {
-         LibJava7.Java_java_lang_UNIXProcess_initIDs(JNIEnv.CURRENT, BasePosixProcess.class);
-      }
+      LibJava8.Java_java_lang_UNIXProcess_init(JNIEnv.CURRENT, BasePosixProcess.class);
 
       if (OS == OperatingSystem.MAC) {
          O_NONBLOCK = 0x0004; // MacOS X, Freebsd
