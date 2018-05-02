@@ -35,10 +35,10 @@ public class FastExitingProcessTest
 {
    private static class Handler extends NuAbstractProcessHandler
    {
-      public final ByteArrayOutputStream stdoutBytes = new ByteArrayOutputStream();
-      public final WritableByteChannel stdoutBytesChannel = Channels.newChannel(stdoutBytes);
-      public int exitCode = -1;
-      public Exception stdoutException;
+      final ByteArrayOutputStream stdoutBytes = new ByteArrayOutputStream();
+      final WritableByteChannel stdoutBytesChannel = Channels.newChannel(stdoutBytes);
+      int exitCode = -1;
+      Exception stdoutException;
 
       @Override
       public void onExit(int exitCode)

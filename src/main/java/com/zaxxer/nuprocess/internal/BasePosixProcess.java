@@ -35,7 +35,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import static com.zaxxer.nuprocess.internal.Constants.*;
+import static com.zaxxer.nuprocess.internal.Constants.NUMBER_OF_THREADS;
+import static com.zaxxer.nuprocess.internal.Constants.OS;
 import static com.zaxxer.nuprocess.internal.Constants.OperatingSystem.MAC;
 
 @SuppressWarnings("WeakerAccess")
@@ -172,8 +173,6 @@ public abstract class BasePosixProcess implements NuProcess
                  std_fds,
                  (byte) 0 /*redirectErrorStream*/);
 
-         initializeBuffers();
-
          if (pid == -1 || !checkLaunch()) {
             return null;
          }
@@ -181,6 +180,8 @@ public abstract class BasePosixProcess implements NuProcess
          stdin = new ReferenceCountedFileDescriptor(std_fds[0]);
          stdout = new ReferenceCountedFileDescriptor(std_fds[1]);
          stderr = new ReferenceCountedFileDescriptor(std_fds[2]);
+
+         initializeBuffers();
 
          setNonBlocking(std_fds[0], std_fds[1], std_fds[2]);
 
@@ -516,13 +517,13 @@ public abstract class BasePosixProcess implements NuProcess
             userWantsWrite.set(false);
             pendingWrites.clear();
             return false;
-         } else if (byteBuffer.remaining() > BUFFER_CAPACITY) {
+         } else if (byteBuffer != null && byteBuffer.remaining() > BUFFER_CAPACITY) {
             ByteBuffer slice = byteBuffer.slice();
             slice.limit(BUFFER_CAPACITY);
             inBuffer.put(slice);
             byteBuffer.position(byteBuffer.position() + BUFFER_CAPACITY);
          }
-         else {
+         else if (byteBuffer != null) {
             inBuffer.put(byteBuffer);
             pendingWrites.poll();
          }
@@ -566,8 +567,7 @@ public abstract class BasePosixProcess implements NuProcess
    //                             Private methods
    // ************************************************************************
 
-   protected void afterStart()
-   {
+   protected void afterStart() {
       isRunning = true;
    }
 

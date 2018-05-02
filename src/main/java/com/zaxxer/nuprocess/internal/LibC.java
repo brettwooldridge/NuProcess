@@ -40,6 +40,25 @@ public class LibC
       Native.register(NativeLibrary.getProcess());
    }
 
+   public static native int pipe(int[] fildes);
+
+   public static native int posix_spawnattr_init(Pointer posix_spawnattr_t);
+
+   public static native int posix_spawnattr_destroy(Pointer posix_spawnattr_t);
+
+   public static native int posix_spawnattr_setflags(Pointer posix_spawnattr_t, short flags);
+
+   public static native int posix_spawn_file_actions_init(Pointer posix_spawn_file_actions_t);
+
+   public static native int posix_spawn_file_actions_destroy(Pointer posix_spawn_file_actions_t);
+
+   public static native int posix_spawn_file_actions_addclose(Pointer actions, int filedes);
+
+   public static native int posix_spawn_file_actions_adddup2(Pointer actions, int fildes, int newfildes);
+
+   public static native int posix_spawnp(IntByReference restrict_pid, String restrict_path, Pointer file_actions,
+                                         Pointer /*const posix_spawnattr_t*/ restrict_attrp, StringArray /*String[]*/ argv, Pointer /*String[]*/ envp);
+
    public static native int fcntl(int fildes, int cmd);
 
    public static native int fcntl(int fildes, int cmd, long argO);
@@ -58,6 +77,8 @@ public class LibC
 
    public static native Pointer signal(int signal, Pointer func);
 
+   public static native String getcwd(Pointer buf, int size);
+
    // from /usr/include/sys/syscall.h
    // We can't use JNA direct mapping for syscall(), since it takes varargs.
    public interface SyscallLibrary extends Library
@@ -69,10 +90,10 @@ public class LibC
 
    public static SyscallLibrary SYSCALL = (SyscallLibrary) Native.loadLibrary(Platform.C_LIBRARY_NAME, SyscallLibrary.class);
 
-   static final int F_GETFL = 3;
-   static final int F_SETFL = 4;
+   public static final int F_GETFL = 3;
+   public static final int F_SETFL = 4;
 
-   static final int O_NONBLOCK;
+   public static final int O_NONBLOCK;
 
    // from /usr/include/asm-generic/errno-base.h
    public static final int ECHILD = 10; /* No child processes */
@@ -80,9 +101,14 @@ public class LibC
    // from /usr/include/sys/wait.h
    public static final int WNOHANG = 0x00000001;
 
+   // from /usr/include/sys/spawn.h
+   public static final short POSIX_SPAWN_START_SUSPENDED = 0x0080;
+   public static final short POSIX_SPAWN_CLOEXEC_DEFAULT = 0x4000;
+
    // From /usr/include/sys/signal.h
    public static final int SIGKILL = 9;
    public static final int SIGTERM = 15;
+   public static final int SIGCONT = 19;
    public static final int SIGUSR2 = 31;
 
    public static final Pointer SIG_IGN = Pointer.createConstant(1);
