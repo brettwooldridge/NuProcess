@@ -26,22 +26,16 @@ import com.zaxxer.nuprocess.NuProcessHandler;
 import com.zaxxer.nuprocess.internal.BasePosixProcess;
 import com.zaxxer.nuprocess.internal.LibC;
 import com.zaxxer.nuprocess.internal.LibC.SyscallLibrary;
-import com.zaxxer.nuprocess.internal.ReferenceCountedFileDescriptor;
 
 import java.nio.file.Path;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
+import java.util.logging.Level;
 
 /**
  * @author Brett Wooldridge
  */
 class OsxProcess extends BasePosixProcess
 {
-   private volatile int stdinWidow;
-   private volatile int stdoutWidow;
-   private volatile int stderrWidow;
-
    static {
       for (int i = 0; i < processors.length; i++) {
          processors[i] = new ProcessKqueue();
@@ -61,7 +55,7 @@ class OsxProcess extends BasePosixProcess
 
       String[] commands = command.toArray(new String[0]);
 
-      Pointer posix_spawn_file_actions = createPipes();
+      Pointer posix_spawn_file_actions = createPosixPipes();
       Pointer posix_spawnattr = createPosixSpawnAttributes();
 
       try {
@@ -98,9 +92,9 @@ class OsxProcess extends BasePosixProcess
 
          singleProcessContinue();
       }
-      catch (RuntimeException re) {
+      catch (RuntimeException e) {
          // TODO remove from event processor pid map?
-         re.printStackTrace(System.err);
+         LOGGER.log(Level.WARNING, "Exception thrown from handler", e);
          onExit(Integer.MIN_VALUE);
          return null;
       }
@@ -149,68 +143,45 @@ class OsxProcess extends BasePosixProcess
       LibC.kill(pid, LibC.SIGCONT);
    }
 
-   private Pointer createPipes()
+   private Pointer createPosixPipes()
    {
       int rc;
-
-      int[] in = new int[2];
-      int[] out = new int[2];
-      int[] err = new int[2];
 
       Pointer posix_spawn_file_actions = createPosixSpawnFileActions();
 
       try {
-         rc = LibC.pipe(in);
-         checkReturnCode(rc, "Create stdin pipe() failed");
-         rc = LibC.pipe(out);
-         checkReturnCode(rc, "Create stdout pipe() failed");
-
-         rc = LibC.pipe(err);
-         checkReturnCode(rc, "Create stderr pipe() failed");
+         int[] fds = createPipes();
 
          // Create spawn file actions
          rc = LibC.posix_spawn_file_actions_init(posix_spawn_file_actions);
          checkReturnCode(rc, "Internal call to posix_spawn_file_actions_init() failed");
 
          // Dup the reading end of the pipe into the sub-process, and close our end
-         rc = LibC.posix_spawn_file_actions_adddup2(posix_spawn_file_actions, in[0], 0);
+         rc = LibC.posix_spawn_file_actions_adddup2(posix_spawn_file_actions, stdinWidow, 0);
          checkReturnCode(rc, "Internal call to posix_spawn_file_actions_adddup2() failed");
 
-         rc = LibC.posix_spawn_file_actions_addclose(posix_spawn_file_actions, in[1]);
+         rc = LibC.posix_spawn_file_actions_addclose(posix_spawn_file_actions, fds[0]);
          checkReturnCode(rc, "Internal call to posix_spawn_file_actions_addclose() failed");
-
-         stdin = new ReferenceCountedFileDescriptor(in[1]);
-         stdinWidow = in[0];
 
          // Dup the writing end of the pipe into the sub-process, and close our end
-         rc = LibC.posix_spawn_file_actions_adddup2(posix_spawn_file_actions, out[1], 1);
+         rc = LibC.posix_spawn_file_actions_adddup2(posix_spawn_file_actions, stdoutWidow, 1);
          checkReturnCode(rc, "Internal call to posix_spawn_file_actions_adddup2() failed");
 
-         rc = LibC.posix_spawn_file_actions_addclose(posix_spawn_file_actions, out[0]);
+         rc = LibC.posix_spawn_file_actions_addclose(posix_spawn_file_actions, fds[1]);
          checkReturnCode(rc, "Internal call to posix_spawn_file_actions_addclose() failed");
-
-         stdout = new ReferenceCountedFileDescriptor(out[0]);
-         stdoutWidow = out[1];
 
          // Dup the writing end of the pipe into the sub-process, and close our end
-         rc = LibC.posix_spawn_file_actions_adddup2(posix_spawn_file_actions, err[1], 2);
+         rc = LibC.posix_spawn_file_actions_adddup2(posix_spawn_file_actions, stderrWidow, 2);
          checkReturnCode(rc, "Internal call to posix_spawn_file_actions_adddup2() failed");
 
-         rc = LibC.posix_spawn_file_actions_addclose(posix_spawn_file_actions, err[0]);
+         rc = LibC.posix_spawn_file_actions_addclose(posix_spawn_file_actions, fds[2]);
          checkReturnCode(rc, "Internal call to posix_spawn_file_actions_addclose() failed");
-
-         stderr = new ReferenceCountedFileDescriptor(err[0]);
-         stderrWidow = err[1];
-
-         setNonBlocking(in, out, err);
 
          return posix_spawn_file_actions;
       }
       catch (RuntimeException e) {
-         e.printStackTrace(System.err);
-
+         LOGGER.log(Level.WARNING, "Exception creating posix pipe actions", e);
          LibC.posix_spawn_file_actions_destroy(posix_spawn_file_actions);
-         initFailureCleanup(in, out, err);
          throw e;
       }
    }
@@ -223,40 +194,5 @@ class OsxProcess extends BasePosixProcess
    private Pointer createPosixSpawnAttributes()
    {
       return new Memory(Pointer.SIZE);
-   }
-
-   private void setNonBlocking(int[] in, int[] out, int[] err)
-   {
-      int rc = LibC.fcntl(in[1], LibC.F_SETFL, LibC.fcntl(in[1], LibC.F_GETFL) | LibC.O_NONBLOCK);
-      checkReturnCode(rc, "fnctl on stdin handle failed");
-      rc = LibC.fcntl(out[0], LibC.F_SETFL, LibC.fcntl(out[0], LibC.F_GETFL) | LibC.O_NONBLOCK);
-      checkReturnCode(rc, "fnctl on stdout handle failed");
-      rc = LibC.fcntl(err[0], LibC.F_SETFL, LibC.fcntl(err[0], LibC.F_GETFL) | LibC.O_NONBLOCK);
-      checkReturnCode(rc, "fnctl on stderr handle failed");
-   }
-
-   private void initFailureCleanup(int[] in, int[] out, int[] err)
-   {
-      Set<Integer> unique = new HashSet<>();
-      if (in != null) {
-         unique.add(in[0]);
-         unique.add(in[1]);
-      }
-
-      if (out != null) {
-         unique.add(out[0]);
-         unique.add(out[1]);
-      }
-
-      if (err != null) {
-         unique.add(err[0]);
-         unique.add(err[1]);
-      }
-
-      for (int fildes : unique) {
-         if (fildes != 0) {
-            LibC.close(fildes);
-         }
-      }
    }
 }

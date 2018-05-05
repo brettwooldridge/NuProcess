@@ -16,7 +16,6 @@
 
 package com.zaxxer.nuprocess.internal;
 
-import com.sun.jna.JNIEnv;
 import com.sun.jna.Memory;
 import com.sun.jna.Native;
 import com.zaxxer.nuprocess.NuProcess;
@@ -25,7 +24,9 @@ import com.zaxxer.nuprocess.NuProcessHandler;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.file.Path;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.CyclicBarrier;
@@ -36,12 +37,13 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import static com.zaxxer.nuprocess.internal.Constants.NUMBER_OF_THREADS;
-import static com.zaxxer.nuprocess.internal.Constants.OS;
-import static com.zaxxer.nuprocess.internal.Constants.OperatingSystem.MAC;
+import static java.util.concurrent.locks.LockSupport.parkNanos;
 
 @SuppressWarnings("WeakerAccess")
 public abstract class BasePosixProcess implements NuProcess
 {
+   protected static final Logger LOGGER = Logger.getLogger(BasePosixProcess.class.getCanonicalName());
+
    private static final boolean IS_SOFTEXIT_DETECTION;
    private static final ByteBuffer STDIN_CLOSED_PENDING_WRITE_TOMBSTONE = ByteBuffer.allocate(1);
 
@@ -76,6 +78,10 @@ public abstract class BasePosixProcess implements NuProcess
    protected ReferenceCountedFileDescriptor stdout;
    protected ReferenceCountedFileDescriptor stderr;
 
+   protected volatile int stdinWidow;
+   protected volatile int stdoutWidow;
+   protected volatile int stderrWidow;
+
    protected AtomicBoolean stdinClosing;
    protected boolean outClosed;
    protected boolean errClosed;
@@ -102,14 +108,6 @@ public abstract class BasePosixProcess implements NuProcess
       }
    }
 
-   @SuppressWarnings("unused")
-   private enum LaunchMechanism {
-      // order IS important!
-      FORK,
-      POSIX_SPAWN,
-      VFORK
-   }
-
    protected BasePosixProcess(NuProcessHandler processListener)
    {
       this.processHandler = processListener;
@@ -129,78 +127,8 @@ public abstract class BasePosixProcess implements NuProcess
    //                        NuProcess interface methods
    // ************************************************************************
 
-   public NuProcess start(List<String> command, String[] environment, Path cwd) {
-      callPreStart();
+   public abstract NuProcess start(List<String> command, String[] environment, Path cwd);
 
-      String[] cmdarray = command.toArray(new String[0]);
-
-      // See https://github.com/JetBrains/jdk8u_jdk/blob/master/src/solaris/classes/java/lang/ProcessImpl.java#L71-L83
-      byte[][] args = new byte[cmdarray.length - 1][];
-      int size = args.length; // For added NUL bytes
-      for (int i = 0; i < args.length; i++) {
-         args[i] = cmdarray[i + 1].getBytes();
-         size += args[i].length;
-      }
-      byte[] argBlock = new byte[size];
-      int i = 0;
-      for (byte[] arg : args) {
-         System.arraycopy(arg, 0, argBlock, i, arg.length);
-         i += arg.length + 1;
-         // No need to write NUL bytes explicitly
-      }
-
-      // See https://github.com/JetBrains/jdk8u_jdk/blob/master/src/solaris/classes/java/lang/ProcessImpl.java#L86
-      byte[] envBlock = toEnvironmentBlock(environment);
-
-      // See https://github.com/JetBrains/jdk8u_jdk/blob/master/src/solaris/classes/java/lang/ProcessImpl.java#L96
-      int[] std_fds = new int[] { -1, -1, -1 };
-
-      try {
-         // See https://github.com/JetBrains/jdk8u_jdk/blob/master/src/solaris/classes/java/lang/UNIXProcess.java#L247
-         // Native source code: https://github.com/JetBrains/jdk8u_jdk/blob/master/src/solaris/native/java/lang/UNIXProcess_md.c#L566
-
-         final LaunchMechanism launchMechanism = OS == MAC ? LaunchMechanism.POSIX_SPAWN : LaunchMechanism.VFORK;
-
-         pid = LibJava8.Java_java_lang_UNIXProcess_forkAndExec(
-                 JNIEnv.CURRENT,
-                 this,
-                 launchMechanism.ordinal() + 1,
-                 toCString(System.getProperty("java.home") + "/lib/jspawnhelper"), // used on Linux
-                 toCString(cmdarray[0]),
-                 argBlock, args.length,
-                 envBlock, environment.length,
-                 (cwd != null ? toCString(cwd.toString()) : null),
-                 std_fds,
-                 (byte) 0 /*redirectErrorStream*/);
-
-         if (pid == -1 || !checkLaunch()) {
-            return null;
-         }
-
-         stdin = new ReferenceCountedFileDescriptor(std_fds[0]);
-         stdout = new ReferenceCountedFileDescriptor(std_fds[1]);
-         stderr = new ReferenceCountedFileDescriptor(std_fds[2]);
-
-         initializeBuffers();
-
-         setNonBlocking(std_fds[0], std_fds[1], std_fds[2]);
-
-         afterStart();
-
-         registerProcess();
-
-         callStart();
-      }
-      catch (Exception re) {
-         // TODO remove from event processor pid map?
-         re.printStackTrace(System.err);
-         onExit(Integer.MIN_VALUE);
-         return null;
-      }
-
-      return this;
-   }
-   
    /**
     * Check the launched process and return {@code true} if launch was successful,
     * or {@code false} if there was an error in launch.
@@ -428,7 +356,7 @@ public abstract class BasePosixProcess implements NuProcess
       }
       catch (Exception e) {
          // Don't let an exception thrown from the user's handler interrupt us
-         e.printStackTrace(System.err);
+         LOGGER.log(Level.WARNING, "Exception thrown from handler", e);
       }
       if (!outBuffer.hasRemaining()) {
          // The caller's onStdout() callback must set the buffer's position
@@ -466,7 +394,7 @@ public abstract class BasePosixProcess implements NuProcess
       }
       catch (Exception e) {
          // Don't let an exception thrown from the user's handler interrupt us
-         e.printStackTrace(System.err);
+         LOGGER.log(Level.WARNING, "Exception thrown from handler", e);
       }
       if (!errBuffer.hasRemaining()) {
          // The caller's onStderr() callback must set the buffer's position
@@ -568,6 +496,11 @@ public abstract class BasePosixProcess implements NuProcess
    // ************************************************************************
 
    protected void afterStart() {
+      final long testSleep = Integer.getInteger("nuprocess.test.afterStartSleep", 0);
+      if (testSleep > 0) {
+         parkNanos(testSleep);
+      }
+
       isRunning = true;
    }
 
@@ -640,14 +573,64 @@ public abstract class BasePosixProcess implements NuProcess
       }
    }
 
-   protected void setNonBlocking(int in, int out, int err)
+   protected int[] createPipes()
    {
-      int rc = LibC.fcntl(in, LibC.F_SETFL, LibC.fcntl(in, LibC.F_GETFL) | LibC.O_NONBLOCK);
-      checkReturnCode(rc, "fnctl on stdin handle failed");
-      rc = LibC.fcntl(out, LibC.F_SETFL, LibC.fcntl(out, LibC.F_GETFL) | LibC.O_NONBLOCK);
-      checkReturnCode(rc, "fnctl on stdout handle failed");
-      rc = LibC.fcntl(err, LibC.F_SETFL, LibC.fcntl(err, LibC.F_GETFL) | LibC.O_NONBLOCK);
-      checkReturnCode(rc, "fnctl on stderr handle failed");
+      int rc;
+
+      int[] in = new int[2];
+      int[] out = new int[2];
+      int[] err = new int[2];
+
+      try {
+         rc = LibC.pipe(in);
+         checkReturnCode(rc, "Create stdin pipe() failed");
+         rc = LibC.pipe(out);
+         checkReturnCode(rc, "Create stdout pipe() failed");
+         rc = LibC.pipe(err);
+         checkReturnCode(rc, "Create stderr pipe() failed");
+
+         setNonBlocking(in[1], out[0], err[0]);
+
+         stdin = new ReferenceCountedFileDescriptor(in[1]);
+         stdout = new ReferenceCountedFileDescriptor(out[0]);
+         stderr = new ReferenceCountedFileDescriptor(err[0]);
+
+         stdinWidow  = in[0];
+         stdoutWidow = out[1];
+         stderrWidow = err[1];
+
+         return new int[] {in[1], out[0], err[0]};
+      }
+      catch (RuntimeException e) {
+         LOGGER.log(Level.SEVERE, "Error creating pipes", e);
+         initFailureCleanup(in, out, err);
+         throw e;
+      }
+   }
+
+   protected void initFailureCleanup(int[] in, int[] out, int[] err)
+   {
+      Set<Integer> unique = new HashSet<>();
+      if (in != null) {
+         unique.add(in[0]);
+         unique.add(in[1]);
+      }
+
+      if (out != null) {
+         unique.add(out[0]);
+         unique.add(out[1]);
+      }
+
+      if (err != null) {
+         unique.add(err[0]);
+         unique.add(err[1]);
+      }
+
+      for (int fildes : unique) {
+         if (fildes != 0) {
+            LibC.close(fildes);
+         }
+      }
    }
 
    protected static void checkReturnCode(int rc, String failureMessage)
@@ -657,35 +640,13 @@ public abstract class BasePosixProcess implements NuProcess
       }
    }
 
-   private static byte[] toCString(String s) {
-      if (s == null)
-         return null;
-      byte[] bytes = s.getBytes();
-      byte[] result = new byte[bytes.length + 1];
-      System.arraycopy(bytes, 0,
-              result, 0,
-              bytes.length);
-      result[result.length-1] = (byte)0;
-      return result;
-   }
-
-   private static byte[] toEnvironmentBlock(String[] environment) {
-      int count = environment.length;
-      for (String entry : environment) {
-         count += entry.getBytes().length;
-      }
-
-      byte[] block = new byte[count];
-
-      int i = 0;
-      for (String entry : environment) {
-         byte[] bytes = entry.getBytes();
-         System.arraycopy(bytes, 0, block, i, bytes.length);
-         i += bytes.length + 1;
-         // No need to write NUL byte explicitly
-         //block[i++] = (byte) '\u0000';
-      }
-
-      return block;
+   private void setNonBlocking(int in, int out, int err)
+   {
+      int rc = LibC.fcntl(in, LibC.F_SETFL, LibC.fcntl(in, LibC.F_GETFL) | LibC.O_NONBLOCK);
+      checkReturnCode(rc, "fnctl on stdin handle failed");
+      rc = LibC.fcntl(out, LibC.F_SETFL, LibC.fcntl(out, LibC.F_GETFL) | LibC.O_NONBLOCK);
+      checkReturnCode(rc, "fnctl on stdout handle failed");
+      rc = LibC.fcntl(err, LibC.F_SETFL, LibC.fcntl(err, LibC.F_GETFL) | LibC.O_NONBLOCK);
+      checkReturnCode(rc, "fnctl on stderr handle failed");
    }
 }

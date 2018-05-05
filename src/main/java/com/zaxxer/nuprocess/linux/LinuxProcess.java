@@ -16,10 +16,17 @@
 
 package com.zaxxer.nuprocess.linux;
 
+import com.sun.jna.JNIEnv;
 import com.sun.jna.ptr.IntByReference;
+import com.zaxxer.nuprocess.NuProcess;
 import com.zaxxer.nuprocess.NuProcessHandler;
 import com.zaxxer.nuprocess.internal.BasePosixProcess;
 import com.zaxxer.nuprocess.internal.LibC;
+import com.zaxxer.nuprocess.internal.LibJava8;
+
+import java.nio.file.Path;
+import java.util.List;
+import java.util.logging.Level;
 
 import static com.zaxxer.nuprocess.internal.LibC.*;
 
@@ -38,8 +45,86 @@ public class LinuxProcess extends BasePosixProcess
       }
    }
 
+   @SuppressWarnings("unused")
+   private enum LaunchMechanism {
+      // order IS important!
+      FORK,
+      POSIX_SPAWN,
+      VFORK
+   }
+
    LinuxProcess(NuProcessHandler processListener) {
       super(processListener);
+   }
+
+   @Override
+   public NuProcess start(List<String> command, String[] environment, Path cwd) {
+      callPreStart();
+
+      String[] cmdarray = command.toArray(new String[0]);
+
+      // See https://github.com/JetBrains/jdk8u_jdk/blob/master/src/solaris/classes/java/lang/ProcessImpl.java#L71-L83
+      byte[][] args = new byte[cmdarray.length - 1][];
+      int size = args.length; // For added NUL bytes
+      for (int i = 0; i < args.length; i++) {
+         args[i] = cmdarray[i + 1].getBytes();
+         size += args[i].length;
+      }
+      byte[] argBlock = new byte[size];
+      int i = 0;
+      for (byte[] arg : args) {
+         System.arraycopy(arg, 0, argBlock, i, arg.length);
+         i += arg.length + 1;
+         // No need to write NUL bytes explicitly
+      }
+
+      // See https://github.com/JetBrains/jdk8u_jdk/blob/master/src/solaris/classes/java/lang/ProcessImpl.java#L86
+      byte[] envBlock = toEnvironmentBlock(environment);
+
+      try {
+         // See https://github.com/JetBrains/jdk8u_jdk/blob/master/src/solaris/classes/java/lang/ProcessImpl.java#L96
+         createPipes();
+         int[] child_fds = {stdinWidow, stdoutWidow, stderrWidow};
+
+         // See https://github.com/JetBrains/jdk8u_jdk/blob/master/src/solaris/classes/java/lang/UNIXProcess.java#L247
+         // Native source code: https://github.com/JetBrains/jdk8u_jdk/blob/master/src/solaris/native/java/lang/UNIXProcess_md.c#L566
+         pid = LibJava8.Java_java_lang_UNIXProcess_forkAndExec(
+               JNIEnv.CURRENT,
+               this,
+               LaunchMechanism.VFORK.ordinal() + 1,
+               toCString(System.getProperty("java.home") + "/lib/jspawnhelper"), // used on Linux
+               toCString(cmdarray[0]),
+               argBlock, args.length,
+               envBlock, environment.length,
+               (cwd != null ? toCString(cwd.toString()) : null),
+               child_fds,
+               (byte) 0 /*redirectErrorStream*/);
+
+         if (pid == -1) {
+            return null;
+         }
+
+         // Close the child end of the pipes in our process
+         LibC.close(stdinWidow);
+         LibC.close(stdoutWidow);
+         LibC.close(stderrWidow);
+
+         initializeBuffers();
+
+         afterStart();
+
+         registerProcess();
+
+         callStart();
+      }
+      catch (Exception e) {
+         // TODO remove from event processor pid map?
+         LOGGER.log(Level.WARNING, "Failed to start process", e);
+         onExit(Integer.MIN_VALUE);
+         return null;
+      }
+
+      return this;
    }
 
    @Override
@@ -75,5 +160,37 @@ public class LinuxProcess extends BasePosixProcess
       }
 
       return true;
+   }
+
+   private static byte[] toCString(String s) {
+      if (s == null)
+         return null;
+      byte[] bytes = s.getBytes();
+      byte[] result = new byte[bytes.length + 1];
+      System.arraycopy(bytes, 0,
+            result, 0,
+            bytes.length);
+      result[result.length-1] = (byte)0;
+      return result;
+   }
+
+   private static byte[] toEnvironmentBlock(String[] environment) {
+      int count = environment.length;
+      for (String entry : environment) {
+         count += entry.getBytes().length;
+      }
+
+      byte[] block = new byte[count];
+
+      int i = 0;
+      for (String entry : environment) {
+         byte[] bytes = entry.getBytes();
+         System.arraycopy(bytes, 0, block, i, bytes.length);
+         i += bytes.length + 1;
+         // No need to write NUL byte explicitly
+         //block[i++] = (byte) '\u0000';
+      }
+
+      return block;
    }
 }
