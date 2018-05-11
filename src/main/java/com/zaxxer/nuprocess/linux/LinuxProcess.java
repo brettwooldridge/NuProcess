@@ -22,10 +22,10 @@ import com.zaxxer.nuprocess.NuProcess;
 import com.zaxxer.nuprocess.NuProcessHandler;
 import com.zaxxer.nuprocess.internal.BasePosixProcess;
 import com.zaxxer.nuprocess.internal.LibC;
-import com.zaxxer.nuprocess.internal.LibJava8;
 
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import java.util.logging.Level;
 
 import static com.zaxxer.nuprocess.internal.LibC.*;
@@ -35,7 +35,11 @@ import static com.zaxxer.nuprocess.internal.LibC.*;
  */
 public class LinuxProcess extends BasePosixProcess
 {
+   private static final boolean isAzul;
+
    static {
+      isAzul = System.getProperty("java.vm.vendor", "").contains("Azul");
+
       LibEpoll.sigignore(LibEpoll.SIGPIPE);
 
       // TODO: install signal handler for SIGCHLD, and call onExit() when received, call the default (JVM) hook if the PID is not ours
@@ -86,19 +90,34 @@ public class LinuxProcess extends BasePosixProcess
          createPipes();
          int[] child_fds = {stdinWidow, stdoutWidow, stderrWidow};
 
-         // See https://github.com/JetBrains/jdk8u_jdk/blob/master/src/solaris/classes/java/lang/UNIXProcess.java#L247
-         // Native source code: https://github.com/JetBrains/jdk8u_jdk/blob/master/src/solaris/native/java/lang/UNIXProcess_md.c#L566
-         pid = LibJava8.Java_java_lang_UNIXProcess_forkAndExec(
-               JNIEnv.CURRENT,
-               this,
-               LaunchMechanism.VFORK.ordinal() + 1,
-               toCString(System.getProperty("java.home") + "/lib/jspawnhelper"), // used on Linux
-               toCString(cmdarray[0]),
-               argBlock, args.length,
-               envBlock, environment.length,
-               (cwd != null ? toCString(cwd.toString()) : null),
-               child_fds,
-               (byte) 0 /*redirectErrorStream*/);
+         if (isAzul) {
+            pid = com.zaxxer.nuprocess.internal.LibAzulJava8.Java_java_lang_ProcessImpl_forkAndExec(
+                  JNIEnv.CURRENT,
+                  this,
+                  LaunchMechanism.VFORK.ordinal() + 1,
+                  toCString(System.getProperty("java.home") + "/lib/jspawnhelper"), // used on Linux
+                  toCString(cmdarray[0]),
+                  argBlock, args.length,
+                  envBlock, environment.length,
+                  (cwd != null ? toCString(cwd.toString()) : null),
+                  child_fds,
+                  (byte) 0 /*redirectErrorStream*/);
+         }
+         else {
+            // See https://github.com/JetBrains/jdk8u_jdk/blob/master/src/solaris/classes/java/lang/UNIXProcess.java#L247
+            // Native source code: https://github.com/JetBrains/jdk8u_jdk/blob/master/src/solaris/native/java/lang/UNIXProcess_md.c#L566
+            pid = com.zaxxer.nuprocess.internal.LibJava8.Java_java_lang_UNIXProcess_forkAndExec(
+                  JNIEnv.CURRENT,
+                  this,
+                  LaunchMechanism.VFORK.ordinal() + 1,
+                  toCString(System.getProperty("java.home") + "/lib/jspawnhelper"), // used on Linux
+                  toCString(cmdarray[0]),
+                  argBlock, args.length,
+                  envBlock, environment.length,
+                  (cwd != null ? toCString(cwd.toString()) : null),
+                  child_fds,
+                  (byte) 0 /*redirectErrorStream*/);
+         }
 
          if (pid == -1) {
             return null;

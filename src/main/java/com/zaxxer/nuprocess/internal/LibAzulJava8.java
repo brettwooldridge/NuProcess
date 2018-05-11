@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2015 Ben Hamilton, Brett Wooldridge
+ * Copyright (C) 2018 Brett Wooldridge
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -26,7 +26,7 @@ import java.util.Map;
 
 import static com.zaxxer.nuprocess.internal.Constants.OS;
 
-public class LibJava8
+public class LibAzulJava8
 {
    static {
       Map<String, Object> options = new HashMap<>();
@@ -39,10 +39,10 @@ public class LibJava8
          Native.register(NativeLibrary.getProcess(options));
       }
 
-      Java_java_lang_UNIXProcess_init(JNIEnv.CURRENT, BasePosixProcess.class);
+      Java_java_lang_ProcessImpl_init(JNIEnv.CURRENT, BasePosixProcess.class);
    }
 
-   public static native void Java_java_lang_UNIXProcess_init(JNIEnv jniEnv, Object clazz);
+   public static native void Java_java_lang_ProcessImpl_init(JNIEnv jniEnv, Object clazz);
 
    /**
     * JNIEXPORT jint JNICALL
@@ -59,7 +59,7 @@ public class LibJava8
     *
     * @return the PID of the process
     */
-   public static native int Java_java_lang_UNIXProcess_forkAndExec(
+   public static native int Java_java_lang_ProcessImpl_forkAndExec(
            JNIEnv jniEnv,
            Object process,
            int mode,
