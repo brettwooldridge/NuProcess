@@ -32,6 +32,8 @@ public class LibJava8
       Map<String, Object> options = new HashMap<>();
       options.put(Library.OPTION_ALLOW_OBJECTS, Boolean.TRUE);
 
+      LibJava8.Java_java_lang_UNIXProcess_init(JNIEnv.CURRENT, BasePosixProcess.class);
+
       if (OS != Constants.OperatingSystem.MAC) {
          Native.register(NativeLibrary.getInstance("java", options));
       }

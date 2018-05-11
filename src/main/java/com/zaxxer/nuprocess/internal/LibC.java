@@ -28,8 +28,6 @@ import static com.zaxxer.nuprocess.internal.Constants.OS;
 public class LibC
 {
    static {
-      LibJava8.Java_java_lang_UNIXProcess_init(JNIEnv.CURRENT, BasePosixProcess.class);
-
       if (OS == OperatingSystem.MAC) {
          O_NONBLOCK = 0x0004; // MacOS X, Freebsd
       }
