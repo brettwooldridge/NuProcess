@@ -1,3 +1,24 @@
+
+Changes in 1.2.3
+ * Resolve launch issue on Linux/MacOS X w/Zulu JVM.
+
+Changes in 1.2.2
+ * Fix race condition seen (once) on Linux after moving to JVM internal API for process spawning.
+
+Changes in 1.2.1
+ * On OS X, continue to use posix_spawnp directly, POSIX_SPAWN_START_SUSPENDED solves a lot of potential race conditions that we have to contend with on Linux.
+
+Changes in 1.2.0
+ * Spawn processes on Linux and MacOS X using JVM internal method Java_java_lang_UNIXProcess_forkAndExec.
+
+Changes in 1.1.3
+
+ * Add constructor with Pointer to LibKevent.Kevent (#82) that reduces reflection code executed in JNA.
+
+ * Change to Linux epoll implementation that massively decreases the amount of memory used.
+ 
+ * Optimize epoll_wait loop to avoid memory churn. (#80)
+
 Changes in 1.1.2
 
  * Fix issue on Mac OS X where pipes would leak after many calls to closeStdin
