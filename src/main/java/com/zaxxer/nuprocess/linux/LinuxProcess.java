@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.logging.Level;
 
 import static com.zaxxer.nuprocess.internal.LibC.*;
+import static com.zaxxer.nuprocess.internal.Constants.JVM_MAJOR_VERSION;
 
 /**
  * @author Brett Wooldridge
@@ -89,8 +90,8 @@ public class LinuxProcess extends BasePosixProcess
          createPipes();
          int[] child_fds = {stdinWidow, stdoutWidow, stderrWidow};
 
-         if (isAzul) {
-            pid = com.zaxxer.nuprocess.internal.LibAzulJava8.Java_java_lang_ProcessImpl_forkAndExec(
+         if (JVM_MAJOR_VERSION >= 10 || isAzul) {
+            pid = com.zaxxer.nuprocess.internal.LibJava10.Java_java_lang_ProcessImpl_forkAndExec(
                   JNIEnv.CURRENT,
                   this,
                   LaunchMechanism.VFORK.ordinal() + 1,

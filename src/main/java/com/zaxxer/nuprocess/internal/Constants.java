@@ -3,7 +3,7 @@ package com.zaxxer.nuprocess.internal;
 public class Constants
 {
    public static final int NUMBER_OF_THREADS;
-   static final int JVM_MAJOR_VERSION;
+   public static final int JVM_MAJOR_VERSION;
    static final OperatingSystem OS;
 
    enum OperatingSystem
@@ -14,7 +14,11 @@ public class Constants
    }
 
    static {
-      JVM_MAJOR_VERSION = System.getProperty("java.vm.specification.version").equals("1.7") ? 7 : 8;
+      String[] parts = System.getProperty("java.version").split("\\.");
+      int major = Integer.valueOf(parts[0]);
+      if (major == 1)
+        major = Integer.valueOf(parts[1]);
+      JVM_MAJOR_VERSION = major;
 
       final String osname = System.getProperty("os.name").toLowerCase();
       if (osname.contains("mac") || osname.contains("freebsd"))
