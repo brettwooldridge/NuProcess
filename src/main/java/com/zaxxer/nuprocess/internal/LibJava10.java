@@ -24,9 +24,10 @@ import com.sun.jna.NativeLibrary;
 import java.util.HashMap;
 import java.util.Map;
 
+import static com.zaxxer.nuprocess.internal.Constants.JVM_MAJOR_VERSION;
 import static com.zaxxer.nuprocess.internal.Constants.OS;
 
-public class LibAzulJava8
+public class LibJava10
 {
    static {
       Map<String, Object> options = new HashMap<>();
@@ -46,7 +47,7 @@ public class LibAzulJava8
 
    /**
     * JNIEXPORT jint JNICALL
-    * Java_java_lang_UNIXProcess_forkAndExec(JNIEnv *env,
+    * Java_java_lang_ProcessImpl_forkAndExec(JNIEnv *env,
     *                                        jobject process,
     *                                        jint mode,
     *                                        jbyteArray helperpath,
