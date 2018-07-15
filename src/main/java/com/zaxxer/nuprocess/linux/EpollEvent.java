@@ -89,7 +89,7 @@ class EpollEvent
          // per bits/epoll.h, epoll_event is created with __attribute__ ((__packed__)), which disables
          // applying padding to optimize alignment. epoll_event is memory-aligned on 32-bit platforms,
          // but not on 64-bit platforms (i.e. it uses 32-bit alignment on 64-bit platforms)
-         super(ALIGN_NONE);
+         super(ALIGN_GNUC); // super(ALIGN_NONE);
 
          data = new EpollData();
          data.setType("fd");
