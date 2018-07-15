@@ -1,0 +1,15 @@
+language: java
+
+jdk:
+  - oraclejdk8
+  
+build:
+  ci:
+    - mvn install
+    #Create folders for test and code coverage
+    - mkdir -p shippable/testresults
+    - mkdir -p shippable/codecoverage
+    - cp -r target/site/jacoco/jacoco.xml shippable/codecoverage
+
+runtime:
+  nodePool: shippable_shared_aarch64
