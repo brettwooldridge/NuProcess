@@ -10,6 +10,8 @@ public class EpollEventTest
    public void testSize()
    {
       EpollEvent event = new EpollEvent();
-      Assert.assertEquals(12, event.size());
+      Assert.assertEquals(16, event.size());
+      // When alignment is ALIGN_NONE
+      // Assert.assertEquals(12, event.size());
    }
 }
