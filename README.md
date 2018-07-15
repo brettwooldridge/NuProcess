@@ -2,6 +2,7 @@ NuProcess
 =========
 
 [![][Build Status img]][Build Status]
+[![][Shippable Status img]][Shippable Status]
 [![][license img]][license]
 [![][Maven Central img]][Maven Central]
 [![][Javadocs img]][Javadocs]
@@ -181,6 +182,9 @@ The following limitations exist in NuProcess:
 
 [Build Status]:https://travis-ci.org/brettwooldridge/NuProcess
 [Build Status img]:https://travis-ci.org/brettwooldridge/NuProcess.svg?branch=master
+
+[Shippable Status]:https://app.shippable.com/github/brettwooldridge/NuProcess
+[Shippable Status img]:https://api.shippable.com/projects/5b4b6a3e6db3b807000a63d8/badge?branch=master
 
 [license]:LICENSE
 [license img]:https://img.shields.io/badge/license-Apache%202-blue.svg
