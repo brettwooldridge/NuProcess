@@ -19,10 +19,7 @@ package com.zaxxer.nuprocess.linux;
 import java.util.Arrays;
 import java.util.List;
 
-import com.sun.jna.Memory;
-import com.sun.jna.Pointer;
-import com.sun.jna.Structure;
-import com.sun.jna.Union;
+import com.sun.jna.*;
 
 class EpollEvent
 {
@@ -76,20 +73,14 @@ class EpollEvent
             epoll_data_t data; // User data variable
           } __EPOLL_PACKED;
 
-          On x86, __EPOLL_PACKED is:    #define __EPOLL_PACKED
-          On x86_64, __EPOLL_PACKED is: #define __EPOLL_PACKED __attribute__ ((__packed__))
-
-          sizeof(struct epoll_event) is 12 on x86 and x86_64
+          sizeof(struct epoll_event) is 12 on x86 and x86_64, but is 16 on other 64-bit platforms
       */
 
       public int events;
       public EpollData data;
 
       EpollEventPrototype() {
-         // per bits/epoll.h, epoll_event is created with __attribute__ ((__packed__)), which disables
-         // applying padding to optimize alignment. epoll_event is memory-aligned on 32-bit platforms,
-         // but not on 64-bit platforms (i.e. it uses 32-bit alignment on 64-bit platforms)
-         super(ALIGN_GNUC); // super(ALIGN_NONE);
+         super(detectAlignment());
 
          data = new EpollData();
          data.setType("fd");
@@ -104,6 +95,23 @@ class EpollEvent
       @Override
       protected List<String> getFieldOrder() {
          return Arrays.asList("events", "data");
+      }
+
+      /**
+       * Uses the OS architecture to reproduce the following logic from the epoll header:
+       * <code><pre>
+       * #ifdef __x86_64__
+       * #define EPOLL_PACKED __attribute__((packed))
+       * #else
+       * #define EPOLL_PACKED
+       * #endif
+       * </pre></code>
+       *
+       * On x86-64 (amd64) platforms, {@code ALIGN_NONE} is used (to emulate {@code __attribute__((packed))}),
+       * and on all other platforms {@code ALIGN_GNUC} is used.
+       */
+      private static int detectAlignment() {
+         return Platform.isIntel() && Platform.is64Bit() ? ALIGN_NONE : ALIGN_GNUC;
       }
 
       /*
