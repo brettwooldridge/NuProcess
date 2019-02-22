@@ -22,11 +22,7 @@ package com.zaxxer.nuprocess.windows;
 import java.util.Arrays;
 import java.util.List;
 
-import com.sun.jna.FromNativeContext;
-import com.sun.jna.IntegerType;
-import com.sun.jna.Pointer;
-import com.sun.jna.PointerType;
-import com.sun.jna.Structure;
+import com.sun.jna.*;
 import com.sun.jna.ptr.ByReference;
 import com.sun.jna.ptr.ByteByReference;
 
@@ -62,7 +58,7 @@ public interface NuWinNT
 
    int STARTF_USESTDHANDLES = 0x100;
 
-   HANDLE INVALID_HANDLE_VALUE = new HANDLE(Pointer.createConstant(Pointer.SIZE == 8 ? -1 : 0xFFFFFFFFL));
+   HANDLE INVALID_HANDLE_VALUE = new HANDLE(Pointer.createConstant(Native.POINTER_SIZE == 8 ? -1 : 0xFFFFFFFFL));
 
    class HANDLE extends PointerType
    {
@@ -125,7 +121,7 @@ public interface NuWinNT
 
       public ULONG_PTR(long value)
       {
-         super(Pointer.SIZE, value, true);
+         super(Native.POINTER_SIZE, value, true);
       }
 
       public Pointer toPointer()
@@ -143,13 +139,13 @@ public interface NuWinNT
 
       public ULONG_PTRByReference(ULONG_PTR value)
       {
-         super(Pointer.SIZE);
+         super(Native.POINTER_SIZE);
          setValue(value);
       }
 
       public void setValue(ULONG_PTR value)
       {
-         if (Pointer.SIZE == 4) {
+         if (Native.POINTER_SIZE == 4) {
             getPointer().setInt(0, value.intValue());
          }
          else {
@@ -159,7 +155,7 @@ public interface NuWinNT
 
       public ULONG_PTR getValue()
       {
-         return new ULONG_PTR(Pointer.SIZE == 4 ? getPointer().getInt(0) : getPointer().getLong(0));
+         return new ULONG_PTR(Native.POINTER_SIZE == 4 ? getPointer().getInt(0) : getPointer().getLong(0));
       }
    }
 
