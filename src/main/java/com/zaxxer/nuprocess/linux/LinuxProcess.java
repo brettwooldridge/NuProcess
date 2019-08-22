@@ -21,6 +21,7 @@ import com.sun.jna.ptr.IntByReference;
 import com.zaxxer.nuprocess.NuProcess;
 import com.zaxxer.nuprocess.NuProcessHandler;
 import com.zaxxer.nuprocess.internal.BasePosixProcess;
+import com.zaxxer.nuprocess.internal.IEventProcessor;
 import com.zaxxer.nuprocess.internal.LibC;
 
 import java.nio.file.Path;
@@ -65,6 +66,65 @@ public class LinuxProcess extends BasePosixProcess
    public NuProcess start(List<String> command, String[] environment, Path cwd) {
       callPreStart();
 
+      try {
+         prepareProcess(command, environment, cwd);
+
+         if (pid == -1) {
+            return null;
+         }
+
+         closePipes();
+
+         initializeBuffers();
+
+         afterStart();
+
+         registerProcess();
+
+         callStart();
+      }
+      catch (Exception e) {
+         // TODO remove from event processor pid map?
+         LOGGER.log(Level.WARNING, "Failed to start process", e);
+         onExit(Integer.MIN_VALUE);
+         return null;
+      }
+
+      return this;
+   }
+
+   @Override
+   public void run(List<String> command, String[] environment, Path cwd)
+   {
+      callPreStart();
+
+      try {
+         prepareProcess(command, environment, cwd);
+
+         if (pid == -1) {
+            return;
+         }
+
+         closePipes();
+
+         initializeBuffers();
+
+         afterStart();
+
+         myProcessor = (IEventProcessor) new ProcessEpoll(this);
+
+         callStart();
+
+         myProcessor.run();
+      }
+      catch (Exception e) {
+         LOGGER.log(Level.WARNING, "Failed to start process", e);
+         onExit(Integer.MIN_VALUE);
+      }
+   }
+
+   private void prepareProcess(List<String> command, String[] environment, Path cwd)
+   {
       String[] cmdarray = command.toArray(new String[0]);
 
       // See https://github.com/JetBrains/jdk8u_jdk/blob/master/src/solaris/classes/java/lang/ProcessImpl.java#L71-L83
@@ -85,65 +145,46 @@ public class LinuxProcess extends BasePosixProcess
       // See https://github.com/JetBrains/jdk8u_jdk/blob/master/src/solaris/classes/java/lang/ProcessImpl.java#L86
       byte[] envBlock = toEnvironmentBlock(environment);
 
-      try {
-         // See https://github.com/JetBrains/jdk8u_jdk/blob/master/src/solaris/classes/java/lang/ProcessImpl.java#L96
-         createPipes();
-         int[] child_fds = {stdinWidow, stdoutWidow, stderrWidow};
+      // See https://github.com/JetBrains/jdk8u_jdk/blob/master/src/solaris/classes/java/lang/ProcessImpl.java#L96
+      createPipes();
+      int[] child_fds = {stdinWidow, stdoutWidow, stderrWidow};
 
-         if (JVM_MAJOR_VERSION >= 10 || isAzul) {
-            pid = com.zaxxer.nuprocess.internal.LibJava10.Java_java_lang_ProcessImpl_forkAndExec(
-                  JNIEnv.CURRENT,
-                  this,
-                  LaunchMechanism.VFORK.ordinal() + 1,
-                  toCString(System.getProperty("java.home") + "/lib/jspawnhelper"), // used on Linux
-                  toCString(cmdarray[0]),
-                  argBlock, args.length,
-                  envBlock, environment.length,
-                  (cwd != null ? toCString(cwd.toString()) : null),
-                  child_fds,
-                  (byte) 0 /*redirectErrorStream*/);
-         }
-         else {
-            // See https://github.com/JetBrains/jdk8u_jdk/blob/master/src/solaris/classes/java/lang/UNIXProcess.java#L247
-            // Native source code: https://github.com/JetBrains/jdk8u_jdk/blob/master/src/solaris/native/java/lang/UNIXProcess_md.c#L566
-            pid = com.zaxxer.nuprocess.internal.LibJava8.Java_java_lang_UNIXProcess_forkAndExec(
-                  JNIEnv.CURRENT,
-                  this,
-                  LaunchMechanism.VFORK.ordinal() + 1,
-                  toCString(System.getProperty("java.home") + "/lib/jspawnhelper"), // used on Linux
-                  toCString(cmdarray[0]),
-                  argBlock, args.length,
-                  envBlock, environment.length,
-                  (cwd != null ? toCString(cwd.toString()) : null),
-                  child_fds,
-                  (byte) 0 /*redirectErrorStream*/);
-         }
-
-         if (pid == -1) {
-            return null;
-         }
-
-         // Close the child end of the pipes in our process
-         LibC.close(stdinWidow);
-         LibC.close(stdoutWidow);
-         LibC.close(stderrWidow);
-
-         initializeBuffers();
-
-         afterStart();
-
-         registerProcess();
-
-         callStart();
+      if (JVM_MAJOR_VERSION >= 10 || isAzul) {
+         pid = com.zaxxer.nuprocess.internal.LibJava10.Java_java_lang_ProcessImpl_forkAndExec(
+               JNIEnv.CURRENT,
+               this,
+               LaunchMechanism.VFORK.ordinal() + 1,
+               toCString(System.getProperty("java.home") + "/lib/jspawnhelper"), // used on Linux
+               toCString(cmdarray[0]),
+               argBlock, args.length,
+               envBlock, environment.length,
+               (cwd != null ? toCString(cwd.toString()) : null),
+               child_fds,
+               (byte) 0 /*redirectErrorStream*/);
       }
-      catch (Exception e) {
-         // TODO remove from event processor pid map?
-         LOGGER.log(Level.WARNING, "Failed to start process", e);
-         onExit(Integer.MIN_VALUE);
-         return null;
+      else {
+         // See https://github.com/JetBrains/jdk8u_jdk/blob/master/src/solaris/classes/java/lang/UNIXProcess.java#L247
+         // Native source code: https://github.com/JetBrains/jdk8u_jdk/blob/master/src/solaris/native/java/lang/UNIXProcess_md.c#L566
+         pid = com.zaxxer.nuprocess.internal.LibJava8.Java_java_lang_UNIXProcess_forkAndExec(
+               JNIEnv.CURRENT,
+               this,
+               LaunchMechanism.VFORK.ordinal() + 1,
+               toCString(System.getProperty("java.home") + "/lib/jspawnhelper"), // used on Linux
+               toCString(cmdarray[0]),
+               argBlock, args.length,
+               envBlock, environment.length,
+               (cwd != null ? toCString(cwd.toString()) : null),
+               child_fds,
+               (byte) 0 /*redirectErrorStream*/);
       }
+   }
 
-      return this;
+   private void closePipes()
+   {
+      // Close the child end of the pipes in our process
+      LibC.close(stdinWidow);
+      LibC.close(stdoutWidow);
+      LibC.close(stderrWidow);
    }
 
    @Override

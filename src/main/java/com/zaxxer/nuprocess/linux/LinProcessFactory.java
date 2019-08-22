@@ -41,4 +41,12 @@ public class LinProcessFactory implements NuProcessFactory
       }
       return process;
    }
+
+   /** {@inheritDoc} */
+   @Override
+   public void runProcess(List<String> commands, String[] env, NuProcessHandler processListener, Path cwd)
+   {
+      LinuxProcess process = new LinuxProcess(processListener);
+      process.run(commands, env, cwd);
+   }
 }

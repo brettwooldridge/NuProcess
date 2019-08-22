@@ -44,6 +44,8 @@ public final class ProcessCompletions implements Runnable
    private static final int STDOUT = 0;
    private static final int STDERR = 1;
 
+   private final int lingerIterations;
+
    private HANDLE ioCompletionPort;
 
    private List<WindowsProcess> deadPool;
@@ -69,6 +71,25 @@ public final class ProcessCompletions implements Runnable
 
    ProcessCompletions()
    {
+      this(LINGER_ITERATIONS);
+   }
+
+   ProcessCompletions(WindowsProcess process)
+   {
+      this(-1);
+
+      if (process == null) {
+         throw new IllegalArgumentException("process");
+      }
+
+      registerProcess(process);
+      checkAndSetRunning();
+   }
+
+   private ProcessCompletions(int lingerIterations)
+   {
+      this.lingerIterations = lingerIterations;
+
       completionKeyToProcessMap = new HashMap<>();
       wantsWrite = new ArrayBlockingQueue<>(512);
       pendingPool = new LinkedBlockingQueue<>();
@@ -89,10 +110,13 @@ public final class ProcessCompletions implements Runnable
    public void run()
    {
       try {
-         startBarrier.await();
+         // If the process is running synchronously, startBarrier will be null
+         if (startBarrier != null) {
+            startBarrier.await();
+         }
 
          int idleCount = 0;
-         while (!isRunning.compareAndSet(idleCount > LINGER_ITERATIONS && deadPool.isEmpty() && completionKeyToProcessMap.isEmpty(), false)) {
+         while (!isRunning.compareAndSet(idleCount > lingerIterations && completionKeyToProcessMap.isEmpty() && deadPool.isEmpty() && pendingPool.isEmpty(), false)) {
             idleCount = (!shutdown && process()) ? 0 : (idleCount + 1);
          }
       }

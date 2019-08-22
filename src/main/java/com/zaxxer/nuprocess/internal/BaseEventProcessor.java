@@ -71,7 +71,10 @@ public abstract class BaseEventProcessor<T extends BasePosixProcess> implements 
    public void run()
    {
       try {
-         startBarrier.await();
+         // If the process is running synchronously, startBarrier will be null
+         if (startBarrier != null) {
+            startBarrier.await();
+         }
 
          int idleCount = 0;
          while (!isRunning.compareAndSet(idleCount > lingerIterations && pidToProcessMap.isEmpty(), false)) {

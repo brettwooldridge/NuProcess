@@ -24,6 +24,7 @@ import com.sun.jna.ptr.IntByReference;
 import com.zaxxer.nuprocess.NuProcess;
 import com.zaxxer.nuprocess.NuProcessHandler;
 import com.zaxxer.nuprocess.internal.BasePosixProcess;
+import com.zaxxer.nuprocess.internal.IEventProcessor;
 import com.zaxxer.nuprocess.internal.LibC;
 import com.zaxxer.nuprocess.internal.LibC.SyscallLibrary;
 
@@ -59,24 +60,7 @@ class OsxProcess extends BasePosixProcess
       Pointer posix_spawnattr = createPosixSpawnAttributes();
 
       try {
-         int rc = LibC.posix_spawnattr_init(posix_spawnattr);
-         checkReturnCode(rc, "Internal call to posix_spawnattr_init() failed");
-
-         LibC.posix_spawnattr_setflags(posix_spawnattr, (short)(LibC.POSIX_SPAWN_START_SUSPENDED | LibC.POSIX_SPAWN_CLOEXEC_DEFAULT));
-
-         IntByReference restrict_pid = new IntByReference();
-         StringArray commandsArray = new StringArray(commands);
-         StringArray environmentArray = new StringArray(environment);
-         if (cwd != null) {
-            rc = spawnWithCwd(restrict_pid, commands[0], posix_spawn_file_actions, posix_spawnattr, commandsArray, environmentArray, cwd);
-         }
-         else {
-            rc = LibC.posix_spawnp(restrict_pid, commands[0], posix_spawn_file_actions, posix_spawnattr, commandsArray, environmentArray);
-         }
-
-         pid = restrict_pid.getValue();
-
-         initializeBuffers();
+         int rc = prepareProcess(environment, cwd, commands, posix_spawn_file_actions, posix_spawnattr);
 
          if (!checkLaunch()) {
             return null;
@@ -103,12 +87,85 @@ class OsxProcess extends BasePosixProcess
          LibC.posix_spawn_file_actions_destroy(posix_spawn_file_actions);
 
          // After we've spawned, close the unused ends of our pipes (that were dup'd into the child process space)
-         LibC.close(stdinWidow);
-         LibC.close(stdoutWidow);
-         LibC.close(stderrWidow);
+         closePipes();
       }
 
       return this;
+   }
+
+    @Override
+   public void run(List<String> command, String[] environment, Path cwd)
+   {
+      callPreStart();
+
+      String[] commands = command.toArray(new String[0]);
+
+      Pointer posix_spawn_file_actions = createPosixPipes();
+      Pointer posix_spawnattr = createPosixSpawnAttributes();
+
+      try {
+         int rc = prepareProcess(environment, cwd, commands, posix_spawn_file_actions, posix_spawnattr);
+
+         if (!checkLaunch()) {
+            return;
+         }
+
+         checkReturnCode(rc, "Invocation of posix_spawn() failed");
+
+         afterStart();
+
+         myProcessor = (IEventProcessor) new ProcessKqueue(this);
+
+         callStart();
+
+         singleProcessContinue();
+
+         myProcessor.run();
+      }
+      catch (RuntimeException e) {
+         // TODO remove from event processor pid map?
+         LOGGER.log(Level.WARNING, "Exception thrown from handler", e);
+         onExit(Integer.MIN_VALUE);
+      }
+      finally {
+         LibC.posix_spawnattr_destroy(posix_spawnattr);
+         LibC.posix_spawn_file_actions_destroy(posix_spawn_file_actions);
+
+         // After we've spawned, close the unused ends of our pipes (that were dup'd into the child process space)
+         closePipes();
+      }
+   }
+
+   private int prepareProcess(String[] environment, Path cwd, String[] commands,
+                              Pointer posix_spawn_file_actions, Pointer posix_spawnattr)
+   {
+      int rc = LibC.posix_spawnattr_init(posix_spawnattr);
+      checkReturnCode(rc, "Internal call to posix_spawnattr_init() failed");
+
+      LibC.posix_spawnattr_setflags(posix_spawnattr, (short)(LibC.POSIX_SPAWN_START_SUSPENDED | LibC.POSIX_SPAWN_CLOEXEC_DEFAULT));
+
+      IntByReference restrict_pid = new IntByReference();
+      StringArray commandsArray = new StringArray(commands);
+      StringArray environmentArray = new StringArray(environment);
+      if (cwd != null) {
+         rc = spawnWithCwd(restrict_pid, commands[0], posix_spawn_file_actions, posix_spawnattr, commandsArray, environmentArray, cwd);
+      }
+      else {
+         rc = LibC.posix_spawnp(restrict_pid, commands[0], posix_spawn_file_actions, posix_spawnattr, commandsArray, environmentArray);
+      }
+
+      pid = restrict_pid.getValue();
+
+      initializeBuffers();
+
+      return rc;
+   }
+
+   private void closePipes()
+   {
+      LibC.close(stdinWidow);
+      LibC.close(stdoutWidow);
+      LibC.close(stderrWidow);
    }
 
    private int spawnWithCwd(final IntByReference restrict_pid,

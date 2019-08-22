@@ -44,6 +44,7 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
    private int epoll;
    private EpollEvent triggeredEvent;
    private List<LinuxProcess> deadPool;
+   private LinuxProcess process;
 
    static
    {
@@ -56,6 +57,23 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
 
    ProcessEpoll()
    {
+      this(LINGER_ITERATIONS);
+   }
+
+   ProcessEpoll(LinuxProcess process)
+   {
+      this(-1);
+
+      this.process = process;
+
+      registerProcess(process);
+      checkAndSetRunning();
+   }
+
+   private ProcessEpoll(int lingerIterations)
+   {
+      super(lingerIterations);
+
       epoll = LibEpoll.epoll_create(1024);
       if (epoll < 0) {
          throw new RuntimeException("Unable to create kqueue: " + Native.getLastError());
@@ -165,6 +183,19 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
    }
 
    @Override
+   public void run() {
+      super.run();
+
+      if (process != null) {
+         // For synchronous execution, perform a final _blocking_ deadpool check. If the deadpool
+         // is empty, this will return immediately. If the process has already exited, waitpid will
+         // return immediately. Otherwise, this will block until the the process terminates. This
+         // is necessary to ensure the handler's onExit is called before LinuxProcess.run returns.
+         checkDeadPool(0);
+      }
+   }
+
+   @Override
    public void closeStdin(LinuxProcess process)
    {
       try {
@@ -256,7 +287,7 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
                linuxProcess.getStderr().release();
             }
          }
-         checkDeadPool();
+         checkDeadPool(LibC.WNOHANG);
       }
    }
 
@@ -294,7 +325,7 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
       }
    }
 
-   private void checkDeadPool()
+   private void checkDeadPool(int options)
    {
       if (deadPool.isEmpty()) {
          return;
@@ -304,7 +335,7 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
       Iterator<LinuxProcess> iterator = deadPool.iterator();
       while (iterator.hasNext()) {
          LinuxProcess process = iterator.next();
-         int rc = LibC.waitpid(process.getPid(), ret, LibC.WNOHANG);
+         int rc = LibC.waitpid(process.getPid(), ret, options);
          if (rc == 0) {
             continue;
          }
