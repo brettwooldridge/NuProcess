@@ -21,8 +21,8 @@ import java.nio.CharBuffer;
 import java.nio.charset.Charset;
 import java.nio.charset.CoderResult;
 import java.util.Arrays;
-import java.util.HashMap;
-import java.util.HashSet;
+import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Scanner;
 import java.util.Set;
@@ -50,9 +50,8 @@ public class EnvironmentTest {
 	@Test
 	public void emptyEnv() throws InterruptedException, IOException 
 	{
-		Map<String, String> env = new HashMap<String, String>();
-		Set<String> javaResult = runJavaProcess(command, env);
-		Set<String> nuResult = runNuProcess(command, env);
+		Set<String> javaResult = runJavaProcess(command, Collections.<String, String>emptyMap());
+		Set<String> nuResult = runNuProcess(command, Collections.<String, String>emptyMap());
 		Assert.assertEquals(javaResult, nuResult);
 	}
 	
@@ -69,16 +68,13 @@ public class EnvironmentTest {
 		ProcessBuilder pb = new ProcessBuilder(command);
 		pb.environment().clear();
 		pb.environment().putAll(env);
-		System.out.println("Started Java Process");
-		Process process = pb.start();		
-		System.out.println("Waited for Java Process");
-		Set<String> result = new HashSet<String>();
-		Scanner s = new Scanner(process.getInputStream()).useDelimiter(System.lineSeparator());
+		Process process = pb.start();
+		Set<String> result = new LinkedHashSet<>();
+		Scanner s = new Scanner(process.getInputStream(), "UTF-8").useDelimiter(System.lineSeparator());
 		while (s.hasNext()) {
 			result.add(s.next());
 		}
 		Assert.assertEquals(0, process.waitFor());
-		System.out.println("env: " + result);
 		return result;
 	}
 
@@ -88,26 +84,23 @@ public class EnvironmentTest {
 		NuProcessBuilder pb = new NuProcessBuilder(Arrays.asList(command), env);
 		pb.setProcessListener(processListener);
 		NuProcess process = pb.start();
-		System.out.println("Started Nu Process");
 		process.waitFor(10, TimeUnit.SECONDS);
-		System.out.println("Waited for Nu Process");
+		Set<String> result = new LinkedHashSet<>();
 		Scanner s = new Scanner(processListener.getStdOut()).useDelimiter(System.lineSeparator());
-		Set<String> result = new HashSet<String>();
 		while (s.hasNext()) {
 			result.add(s.next());
 		}
-		System.out.println("env: " + result);
 		return result;
 	}
 
 	private static class ProcessHandler extends NuAbstractCharsetHandler 
 	{
-		protected ProcessHandler() 
+		ProcessHandler()
 		{
 			super(Charset.forName("UTF-8"));
 		}
 
-		private StringBuilder stdOut = new StringBuilder();
+		private final StringBuilder stdOut = new StringBuilder();
 
 		@Override
 		public void onStdoutChars(CharBuffer buffer, boolean closed, CoderResult coderResult) 
@@ -116,10 +109,9 @@ public class EnvironmentTest {
 			buffer.position(buffer.limit());
 		}
 
-		public String getStdOut() 
+		String getStdOut()
 		{
 			return stdOut.toString();
 		}
 	}
-
 }
