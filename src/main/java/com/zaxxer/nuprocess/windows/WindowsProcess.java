@@ -44,6 +44,7 @@ public final class WindowsProcess implements NuProcess
    private static final boolean IS_SOFTEXIT_DETECTION;
 
    private static final int BUFFER_SIZE = 65536;
+   private static final String ENV_SYSTEMROOT = "SystemRoot";
 
    private static final ProcessCompletions[] processors;
    private static int processorRoundRobin;
@@ -90,7 +91,7 @@ public final class WindowsProcess implements NuProcess
          processors[i] = new ProcessCompletions();
       }
 
-      if (Boolean.valueOf(System.getProperty("com.zaxxer.nuprocess.enableShutdownHook", "true"))) {
+      if (Boolean.parseBoolean(System.getProperty("com.zaxxer.nuprocess.enableShutdownHook", "true"))) {
          Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
             @Override
             public void run()
@@ -629,16 +630,30 @@ public final class WindowsProcess implements NuProcess
    {
       Map<String, String> env = new HashMap<String, String>();
 
-      final String SYSTEMROOT = "SystemRoot";
-      String systemRootValue = System.getenv(SYSTEMROOT);
-      if (systemRootValue != null) {
-         env.put(SYSTEMROOT, systemRootValue);
-      }
-      
+      // This SystemRoot handling matches java.lang.ProcessEnvironment.toEnvironmentBlock,
+      // which is used by ProcessBuilder when starting processes on Windows
+      boolean addSystemRoot = true;
+
       for (String entry : environment) {
          int ndx = entry.indexOf('=');
          if (ndx != -1) {
-            env.put(entry.substring(0, ndx), (ndx < entry.length() ? entry.substring(ndx + 1) : ""));
+            String key = entry.substring(0, ndx);
+            env.put(key, (ndx < entry.length() ? entry.substring(ndx + 1) : ""));
+
+            // SystemRoot is sometimes set as SYSTEMROOT, which is also valid, so this needs
+            // to use a case-insensitive comparison to detect either permutation
+            if (ENV_SYSTEMROOT.equalsIgnoreCase(key)) {
+               addSystemRoot = false;
+            }
+         }
+      }
+
+      // If SystemRoot wasn't included in the user-specified environment, copy it from our
+      // own environment if it's set there
+      if (addSystemRoot) {
+         String systemRoot = System.getenv(ENV_SYSTEMROOT);
+         if (systemRoot != null) {
+            env.put(ENV_SYSTEMROOT, systemRoot);
          }
       }
 
