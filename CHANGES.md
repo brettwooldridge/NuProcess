@@ -1,12 +1,26 @@
+Changes in 1.2.5
+
+ * Handle SystemRoot case-insensitively (Windows).
+ 
+ * Comptibility changes for JNA 5.2.0.
+
+Changes in 1.2.4
+
+ * Fix structure alignment (ALIGN_GNUC) on various platforms.
+
+ * Add support for JDK 10/11.
 
 Changes in 1.2.3
+
  * Resolve launch issue on Linux/MacOS X w/Zulu JVM.
 
 Changes in 1.2.2
+
  * Fix race condition seen (once) on Linux after moving to JVM internal API for process spawning.
 
 Changes in 1.2.1
- * On OS X, continue to use posix_spawnp directly, POSIX_SPAWN_START_SUSPENDED solves a lot of potential race conditions that we have to contend with on Linux.
+
+* On OS X, continue to use posix_spawnp directly, POSIX_SPAWN_START_SUSPENDED solves a lot of potential race conditions that we have to contend with on Linux.
 
 Changes in 1.2.0
  * Spawn processes on Linux and MacOS X using JVM internal method Java_java_lang_UNIXProcess_forkAndExec.
