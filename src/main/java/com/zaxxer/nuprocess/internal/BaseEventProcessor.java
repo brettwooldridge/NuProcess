@@ -85,6 +85,13 @@ public abstract class BaseEventProcessor<T extends BasePosixProcess> implements 
          // TODO: how to handle this error?
          isRunning.set(false);
       }
+      finally {
+         if (startBarrier == null) {
+            // If the process is running synchronously, when the run loop ends give the subclass
+            // an opportunity to close any descriptors it might have been using
+            close();
+         }
+      }
    }
 
    /** {@inheritDoc} */
@@ -115,4 +122,16 @@ public abstract class BaseEventProcessor<T extends BasePosixProcess> implements 
          LibC.waitpid(process.getPid(), exitCode, LibC.WNOHANG);
       }
    }
+
+   /**
+    * Closes the processor, freeing up any resources (such as file descriptors) it was using.
+    * <p>
+    * <b>Note</b>: This method is only called for processors that are used to pump <i>synchronous</i> processes.
+    * Processors used to pump <i>asynchronous</i> processes are never closed; while their threads may be stopped,
+    * when there are no processes to pump, they are restarted if a new asynchronous process is started and will
+    * reuse the same resources.
+    *
+    * @since 1.3
+    */
+   protected abstract void close();
 }

@@ -183,7 +183,8 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
    }
 
    @Override
-   public void run() {
+   public void run()
+   {
       super.run();
 
       if (process != null) {
@@ -287,6 +288,17 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
          }
          checkDeadPool();
       }
+   }
+
+   /**
+    * Closes the {@code eventpoll} file descriptor.
+    *
+    * @since 1.3
+    */
+   @Override
+   protected void close()
+   {
+      LibC.close(epoll);
    }
 
    // ************************************************************************

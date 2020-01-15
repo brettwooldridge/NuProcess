@@ -240,6 +240,17 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
       return true;
    }
 
+   /**
+    * Closes the {@code kqueue} file descriptor.
+    *
+    * @since 1.3
+    */
+   @Override
+   protected void close()
+   {
+      LibC.close(kqueue);
+   }
+
    private void processEvent(Kevent kevent)
    {
       int ident = kevent.ident.intValue();

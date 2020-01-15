@@ -125,6 +125,13 @@ public final class ProcessCompletions implements Runnable
          e.printStackTrace();
          isRunning.set(false);
       }
+      finally {
+         if (startBarrier == null) {
+            // If the process is running synchronously, when the run loop ends the I/O completion
+            // port will never be reused so it needs to be closed to avoid leaking handles
+            NuKernel32.CloseHandle(ioCompletionPort);
+         }
+      }
    }
 
    public boolean process()
