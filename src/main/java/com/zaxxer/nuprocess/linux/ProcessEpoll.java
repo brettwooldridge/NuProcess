@@ -187,11 +187,9 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
       super.run();
 
       if (process != null) {
-         // For synchronous execution, perform a final _blocking_ deadpool check. If the deadpool
-         // is empty, this will return immediately. If the process has already exited, waitpid will
-         // return immediately. Otherwise, this will block until the the process terminates. This
-         // is necessary to ensure the handler's onExit is called before LinuxProcess.run returns.
-         checkDeadPool(0);
+         // For synchronous execution, wait until the deadpool is drained. This is necessary to ensure
+         // the handler's onExit is called before LinuxProcess.run returns.
+         waitForDeadPool();
       }
    }
 
@@ -287,7 +285,7 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
                linuxProcess.getStderr().release();
             }
          }
-         checkDeadPool(LibC.WNOHANG);
+         checkDeadPool();
       }
    }
 
@@ -325,7 +323,7 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
       }
    }
 
-   private void checkDeadPool(int options)
+   private void checkDeadPool()
    {
       if (deadPool.isEmpty()) {
          return;
@@ -335,7 +333,7 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
       Iterator<LinuxProcess> iterator = deadPool.iterator();
       while (iterator.hasNext()) {
          LinuxProcess process = iterator.next();
-         int rc = LibC.waitpid(process.getPid(), ret, options);
+         int rc = LibC.waitpid(process.getPid(), ret, LibC.WNOHANG);
          if (rc == 0) {
             continue;
          }
@@ -366,6 +364,48 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
       }
       else {
          process.onExit(Integer.MIN_VALUE);
+      }
+   }
+
+   /**
+    * Loops until the {@link #deadPool} is empty, using a backoff sleep to progressively increase the poll
+    * interval the longer the process takes to terminate.
+    * <p>
+    * {@code waitpid} does not offer a timeout variant. Callers have two options:
+    * <ul>
+    *     <li>Use {@code WNOHANG} and have the call return immediately, whether the process has terminated
+    *     or not, and use the return code to tell the difference</li>
+    *     <li>Don't use {@code WNOHANG} and have the call block until the process terminates</li>
+    * </ul>
+    * To avoid the possibility of a misbehaving process hanging the JVM indefinitely, this loop uses a Java-
+    * based sleep to wait between checks. The sleep interval ramps up each time the loop runs. The ramp-up
+    * is intended to minimize the penalty imposed on well-behaved processes, which will generally only loop
+    * once or twice before terminating.
+    * <p>
+    * This loop will wait up to the {@link #LINGER_TIME_MS configured linger timeout} for the process to
+    * terminate. At that point, if the process still hasn't terminated, it is abandoned.
+    */
+   private void waitForDeadPool()
+   {
+      long sleepInterval = 0L;
+      long timeout = System.currentTimeMillis() + LINGER_TIME_MS;
+      while (true) {
+         checkDeadPool();
+         if (deadPool.isEmpty() || System.currentTimeMillis() > timeout) {
+            break;
+         }
+
+         if (sleepInterval > 0L) { // This gives 2 checks in a row before the first sleep
+            try {
+               Thread.sleep(sleepInterval);
+            }
+            catch (InterruptedException e) {
+               Thread.currentThread().interrupt();
+               break;
+            }
+         }
+         // 0 -> 1 -> 3 -> 7 -> 15 -> 31 -> 63 -> 127, etc
+         sleepInterval = (sleepInterval * 2L) + 1L;
       }
    }
 }
