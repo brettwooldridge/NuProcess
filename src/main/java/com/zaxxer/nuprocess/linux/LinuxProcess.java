@@ -35,11 +35,7 @@ import static com.zaxxer.nuprocess.internal.Constants.JVM_MAJOR_VERSION;
  */
 public class LinuxProcess extends BasePosixProcess
 {
-   private static final boolean isAzul;
-
    static {
-      isAzul = System.getProperty("java.vm.vendor", "").contains("Azul");
-
       LibEpoll.sigignore(LibEpoll.SIGPIPE);
 
       // TODO: install signal handler for SIGCHLD, and call onExit() when received, call the default (JVM) hook if the PID is not ours
@@ -90,7 +86,7 @@ public class LinuxProcess extends BasePosixProcess
          createPipes();
          int[] child_fds = {stdinWidow, stdoutWidow, stderrWidow};
 
-         if (JVM_MAJOR_VERSION >= 10 || isAzul) {
+         if (JVM_MAJOR_VERSION >= 10) {
             pid = com.zaxxer.nuprocess.internal.LibJava10.Java_java_lang_ProcessImpl_forkAndExec(
                   JNIEnv.CURRENT,
                   this,
