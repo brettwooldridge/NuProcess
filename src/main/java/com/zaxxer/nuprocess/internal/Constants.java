@@ -13,12 +13,19 @@ public class Constants
       SOLARIS
    }
 
+   static int getJavaMajorVersion(String versionString) {
+       String[] parts = versionString.split("\\.");
+       // Make sure we handle versions like '11-ea' which ships with centos7
+       int major = Integer.parseInt(parts[0].split("\\D")[0]);
+       if (major == 1) {
+         major = Integer.parseInt(parts[1].split("\\D")[0]);
+       }
+       return major;
+   }
+
    static {
-      String[] parts = System.getProperty("java.version").split("\\.");
-      int major = Integer.valueOf(parts[0]);
-      if (major == 1)
-        major = Integer.valueOf(parts[1]);
-      JVM_MAJOR_VERSION = major;
+
+      JVM_MAJOR_VERSION = getJavaMajorVersion(System.getProperty("java.version"));
 
       final String osname = System.getProperty("os.name").toLowerCase();
       if (osname.contains("mac") || osname.contains("freebsd"))

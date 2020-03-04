@@ -1,3 +1,8 @@
+Changes in 1.2.6
+
+ * Fix linkage issues with Azul JVMs. Special thanks to Bryan Turner for this pull request and extensive testing across
+   a wide variety of JVMs.
+
 Changes in 1.2.5
 
  * Handle SystemRoot case-insensitively (Windows).
