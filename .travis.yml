@@ -15,4 +15,4 @@ matrix:
     - jdk: oraclejdk11
 
 script:
-  - mvn -e package -V
+  - mvn -Dmaven.javadoc.skip=true -e package -V
