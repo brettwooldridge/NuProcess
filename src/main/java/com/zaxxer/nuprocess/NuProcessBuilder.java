@@ -253,16 +253,41 @@ public class NuProcessBuilder
     */
    public NuProcess start()
    {
+      ensureListener();
+      String[] env = prepareEnvironment();
+
+      return factory.createProcess(command, env, processListener, cwd);
+   }
+
+   /**
+    * Spawn the child process with the configured commands, environment, and {@link NuProcessHandler}
+    * and wait for it to complete running.
+    *
+    * @since 1.3
+    */
+   public void run()
+   {
+      ensureListener();
+      String[] env = prepareEnvironment();
+
+      factory.runProcess(command, env, processListener, cwd);
+   }
+
+   private void ensureListener()
+   {
       if (processListener == null) {
          throw new IllegalArgumentException("NuProcessHandler not specified");
       }
+   }
 
+   private String[] prepareEnvironment()
+   {
       String[] env = new String[environment.size()];
       int i = 0;
       for (Entry<String, String> entrySet : environment.entrySet()) {
          env[i++] = entrySet.getKey() + "=" + entrySet.getValue();
       }
 
-      return factory.createProcess(command, env, processListener, cwd);
+      return env;
    }
 }

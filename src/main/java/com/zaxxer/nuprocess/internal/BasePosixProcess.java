@@ -130,6 +130,15 @@ public abstract class BasePosixProcess implements NuProcess
    public abstract NuProcess start(List<String> command, String[] environment, Path cwd);
 
    /**
+    * Runs the process synchronously.
+    *
+    * Pumping is done on the calling thread, and this method will not return until the process has exited.
+    *
+    * @since 1.3
+    */
+   public abstract void run(List<String> command, String[] environment, Path cwd);
+
+   /**
     * Check the launched process and return {@code true} if launch was successful,
     * or {@code false} if there was an error in launch.
     *

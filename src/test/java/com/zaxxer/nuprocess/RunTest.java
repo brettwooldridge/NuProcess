@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2013 Brett Wooldridge
+ * Copyright (C) 2019 Brett Wooldridge
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,11 +16,15 @@
 
 package com.zaxxer.nuprocess;
 
+import com.zaxxer.nuprocess.codec.NuAbstractCharsetHandler;
+import org.junit.*;
+import org.junit.rules.TemporaryFolder;
+
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.CharBuffer;
-import java.nio.charset.Charset;
 import java.nio.charset.CoderResult;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -32,26 +36,15 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.zip.Adler32;
 
-import org.junit.Assert;
-import org.junit.Before;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.TemporaryFolder;
-
-import com.zaxxer.nuprocess.codec.NuAbstractCharsetHandler;
-
 /**
- * Performs <i>asynchronous</i> tests using {@link NuProcessBuilder#start}.
- *
- * @author Brett Wooldridge
+ * Performs <i>synchronous</i> tests using {@link NuProcessBuilder#run}.
  */
-// @RunWith(value=RunOnlyOnUnix.class)
-public class CatTest
+public class RunTest
 {
    private String command;
 
    @Rule
-   public TemporaryFolder tmp = new TemporaryFolder();
+   public final TemporaryFolder tmp = new TemporaryFolder();
 
    @Before
    public void setup()
@@ -63,47 +56,77 @@ public class CatTest
    }
 
    @Test
-   public void lotOfProcesses() throws Exception
+   public void lotOfProcesses() throws InterruptedException
    {
-      System.err.println("Starting test lotOfProcesses()");
-      for (int times = 0; times < 20; times++) {
-         System.err.printf(" Iteration %d\n", times + 1);
+      int cpus = Runtime.getRuntime().availableProcessors();
+      Assume.assumeTrue("Skipping lotOfProcesses(); the system only has 1 CPU", cpus > 1);
 
-         Semaphore[] semaphores = new Semaphore[100];
-         LottaProcessListener[] listeners = new LottaProcessListener[100];
+      // Use at least 2 threads, to ensure concurrency, but use no more than 4 threads to avoid
+      // producing excessive system load
+      final int threadCount = Math.max(2, Math.min(4, cpus / 2));
+      System.err.println("Starting test lotOfProcesses() with " + threadCount + " threads");
 
-         for (int i = 0; i < semaphores.length; i++) {
-            semaphores[i] = new Semaphore(0);
-            listeners[i] = new LottaProcessListener(semaphores[i]);
-            NuProcessBuilder pb = new NuProcessBuilder(listeners[i], command);
-            pb.start();
-            // System.err.printf("  starting process: %d\n", i + 1);
+      // Start threadCount threads, each running several synchronous processes in a row. This parallel
+      // execution is intended to verify synchronous pumping on concurrent threads doesn't produce any
+      // unexpected interactions "between" the threads
+      final Thread[] threads = new Thread[threadCount];
+      final AssertionError[] failures = new AssertionError[threadCount];
+      for (int i = 0; i < threadCount; i++) {
+         final int threadId = i + 1;
+         Thread thread = new Thread("RunTest-lotOfProcesses-" + threadId) {
+            @Override
+            public void run()
+            {
+               for (int times = 0; times < 20; times++) {
+                  System.err.printf("Thread %d: Iteration %d\n", threadId, times + 1);
+
+                  LottaProcessListener listener = new LottaProcessListener();
+                  NuProcessBuilder pb = new NuProcessBuilder(listener, command);
+                  pb.run();
+
+                  try {
+                     Assert.assertTrue("Adler32 mismatch between written and read", listener.checkAdlers());
+                     Assert.assertEquals("Exit code mismatch", 0, listener.getExitCode());
+                  } catch (AssertionError e) {
+                     failures[threadId - 1] = e;
+                     break;
+                  }
+               }
+            }
+         };
+         thread.setDaemon(true);
+         thread.start();
+
+         threads[i] = thread;
+      }
+
+      // After all the threads are started, wait for each to finish and then check to see whether it
+      // inserted an AssertionError into the failures array
+      int failed = 0;
+      for (int i = 0; i < threadCount; i++) {
+         threads[i].join();
+         if (failures[i] != null) {
+            System.err.printf("Thread %d failed: %s", threadCount + 1, failures[i].getMessage());
+            ++failed;
          }
+      }
 
-         for (Semaphore sem : semaphores) {
-            sem.acquire();
-         }
-
-         for (LottaProcessListener listen : listeners) {
-            Assert.assertTrue("Adler32 mismatch between written and read", listen.checkAdlers());
-            Assert.assertEquals("Exit code mismatch", 0, listen.getExitCode());
-         }
+      // If any threads failed, the test failed
+      if (failed > 0) {
+         Assert.fail(failed + " thread(s) failed");
       }
 
       System.err.println("Completed test lotOfProcesses()");
    }
 
    @Test
-   public void lotOfData() throws Exception
+   public void lotOfData()
    {
       System.err.println("Starting test lotOfData()");
       for (int i = 0; i < 100; i++) {
-         Semaphore semaphore = new Semaphore(0);
-
-         LottaProcessListener processListener = new LottaProcessListener(semaphore);
+         LottaProcessListener processListener = new LottaProcessListener();
          NuProcessBuilder pb = new NuProcessBuilder(processListener, command);
-         pb.start();
-         semaphore.acquireUninterruptibly();
+         pb.run();
 
          Assert.assertTrue("Adler32 mismatch between written and read", processListener.checkAdlers());
       }
@@ -112,15 +135,13 @@ public class CatTest
    }
 
    @Test
-   public void decodingShortUtf8Data() throws Exception
+   public void decodingShortUtf8Data()
    {
-      Semaphore semaphore = new Semaphore(0);
       String SHORT_UNICODE_TEXT = "Hello \uD83D\uDCA9 world";
       System.err.println("Starting test decodingShortUtf8Data()");
-      Utf8DecodingListener processListener = new Utf8DecodingListener(semaphore, SHORT_UNICODE_TEXT, true);
+      Utf8DecodingListener processListener = new Utf8DecodingListener(SHORT_UNICODE_TEXT, true);
       NuProcessBuilder pb = new NuProcessBuilder(processListener, command);
-      pb.start();
-      semaphore.acquireUninterruptibly();
+      pb.run();
       Assert.assertEquals("Decoding mismatch", SHORT_UNICODE_TEXT, processListener.decodedStdout.toString());
       Assert.assertEquals("Exit code mismatch", 0, processListener.exitCode);
       Assert.assertFalse("Decoder stdin should not overflow", processListener.stdinOverflow);
@@ -128,9 +149,8 @@ public class CatTest
    }
 
    @Test
-   public void decodingLongUtf8Data() throws Exception
+   public void decodingLongUtf8Data()
    {
-      Semaphore semaphore = new Semaphore(0);
       // We use 3 bytes to make sure at least one UTF-8 boundary goes across two byte buffers.
       String THREE_BYTE_UTF_8 = "\u2764";
       StringBuilder unicodeTextWhichDoesNotFitInBuffer = new StringBuilder();
@@ -138,10 +158,9 @@ public class CatTest
          unicodeTextWhichDoesNotFitInBuffer.append(THREE_BYTE_UTF_8);
       }
       System.err.println("Starting test decodingLongUtf8Data()");
-      Utf8DecodingListener processListener = new Utf8DecodingListener(semaphore, unicodeTextWhichDoesNotFitInBuffer.toString(), true);
+      Utf8DecodingListener processListener = new Utf8DecodingListener(unicodeTextWhichDoesNotFitInBuffer.toString(), true);
       NuProcessBuilder pb = new NuProcessBuilder(processListener, command);
-      pb.start();
-      semaphore.acquireUninterruptibly();
+      pb.run();
       Assert.assertEquals("Decoding mismatch", unicodeTextWhichDoesNotFitInBuffer.toString(), processListener.decodedStdout.toString());
       Assert.assertEquals("Exit code mismatch", 0, processListener.exitCode);
       Assert.assertTrue("Decoder stdin should overflow", processListener.stdinOverflow);
@@ -207,7 +226,7 @@ public class CatTest
    @Test
    public void callbackOrder() throws InterruptedException
    {
-      final List<String> callbacks = new CopyOnWriteArrayList<String>();
+      final List<String> callbacks = new CopyOnWriteArrayList<>();
       final CountDownLatch latch = new CountDownLatch(1);
 
       NuProcessHandler handler = new NuProcessHandler() {
@@ -264,20 +283,18 @@ public class CatTest
    }
 
    @Test
-   public void changeCwd() throws InterruptedException, IOException
+   public void changeCwd() throws IOException
    {
       Path javaCwd = Paths.get(System.getProperty("user.dir"));
       Path tmpPath = tmp.getRoot().toPath();
       System.err.println("Starting test changeCwd() (java cwd=" + javaCwd + ", tmp=" + tmpPath + ")");
       Assert.assertNotEquals("java cwd should not be tmp path before process", javaCwd.toRealPath(), tmpPath.toRealPath());
       String message = "Hello cwd-aware world\n";
-      Files.write(tmpPath.resolve("foo.txt"), message.getBytes(Charset.forName("UTF-8")));
-      final Semaphore semaphore = new Semaphore(0);
-      Utf8DecodingListener processListener = new Utf8DecodingListener(semaphore, "", true);
+      Files.write(tmpPath.resolve("foo.txt"), message.getBytes(StandardCharsets.UTF_8));
+      Utf8DecodingListener processListener = new Utf8DecodingListener("", true);
       NuProcessBuilder pb = new NuProcessBuilder(processListener, command, "foo.txt");
       pb.setCwd(tmpPath);
-      pb.start();
-      semaphore.acquireUninterruptibly();
+      pb.run();
       Assert.assertEquals("Output mismatch", message, processListener.decodedStdout.toString());
       Assert.assertEquals("Exit code mismatch", 0, processListener.exitCode);
       javaCwd = Paths.get(System.getProperty("user.dir"));
@@ -286,15 +303,13 @@ public class CatTest
    }
 
    @Test
-   public void softCloseStdinAfterWrite() throws Exception
+   public void softCloseStdinAfterWrite()
    {
-      Semaphore semaphore = new Semaphore(0);
       String text = "Hello world!";
       System.err.println("Starting test softCloseStdinAfterWrite()");
-      Utf8DecodingListener processListener = new Utf8DecodingListener(semaphore, text, false);
+      Utf8DecodingListener processListener = new Utf8DecodingListener(text, false);
       NuProcessBuilder pb = new NuProcessBuilder(processListener, command);
-      pb.start();
-      semaphore.acquireUninterruptibly();
+      pb.run();
       Assert.assertEquals("Decoding mismatch", text, processListener.decodedStdout.toString());
       Assert.assertEquals("Exit code mismatch", 0, processListener.exitCode);
       Assert.assertFalse("Decoder stdin should not overflow", processListener.stdinOverflow);
@@ -303,13 +318,8 @@ public class CatTest
 
    private static byte[] getLotsOfBytes()
    {
-      return getLotsOfBytes(6000);
-   }
-
-   static byte[] getLotsOfBytes(int size)
-   {
       StringBuilder sb = new StringBuilder();
-      for (int i = 0; i < size; i++) {
+      for (int i = 0; i < 6000; i++) {
          sb.append("1234567890");
       }
 
@@ -323,16 +333,13 @@ public class CatTest
       private int writes;
       private int size;
       private int exitCode;
-      private Semaphore semaphore;
 
       private Adler32 readAdler32;
       private Adler32 writeAdler32;
       private byte[] bytes;
 
-      LottaProcessListener(Semaphore semaphore)
+      LottaProcessListener()
       {
-         this.semaphore = semaphore;
-
          this.readAdler32 = new Adler32();
          this.writeAdler32 = new Adler32();
 
@@ -351,7 +358,6 @@ public class CatTest
       public void onExit(int statusCode)
       {
          exitCode = statusCode;
-         semaphore.release();
       }
 
       @Override
@@ -391,20 +397,18 @@ public class CatTest
 
    private static class Utf8DecodingListener extends NuAbstractCharsetHandler
    {
-      private final Semaphore semaphore;
       private final CharBuffer utf8Buffer;
       private final boolean forceCloseStdin;
       private int charsWritten;
       private int charsRead;
       private NuProcess nuProcess;
-      public StringBuilder decodedStdout;
-      public boolean stdinOverflow;
-      public int exitCode;
+      StringBuilder decodedStdout;
+      boolean stdinOverflow;
+      int exitCode;
 
-      Utf8DecodingListener(Semaphore semaphore, String utf8Text, boolean forceCloseStdin)
+      Utf8DecodingListener(String utf8Text, boolean forceCloseStdin)
       {
-         super(Charset.forName("UTF-8"));
-         this.semaphore = semaphore;
+         super(StandardCharsets.UTF_8);
          this.utf8Buffer = CharBuffer.wrap(utf8Text);
          this.forceCloseStdin = forceCloseStdin;
          this.charsWritten = 0;
@@ -425,7 +429,6 @@ public class CatTest
       public void onExit(int statusCode)
       {
          exitCode = statusCode;
-         semaphore.release();
       }
 
       @Override

@@ -60,7 +60,21 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
 
    ProcessKqueue()
    {
-      super(LINGER_ITERATIONS);
+      this(LINGER_ITERATIONS);
+   }
+
+   ProcessKqueue(OsxProcess process)
+   {
+      this(-1);
+
+      registerProcess(process);
+      checkAndSetRunning();
+   }
+
+   private ProcessKqueue(int lingerIterations)
+   {
+      super(lingerIterations);
+
       kqueue = LibKevent.kqueue();
       if (kqueue < 0) {
          throw new RuntimeException("Unable to create kqueue");
@@ -224,6 +238,17 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
          processEvent(processEvents[i]);
       }
       return true;
+   }
+
+   /**
+    * Closes the {@code kqueue} file descriptor.
+    *
+    * @since 1.3
+    */
+   @Override
+   protected void close()
+   {
+      LibC.close(kqueue);
    }
 
    private void processEvent(Kevent kevent)
