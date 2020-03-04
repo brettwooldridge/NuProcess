@@ -145,7 +145,7 @@ public class LinuxProcess extends BasePosixProcess
       createPipes();
       int[] child_fds = {stdinWidow, stdoutWidow, stderrWidow};
 
-      if (JVM_MAJOR_VERSION >= 10 || isAzul) {
+      if (JVM_MAJOR_VERSION >= 10) {
          pid = com.zaxxer.nuprocess.internal.LibJava10.Java_java_lang_ProcessImpl_forkAndExec(
                JNIEnv.CURRENT,
                this,
