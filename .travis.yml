@@ -9,7 +9,10 @@ matrix:
   fast_finish: true
   include:
     - jdk: openjdk7
+    - jdk: openjdk8
     - jdk: oraclejdk8
+    - jdk: openjdk11
+    - jdk: oraclejdk11
 
 script:
   - mvn -e package -V
