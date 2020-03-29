@@ -181,14 +181,14 @@ class OsxProcess extends BasePosixProcess
       Pointer oldCwd = new Pointer(peer);
       LibC.getcwd(oldCwd, cwdBufSize);
       String newCwd = cwd.toAbsolutePath().toString();
-      int rc = LibC.SYSCALL.syscall(SyscallLibrary.SYS___pthread_chdir, newCwd);
+      int rc = LibC.SYSCALL.syscall(LibC.SYS___pthread_chdir, newCwd);
       checkReturnCode(rc, "syscall(SYS__pthread_chdir) failed to set current directory");
 
       try {
          return LibC.posix_spawnp(restrict_pid, restrict_path, file_actions, restrict_attrp, argv, envp);
       }
       finally {
-         rc = LibC.SYSCALL.syscall(SyscallLibrary.SYS___pthread_chdir, oldCwd);
+         rc = LibC.SYSCALL.syscall(LibC.SYS___pthread_chdir, oldCwd);
          Native.free(Pointer.nativeValue(oldCwd));
          checkReturnCode(rc, "syscall(SYS__pthread_chdir) failed to restore current directory");
       }
