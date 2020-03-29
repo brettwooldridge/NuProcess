@@ -34,7 +34,6 @@ public class LibC
       if (OS == OperatingSystem.MAC) {
          O_NONBLOCK = 0x0004; // MacOS X, Freebsd
       }
-      
       else {
          O_NONBLOCK = 2048; // Linux
       }
