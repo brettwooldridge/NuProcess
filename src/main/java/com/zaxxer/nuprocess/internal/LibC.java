@@ -32,7 +32,7 @@ public class LibC
     
    static {
       if (OS == OperatingSystem.MAC) {
-         O_NONBLOCK = 0x0004; // MacOS X, Freebsd 
+         O_NONBLOCK = 0x0004; // MacOS X, Freebsd
       }
       
       else {
