@@ -26,7 +26,6 @@ import com.zaxxer.nuprocess.NuProcessHandler;
 import com.zaxxer.nuprocess.internal.BasePosixProcess;
 import com.zaxxer.nuprocess.internal.IEventProcessor;
 import com.zaxxer.nuprocess.internal.LibC;
-import com.zaxxer.nuprocess.internal.LibC.SyscallLibrary;
 
 import java.nio.file.Path;
 import java.util.List;
