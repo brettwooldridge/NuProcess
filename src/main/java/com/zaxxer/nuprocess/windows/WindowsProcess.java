@@ -33,6 +33,8 @@ import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import static com.zaxxer.nuprocess.internal.Constants.NUMBER_OF_THREADS;
 
@@ -437,23 +439,27 @@ public final class WindowsProcess implements NuProcess
          }
       }
 
-      if (userWantsWrite.compareAndSet(true, false)) {
-
-         try {
-            final ByteBuffer buffer = stdinPipe.buffer;
-            buffer.clear();
-            userWantsWrite.set(processHandler.onStdinReady(buffer));
-
-            return true;
-         }
-         catch (Exception e) {
-            // Don't let an exception thrown from the user's handler interrupt us
-            e.printStackTrace();
-            return false;
-         }
+      // See BasePosixProcess.writeStdin(int, int) for an explanation of how the userWantsWrite
+      // flag is handled here; both methods use the same approach
+      if (!userWantsWrite.compareAndSet(true, false)) {
+         return false;
       }
 
-      return false;
+      try {
+         ByteBuffer buffer = stdinPipe.buffer;
+         buffer.clear();
+         if (processHandler.onStdinReady(buffer)) {
+            userWantsWrite.set(true);
+         }
+
+         return true;
+      }
+      catch (Exception e) {
+         Logger.getLogger(getClass().getName()).log(Level.SEVERE, "Exception thrown handling writes to stdin " + processHandler, e);
+
+         // Don't let an exception thrown from the user's handler interrupt us
+         return false;
+      }
    }
 
    void onExit(int statusCode)
@@ -712,7 +718,7 @@ public final class WindowsProcess implements NuProcess
 
    private void checkHandleValidity(HANDLE handle)
    {
-      if (NuWinNT.INVALID_HANDLE_VALUE.getPointer().equals(handle)) {
+      if (NuWinNT.INVALID_HANDLE_VALUE.getPointer().equals(handle.getPointer())) {
          throw new RuntimeException("Unable to create pipe, error " + Native.getLastError());
       }
    }
