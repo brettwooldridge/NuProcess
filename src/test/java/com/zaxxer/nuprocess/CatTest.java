@@ -301,6 +301,69 @@ public class CatTest
       System.err.println("Completed test softCloseStdinAfterWrite()");
    }
 
+   @Test
+   public void wantWriteDuringOnStdinReady() throws Exception
+   {
+      System.err.println("Starting test wantWriteDuringOnStdinReady()");
+
+      final AtomicInteger callCount = new AtomicInteger(0);
+      final CountDownLatch onStdinReadyCalled = new CountDownLatch(1);
+      final CountDownLatch wantWriteCalled = new CountDownLatch(1);
+      NuProcessHandler processListener = new NuAbstractProcessHandler() {
+         private NuProcess nuProcess;
+
+         @Override
+         public void onPreStart(NuProcess nuProcess) {
+            this.nuProcess = nuProcess;
+         }
+
+         @Override
+         public boolean onStdinReady(ByteBuffer buffer) {
+            if (callCount.getAndIncrement() == 0) {
+               // For the first callback, signal that we're inside the callback
+               // and then wait for wantWrite() to be called by the test thread
+               onStdinReadyCalled.countDown();
+
+               try {
+                  wantWriteCalled.await(5L, TimeUnit.SECONDS);
+               } catch (InterruptedException e) {
+                  throw new IllegalStateException("Interrupted while waiting for wantWrite()", e);
+               }
+            } else {
+               // For the second callback, close stdin so the process can complete
+               nuProcess.closeStdin(false);
+            }
+
+            // No matter which callback, always return false
+            return false;
+         }
+      };
+
+      NuProcessBuilder pb = new NuProcessBuilder(processListener, command);
+      NuProcess nuProcess = pb.start();
+      //Trigger the first onStdinReady callback
+      nuProcess.wantWrite();
+      //Wait until onStdinReady is called
+      onStdinReadyCalled.await(5L, TimeUnit.SECONDS);
+      //Call wantWrite() again
+      nuProcess.wantWrite();
+      //Let the first onStdinReady callback complete
+      wantWriteCalled.countDown();
+
+      try {
+         Assert.assertNotEquals(command + " did not complete",
+                 nuProcess.waitFor(5L, TimeUnit.SECONDS), Integer.MIN_VALUE);
+         Assert.assertEquals("Unexpected onStdinReady call count", 2, callCount.get());
+      } finally {
+         if (nuProcess.isRunning()) {
+            nuProcess.closeStdin(true);
+            nuProcess.destroy(false);
+         }
+      }
+
+      System.err.println("Completed test wantWriteDuringOnStdinReady()");
+   }
+
    private static byte[] getLotsOfBytes()
    {
       return getLotsOfBytes(6000);

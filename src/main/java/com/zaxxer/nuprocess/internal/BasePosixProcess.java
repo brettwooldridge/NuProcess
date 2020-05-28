@@ -477,20 +477,27 @@ public abstract class BasePosixProcess implements NuProcess
          }
       }
 
-      if (!userWantsWrite.get()) {
+      // Check whether the user has requested a write window. If so, this will clear the request and set
+      // userWantsWrite to a known-false state. Clearing the flag here ensures, if wantWrite() is called
+      // while we're in onStdinReady or, racily, after onStdinReady returns but before the result can be
+      // used to update userWantsWrite, we don't "lose" the write request
+      if (!userWantsWrite.compareAndSet(true, false)) {
          return false;
       }
 
       try {
          inBuffer.clear();
-         boolean wantMore = processHandler.onStdinReady(inBuffer);
-         userWantsWrite.set(wantMore);
+         if (processHandler.onStdinReady(inBuffer)) {
+            // If onStdinReady returns true, re-set userWantsWrite. If it returns false, we already set
+            // userWantsWrite to false before we made the callback so there's nothing to do
+            userWantsWrite.set(true);
+         }
          if (inBuffer.hasRemaining() && availability > 0) {
             // Recurse
             return writeStdin(availability, fd);
-         } else {
-            return true;
          }
+
+         return true;
       }
       catch (Exception e) {
          Logger.getLogger(getClass().getName()).log(Level.SEVERE, "Exception thrown handling writes to stdin " + processHandler, e);
