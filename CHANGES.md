@@ -1,3 +1,16 @@
+Changes in 2.0.1
+
+ * Fix race condition between the onStdinReady() and userWantsWrite() methods that causes the state to
+   become incorrect, resulting in failure to continue processing wanted stdin writes
+
+Changes in 2.0.0
+
+ * Update JNA dependency to v5.5.0
+
+ * Add ability to run processes synchronously (#104)
+
+ * Handle detecting Java versions when non-numbers are present (#105)
+
 Changes in 1.2.6
 
  * Fix linkage issues with Azul JVMs. Special thanks to Bryan Turner for this pull request and extensive testing across
