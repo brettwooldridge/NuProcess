@@ -58,10 +58,12 @@ public interface NuWinNT
 
    int STARTF_USESTDHANDLES = 0x100;
 
-   HANDLE INVALID_HANDLE_VALUE = new HANDLE(Pointer.createConstant(Native.POINTER_SIZE == 8 ? -1 : 0xFFFFFFFFL));
+   HANDLE INVALID_HANDLE_VALUE = new HANDLE(HANDLE.INVALID);
 
    class HANDLE extends PointerType
    {
+      static final Pointer INVALID = Pointer.createConstant(Native.POINTER_SIZE == 8 ? -1 : 0xFFFFFFFFL);
+
       public HANDLE()
       {
       }
@@ -74,15 +76,15 @@ public interface NuWinNT
       @Override
       public Object fromNative(Object nativeValue, FromNativeContext context)
       {
-         Object o = super.fromNative(nativeValue, context);
-         if (INVALID_HANDLE_VALUE.equals(o)) {
+         Pointer ptr = (Pointer) nativeValue;
+         if (INVALID.equals(ptr)) {
             return INVALID_HANDLE_VALUE;
          }
-         return o;
+         return new HANDLE(ptr);
       }
    }
 
-   static class WORD extends IntegerType
+   class WORD extends IntegerType
    {
       public static final int SIZE = 2;
 
@@ -97,7 +99,7 @@ public interface NuWinNT
       }
    }
 
-   static class DWORD extends IntegerType
+   class DWORD extends IntegerType
    {
       public static final int SIZE = 4;
 
@@ -112,7 +114,7 @@ public interface NuWinNT
       }
    }
 
-   static class ULONG_PTR extends IntegerType
+   class ULONG_PTR extends IntegerType
    {
       public ULONG_PTR()
       {
@@ -123,14 +125,9 @@ public interface NuWinNT
       {
          super(Native.POINTER_SIZE, value, true);
       }
-
-      public Pointer toPointer()
-      {
-         return Pointer.createConstant(longValue());
-      }
    }
 
-   static class ULONG_PTRByReference extends ByReference
+   class ULONG_PTRByReference extends ByReference
    {
       public ULONG_PTRByReference()
       {
@@ -166,10 +163,9 @@ public interface NuWinNT
       public boolean bInheritHandle;
 
       @Override
-      @SuppressWarnings("rawtypes")
-      protected List getFieldOrder()
+      protected List<String> getFieldOrder()
       {
-         return Arrays.asList(new String[] { "dwLength", "lpSecurityDescriptor", "bInheritHandle" });
+         return Arrays.asList("dwLength", "lpSecurityDescriptor", "bInheritHandle");
       }
    }
 
@@ -194,17 +190,17 @@ public interface NuWinNT
       public HANDLE hStdOutput;
       public HANDLE hStdError;
 
-      @Override
-      @SuppressWarnings("rawtypes")
-      protected List getFieldOrder()
-      {
-         return Arrays.asList(new String[] { "cb", "lpReserved", "lpDesktop", "lpTitle", "dwX", "dwY", "dwXSize", "dwYSize", "dwXCountChars", "dwYCountChars",
-               "dwFillAttribute", "dwFlags", "wShowWindow", "cbReserved2", "lpReserved2", "hStdInput", "hStdOutput", "hStdError" });
-      }
-
       public STARTUPINFO()
       {
          cb = new DWORD(size());
+      }
+
+      @Override
+      protected List<String> getFieldOrder()
+      {
+         return Arrays.asList("cb", "lpReserved", "lpDesktop", "lpTitle", "dwX", "dwY", "dwXSize", "dwYSize",
+               "dwXCountChars", "dwYCountChars", "dwFillAttribute", "dwFlags", "wShowWindow", "cbReserved2",
+               "lpReserved2", "hStdInput", "hStdOutput", "hStdError");
       }
    }
 
@@ -216,10 +212,9 @@ public interface NuWinNT
       public DWORD dwThreadId;
 
       @Override
-      @SuppressWarnings("rawtypes")
-      protected List getFieldOrder()
+      protected List<String> getFieldOrder()
       {
-         return Arrays.asList(new String[] { "hProcess", "hThread", "dwProcessId", "dwThreadId" });
+         return Arrays.asList("hProcess", "hThread", "dwProcessId", "dwThreadId");
       }
    }
 }
