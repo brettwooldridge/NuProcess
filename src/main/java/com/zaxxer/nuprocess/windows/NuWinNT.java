@@ -76,6 +76,10 @@ public interface NuWinNT
       @Override
       public Object fromNative(Object nativeValue, FromNativeContext context)
       {
+         if (nativeValue == null) {
+            return null;
+         }
+
          Pointer ptr = (Pointer) nativeValue;
          if (INVALID.equals(ptr)) {
             return INVALID_HANDLE_VALUE;
