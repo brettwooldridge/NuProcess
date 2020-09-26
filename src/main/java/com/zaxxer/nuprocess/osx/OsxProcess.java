@@ -61,11 +61,6 @@ class OsxProcess extends BasePosixProcess
 
       try {
          int rc = prepareProcess(environment, cwd, commands, posix_spawn_file_actions, posix_spawnattr);
-
-         if (!checkLaunch()) {
-            return null;
-         }
-
          checkReturnCode(rc, "Invocation of posix_spawn() failed");
 
          afterStart();
@@ -105,11 +100,6 @@ class OsxProcess extends BasePosixProcess
 
       try {
          int rc = prepareProcess(environment, cwd, commands, posix_spawn_file_actions, posix_spawnattr);
-
-         if (!checkLaunch()) {
-            return;
-         }
-
          checkReturnCode(rc, "Invocation of posix_spawn() failed");
 
          afterStart();

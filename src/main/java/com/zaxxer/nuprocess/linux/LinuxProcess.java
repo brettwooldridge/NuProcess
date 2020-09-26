@@ -17,7 +17,6 @@
 package com.zaxxer.nuprocess.linux;
 
 import com.sun.jna.JNIEnv;
-import com.sun.jna.ptr.IntByReference;
 import com.zaxxer.nuprocess.NuProcess;
 import com.zaxxer.nuprocess.NuProcessHandler;
 import com.zaxxer.nuprocess.internal.BasePosixProcess;
@@ -28,7 +27,6 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.logging.Level;
 
-import static com.zaxxer.nuprocess.internal.LibC.*;
 import static com.zaxxer.nuprocess.internal.Constants.JVM_MAJOR_VERSION;
 
 /**
@@ -64,12 +62,9 @@ public class LinuxProcess extends BasePosixProcess
 
       try {
          prepareProcess(command, environment, cwd);
-
          if (pid == -1) {
             return null;
          }
-
-         closePipes();
 
          initializeBuffers();
 
@@ -96,12 +91,9 @@ public class LinuxProcess extends BasePosixProcess
 
       try {
          prepareProcess(command, environment, cwd);
-
          if (pid == -1) {
             return;
          }
-
-         closePipes();
 
          initializeBuffers();
 
@@ -141,37 +133,44 @@ public class LinuxProcess extends BasePosixProcess
       // See https://github.com/JetBrains/jdk8u_jdk/blob/master/src/solaris/classes/java/lang/ProcessImpl.java#L86
       byte[] envBlock = toEnvironmentBlock(environment);
 
-      // See https://github.com/JetBrains/jdk8u_jdk/blob/master/src/solaris/classes/java/lang/ProcessImpl.java#L96
       createPipes();
-      int[] child_fds = {stdinWidow, stdoutWidow, stderrWidow};
+      try {
+         // createPipes() returns the parent ends of the pipes, but forkAndExec requires the child ends
+         int[] child_fds = {stdinWidow, stdoutWidow, stderrWidow};
 
-      if (JVM_MAJOR_VERSION >= 10) {
-         pid = com.zaxxer.nuprocess.internal.LibJava10.Java_java_lang_ProcessImpl_forkAndExec(
-               JNIEnv.CURRENT,
-               this,
-               LaunchMechanism.VFORK.ordinal() + 1,
-               toCString(System.getProperty("java.home") + "/lib/jspawnhelper"), // used on Linux
-               toCString(cmdarray[0]),
-               argBlock, args.length,
-               envBlock, environment.length,
-               (cwd != null ? toCString(cwd.toString()) : null),
-               child_fds,
-               (byte) 0 /*redirectErrorStream*/);
+         if (JVM_MAJOR_VERSION >= 10) {
+            pid = com.zaxxer.nuprocess.internal.LibJava10.Java_java_lang_ProcessImpl_forkAndExec(
+                    JNIEnv.CURRENT,
+                    this,
+                    LaunchMechanism.VFORK.ordinal() + 1,
+                    toCString(System.getProperty("java.home") + "/lib/jspawnhelper"), // used on Linux
+                    toCString(cmdarray[0]),
+                    argBlock, args.length,
+                    envBlock, environment.length,
+                    (cwd != null ? toCString(cwd.toString()) : null),
+                    child_fds,
+                    (byte) 0 /*redirectErrorStream*/);
+         }
+         else {
+            // See https://github.com/JetBrains/jdk8u_jdk/blob/master/src/solaris/classes/java/lang/UNIXProcess.java#L247
+            // Native source code: https://github.com/JetBrains/jdk8u_jdk/blob/master/src/solaris/native/java/lang/UNIXProcess_md.c#L566
+            pid = com.zaxxer.nuprocess.internal.LibJava8.Java_java_lang_UNIXProcess_forkAndExec(
+                    JNIEnv.CURRENT,
+                    this,
+                    LaunchMechanism.VFORK.ordinal() + 1,
+                    toCString(System.getProperty("java.home") + "/lib/jspawnhelper"), // used on Linux
+                    toCString(cmdarray[0]),
+                    argBlock, args.length,
+                    envBlock, environment.length,
+                    (cwd != null ? toCString(cwd.toString()) : null),
+                    child_fds,
+                    (byte) 0 /*redirectErrorStream*/);
+         }
       }
-      else {
-         // See https://github.com/JetBrains/jdk8u_jdk/blob/master/src/solaris/classes/java/lang/UNIXProcess.java#L247
-         // Native source code: https://github.com/JetBrains/jdk8u_jdk/blob/master/src/solaris/native/java/lang/UNIXProcess_md.c#L566
-         pid = com.zaxxer.nuprocess.internal.LibJava8.Java_java_lang_UNIXProcess_forkAndExec(
-               JNIEnv.CURRENT,
-               this,
-               LaunchMechanism.VFORK.ordinal() + 1,
-               toCString(System.getProperty("java.home") + "/lib/jspawnhelper"), // used on Linux
-               toCString(cmdarray[0]),
-               argBlock, args.length,
-               envBlock, environment.length,
-               (cwd != null ? toCString(cwd.toString()) : null),
-               child_fds,
-               (byte) 0 /*redirectErrorStream*/);
+      finally {
+         // If we call createPipes, even if launching the process then fails, we need to ensure
+         // the child side of the pipes are closed. The parent side will be closed in onExit
+         closePipes();
       }
    }
 
@@ -181,41 +180,6 @@ public class LinuxProcess extends BasePosixProcess
       LibC.close(stdinWidow);
       LibC.close(stdoutWidow);
       LibC.close(stderrWidow);
-   }
-
-   @Override
-   protected boolean checkLaunch()
-   {
-      // This is necessary on Linux because spawn failures are not reflected in the rc, and this will reap
-      // any zombies due to launch failure
-      IntByReference ret = new IntByReference();
-      int waitpidRc = LibC.waitpid(pid, ret, LibC.WNOHANG);
-      int status = ret.getValue();
-      boolean cleanExit = waitpidRc == pid && WIFEXITED(status) && WEXITSTATUS(status) == 0;
-
-      if (cleanExit) {
-         // If the process already exited cleanly, make sure we run epoll to dispatch any stdout/stderr sent
-         // before we tear everything down.
-         cleanlyExitedBeforeProcess.set(true);
-      }
-      else if (waitpidRc != 0) {
-         if (WIFEXITED(status)) {
-            status = WEXITSTATUS(status);
-            if (status == 127) {
-               onExit(Integer.MIN_VALUE);
-            }
-            else {
-               onExit(status);
-            }
-         }
-         else if (WIFSIGNALED(status)) {
-            onExit(WTERMSIG(status));
-         }
-
-         return false;
-      }
-
-      return true;
    }
 
    private static byte[] toCString(String s) {
@@ -231,7 +195,7 @@ public class LinuxProcess extends BasePosixProcess
    }
 
    private static byte[] toEnvironmentBlock(String[] environment) {
-      int count = environment.length;
+      int count = environment.length; // This implicitly adds an extra null byte for each entry
       for (String entry : environment) {
          count += entry.getBytes().length;
       }
