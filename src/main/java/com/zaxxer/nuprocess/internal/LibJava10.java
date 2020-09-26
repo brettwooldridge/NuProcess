@@ -21,6 +21,7 @@ import com.sun.jna.Library;
 import com.sun.jna.Native;
 import com.sun.jna.NativeLibrary;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -71,5 +72,5 @@ public class LibJava10
            Object dir,
            Object fds,
            byte redirectErrorStream
-   );
+   ) throws IOException;
 }

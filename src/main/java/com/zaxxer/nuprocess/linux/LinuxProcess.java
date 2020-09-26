@@ -23,6 +23,7 @@ import com.zaxxer.nuprocess.internal.BasePosixProcess;
 import com.zaxxer.nuprocess.internal.IEventProcessor;
 import com.zaxxer.nuprocess.internal.LibC;
 
+import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.logging.Level;
@@ -111,7 +112,7 @@ public class LinuxProcess extends BasePosixProcess
       }
    }
 
-   private void prepareProcess(List<String> command, String[] environment, Path cwd)
+   private void prepareProcess(List<String> command, String[] environment, Path cwd) throws IOException
    {
       String[] cmdarray = command.toArray(new String[0]);
 
