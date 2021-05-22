@@ -102,16 +102,10 @@ public class NuKernel32
          super();
       }
 
-      public OVERLAPPED(Pointer p)
-      {
-         super(p);
-      }
-
       @Override
-      @SuppressWarnings("rawtypes")
-      protected List getFieldOrder()
+      protected List<String> getFieldOrder()
       {
-         return Arrays.asList(new String[] { "Internal", "InternalHigh", "Offset", "OffsetHigh", "hEvent" });
+         return Arrays.asList("Internal", "InternalHigh", "Offset", "OffsetHigh", "hEvent");
       }
    }
 

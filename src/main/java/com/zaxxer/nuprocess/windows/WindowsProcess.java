@@ -45,8 +45,10 @@ public final class WindowsProcess implements NuProcess
 {
    private static final boolean IS_SOFTEXIT_DETECTION;
 
-   private static final int BUFFER_SIZE = 65536;
+   // See https://github.com/JetBrains/jdk8u_jdk/blob/master/src/windows/native/java/lang/ProcessImpl_md.c#L36-L41
+   private static final int BUFFER_SIZE = 4096 + 24;
    private static final String ENV_SYSTEMROOT = "SystemRoot";
+   private static final Logger LOGGER = Logger.getLogger(WindowsProcess.class.getCanonicalName());
 
    private static final ProcessCompletions[] processors;
    private static int processorRoundRobin;
@@ -86,7 +88,7 @@ public final class WindowsProcess implements NuProcess
       namedPipePathPrefix = "\\\\.\\pipe\\NuProcess-" + UUID.randomUUID().toString() + "-";
       namedPipeCounter = new AtomicInteger(100);
 
-      IS_SOFTEXIT_DETECTION = Boolean.valueOf(System.getProperty("com.zaxxer.nuprocess.softExitDetection", "true"));
+      IS_SOFTEXIT_DETECTION = Boolean.parseBoolean(System.getProperty("com.zaxxer.nuprocess.softExitDetection", "true"));
 
       processors = new ProcessCompletions[NUMBER_OF_THREADS];
       for (int i = 0; i < NUMBER_OF_THREADS; i++) {
@@ -236,7 +238,7 @@ public final class WindowsProcess implements NuProcess
          NuKernel32.ResumeThread(processInfo.hThread);
       }
       catch (Throwable e) {
-         e.printStackTrace();
+         LOGGER.log(Level.WARNING, "Failed to start process", e);
          onExit(Integer.MIN_VALUE);
       }
       finally {
@@ -262,7 +264,7 @@ public final class WindowsProcess implements NuProcess
          NuKernel32.ResumeThread(processInfo.hThread);
       }
       catch (Throwable e) {
-         e.printStackTrace();
+         LOGGER.log(Level.WARNING, "Failed to start process", e);
          onExit(Integer.MIN_VALUE);
          return;
       }
@@ -351,7 +353,7 @@ public final class WindowsProcess implements NuProcess
       }
       catch (Exception e) {
          // Don't let an exception thrown from the user's handler interrupt us
-         e.printStackTrace();
+         LOGGER.log(Level.WARNING, "Exception thrown from handler", e);
       }
       if (!stdoutPipe.buffer.hasRemaining()) {
          // The caller's onStdout() callback must set the buffer's position
@@ -386,7 +388,7 @@ public final class WindowsProcess implements NuProcess
       }
       catch (Exception e) {
          // Don't let an exception thrown from the user's handler interrupt us
-         e.printStackTrace();
+         LOGGER.log(Level.WARNING, "Exception thrown from handler", e);
       }
       if (!stderrPipe.buffer.hasRemaining()) {
          // The caller's onStdout() callback must set the buffer's position
@@ -455,7 +457,7 @@ public final class WindowsProcess implements NuProcess
          return true;
       }
       catch (Exception e) {
-         Logger.getLogger(getClass().getName()).log(Level.SEVERE, "Exception thrown handling writes to stdin " + processHandler, e);
+         LOGGER.log(Level.SEVERE, "Exception thrown handling writes to stdin " + processHandler, e);
 
          // Don't let an exception thrown from the user's handler interrupt us
          return false;
@@ -485,7 +487,7 @@ public final class WindowsProcess implements NuProcess
       }
       catch (Exception e) {
          // Don't let an exception thrown from the user's handler interrupt us
-         e.printStackTrace();
+         LOGGER.log(Level.WARNING, "Exception thrown from handler", e);
       }
       finally {
          exitPending.countDown();
@@ -540,6 +542,7 @@ public final class WindowsProcess implements NuProcess
       }
       catch (Exception e) {
          // Don't let an exception thrown from the user's handler interrupt us
+         LOGGER.log(Level.WARNING, "Exception thrown from handler", e);
       }
    }
 
@@ -550,7 +553,7 @@ public final class WindowsProcess implements NuProcess
       }
       catch (Exception e) {
          // Don't let an exception thrown from the user's handler interrupt us
-         e.printStackTrace();
+         LOGGER.log(Level.WARNING, "Exception thrown from handler", e);
       }
    }
 
@@ -603,7 +606,7 @@ public final class WindowsProcess implements NuProcess
 
    private void afterStart()
    {
-      pendingWrites = new ConcurrentLinkedQueue<ByteBuffer>();
+      pendingWrites = new ConcurrentLinkedQueue<>();
 
       outClosed = false;
       errClosed = false;
@@ -777,7 +780,12 @@ public final class WindowsProcess implements NuProcess
       {
          this.pipeHandle = pipeHandle;
          this.ioCompletionKey = ioCompletionKey;
-         this.overlapped = new OVERLAPPED();
+
+         // The OVERLAPPED structure is required to make non-blocking ReadFile and WriteFile calls,
+         // but its state is never read from nor written to in Java, so we disable auto-sync so JNA
+         // doesn't waste time marshaling contents to/from native memory
+         overlapped = new OVERLAPPED();
+         overlapped.setAutoSynch(false);
       }
    }
 }
