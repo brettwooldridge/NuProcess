@@ -67,7 +67,7 @@
         <dependency>
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>
-            <version>4.12</version>
+            <version>4.13.2</version>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -110,7 +110,7 @@
                    <instructions>
                        <Bundle-Name>NuProcess</Bundle-Name>
                        <Export-Package>
-							com.zaxxer.nuprocess;version="${project.version}", 
+							com.zaxxer.nuprocess;version="${project.version}",
 							com.zaxxer.nuprocess.codec;version="${project.version}"
 					   </Export-Package>
                        <Import-Package>com.sun.*</Import-Package>
