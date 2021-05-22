@@ -89,11 +89,11 @@ public abstract class BasePosixProcess implements NuProcess
    private ConcurrentLinkedQueue<ByteBuffer> pendingWrites;
 
    static {
-      IS_SOFTEXIT_DETECTION = Boolean.valueOf(System.getProperty("com.zaxxer.nuprocess.softExitDetection", "true"));
+      IS_SOFTEXIT_DETECTION = Boolean.parseBoolean(System.getProperty("com.zaxxer.nuprocess.softExitDetection", "true"));
 
       processors = new IEventProcessor<?>[NUMBER_OF_THREADS];
 
-      if (Boolean.valueOf(System.getProperty("com.zaxxer.nuprocess.enableShutdownHook", "true"))) {
+      if (Boolean.parseBoolean(System.getProperty("com.zaxxer.nuprocess.enableShutdownHook", "true"))) {
          Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
             @Override
             public void run()
@@ -137,18 +137,6 @@ public abstract class BasePosixProcess implements NuProcess
     * @since 1.3
     */
    public abstract void run(List<String> command, String[] environment, Path cwd);
-
-   /**
-    * Check the launched process and return {@code true} if launch was successful,
-    * or {@code false} if there was an error in launch.
-    *
-    * @return {@code true} on success, {@code false} on failure
-    */
-   protected boolean checkLaunch()
-   {
-      // Can be overridden by subclasses for post-launch checks
-      return true;
-   }
 
    /** {@inheritDoc} */
    @Override
@@ -321,6 +309,7 @@ public abstract class BasePosixProcess implements NuProcess
       }
       catch (Exception e) {
          // Don't let an exception thrown from the user's handler interrupt us
+         LOGGER.log(Level.WARNING, "Exception thrown from handler", e);
       }
       finally {
          exitPending.countDown();
@@ -500,7 +489,7 @@ public abstract class BasePosixProcess implements NuProcess
          return true;
       }
       catch (Exception e) {
-         Logger.getLogger(getClass().getName()).log(Level.SEVERE, "Exception thrown handling writes to stdin " + processHandler, e);
+         LOGGER.log(Level.SEVERE, "Exception thrown handling writes to stdin " + processHandler, e);
 
          // Don't let an exception thrown from the user's handler interrupt us
          return false;
@@ -576,6 +565,7 @@ public abstract class BasePosixProcess implements NuProcess
       }
       catch (Exception e) {
          // Don't let an exception thrown from the user's handler interrupt us
+         LOGGER.log(Level.WARNING, "Exception thrown from handler", e);
       }
    }
 
@@ -586,19 +576,18 @@ public abstract class BasePosixProcess implements NuProcess
       }
       catch (Exception e) {
          // Don't let an exception thrown from the user's handler interrupt us
+         LOGGER.log(Level.WARNING, "Exception thrown from handler", e);
       }
    }
 
    protected int[] createPipes()
    {
-      int rc;
-
       int[] in = new int[2];
       int[] out = new int[2];
       int[] err = new int[2];
 
       try {
-         rc = LibC.pipe(in);
+         int rc = LibC.pipe(in);
          checkReturnCode(rc, "Create stdin pipe() failed");
          rc = LibC.pipe(out);
          checkReturnCode(rc, "Create stdout pipe() failed");
@@ -627,25 +616,20 @@ public abstract class BasePosixProcess implements NuProcess
    protected void initFailureCleanup(int[] in, int[] out, int[] err)
    {
       Set<Integer> unique = new HashSet<>();
-      if (in != null) {
-         unique.add(in[0]);
-         unique.add(in[1]);
-      }
+      // Add stdin pipe descriptors
+      unique.add(in[0]);
+      unique.add(in[1]);
+      // Add stdout pipe descriptors
+      unique.add(out[0]);
+      unique.add(out[1]);
+      // Add stderr pipe descriptors
+      unique.add(err[0]);
+      unique.add(err[1]);
+      // Remove 0, in case any of the above desriptors weren't allocated
+      unique.remove(0);
 
-      if (out != null) {
-         unique.add(out[0]);
-         unique.add(out[1]);
-      }
-
-      if (err != null) {
-         unique.add(err[0]);
-         unique.add(err[1]);
-      }
-
-      for (int fildes : unique) {
-         if (fildes != 0) {
-            LibC.close(fildes);
-         }
+      for (int fd : unique) {
+         LibC.close(fd);
       }
    }
 
