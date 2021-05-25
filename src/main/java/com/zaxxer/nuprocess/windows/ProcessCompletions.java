@@ -27,6 +27,8 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CyclicBarrier;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 import com.sun.jna.Native;
 import com.sun.jna.ptr.IntByReference;
@@ -41,6 +43,7 @@ public final class ProcessCompletions implements Runnable
 {
    private static final int DEADPOOL_POLL_INTERVAL;
    private static final int LINGER_ITERATIONS;
+   private static final Logger LOGGER = Logger.getLogger(ProcessCompletions.class.getCanonicalName());
    private static final int STDOUT = 0;
    private static final int STDERR = 1;
 
@@ -122,7 +125,8 @@ public final class ProcessCompletions implements Runnable
       }
       catch (Exception e) {
          // TODO: how to handle this error?
-         e.printStackTrace();
+         LOGGER.log(Level.WARNING, "Aborting processing loop after unexpected exception (" +
+                 completionKeyToProcessMap.size() + " processes running)", e);
          isRunning.set(false);
       }
       finally {
