@@ -27,6 +27,9 @@ import static com.zaxxer.nuprocess.internal.Constants.OS;
 @SuppressWarnings("WeakerAccess")
 public class LibC
 {
+    
+   public static int SYS___pthread_chdir = 348; 
+    
    static {
       if (OS == OperatingSystem.MAC) {
          O_NONBLOCK = 0x0004; // MacOS X, Freebsd
@@ -34,7 +37,13 @@ public class LibC
       else {
          O_NONBLOCK = 2048; // Linux
       }
-
+      
+      // changing the value based on https://github.com/freebsd/freebsd/blob/master/sys/sys/syscall.h
+      String osname = System.getProperty("os.name").toLowerCase();
+      if ( osname.contains("freebsd") ) {
+          SYS___pthread_chdir = 12;
+      }
+       
       Native.register(NativeLibrary.getProcess());
    }
 
@@ -81,8 +90,7 @@ public class LibC
    // We can't use JNA direct mapping for syscall(), since it takes varargs.
    public interface SyscallLibrary extends Library
    {
-      public static final int SYS___pthread_chdir = 348;
-
+     
       int syscall(int syscall_number, Object... args);
    }
 
