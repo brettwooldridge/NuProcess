@@ -164,7 +164,17 @@ public abstract class BasePosixProcess implements NuProcess
    public void destroy(boolean force)
    {
       if (isRunning) {
-         checkReturnCode(LibC.kill(pid, force ? LibC.SIGKILL : LibC.SIGTERM), "Sending signal failed");
+         int result = LibC.kill(pid, force ? LibC.SIGKILL : LibC.SIGTERM);
+         if (result != 0) {
+            int errno = Native.getLastError();
+            if (errno == LibC.ESRCH) {
+               LOGGER.log(Level.FINE, "{0}: The process exited before it could be {1}",
+                       new Object[]{pid, force ? "killed" : "terminated"});
+            }
+            else {
+               throw new RuntimeException("Sending signal failed, return code: " + result + ", last error: " + errno);
+            }
+         }
       }
    }
 
