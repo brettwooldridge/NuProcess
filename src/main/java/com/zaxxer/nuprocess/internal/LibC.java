@@ -94,6 +94,7 @@ public class LibC
    public static final int O_NONBLOCK;
 
    // from /usr/include/asm-generic/errno-base.h
+   public static final int ESRCH = 3;   /* No such process */
    public static final int ECHILD = 10; /* No child processes */
 
    // from /usr/include/sys/wait.h
