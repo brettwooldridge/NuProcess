@@ -21,8 +21,6 @@ import com.sun.jna.Native;
 import com.sun.jna.WString;
 import com.zaxxer.nuprocess.NuProcess;
 import com.zaxxer.nuprocess.NuProcessHandler;
-import com.zaxxer.nuprocess.windows.NuKernel32.OVERLAPPED;
-import com.zaxxer.nuprocess.windows.NuWinNT.*;
 
 import java.nio.ByteBuffer;
 import java.nio.file.Path;
@@ -37,6 +35,8 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import static com.zaxxer.nuprocess.internal.Constants.NUMBER_OF_THREADS;
+import static com.zaxxer.nuprocess.windows.NuKernel32.*;
+import static com.zaxxer.nuprocess.windows.NuWinNT.*;
 
 /**
  * @author Brett Wooldridge
@@ -44,6 +44,7 @@ import static com.zaxxer.nuprocess.internal.Constants.NUMBER_OF_THREADS;
 public final class WindowsProcess implements NuProcess
 {
    private static final boolean IS_SOFTEXIT_DETECTION;
+   private static final boolean CHILD_TERMINATES_WITH_PARENT;
 
    // See https://github.com/JetBrains/jdk8u_jdk/blob/master/src/windows/native/java/lang/ProcessImpl_md.c#L36-L41
    private static final int BUFFER_SIZE = 4096 + 24;
@@ -82,6 +83,8 @@ public final class WindowsProcess implements NuProcess
    private volatile boolean outClosed;
    private volatile boolean errClosed;
 
+   private HANDLE hJob;
+
    private PROCESS_INFORMATION processInfo;
 
    static {
@@ -95,19 +98,7 @@ public final class WindowsProcess implements NuProcess
          processors[i] = new ProcessCompletions();
       }
 
-      if (Boolean.parseBoolean(System.getProperty("com.zaxxer.nuprocess.enableShutdownHook", "true"))) {
-         Runtime.getRuntime().addShutdownHook(new Thread(new Runnable() {
-            @Override
-            public void run()
-            {
-               for (int i = 0; i < processors.length; i++) {
-                  if (processors[i] != null) {
-                     processors[i].shutdown();
-                  }
-               }
-            }
-         }));
-      }
+      CHILD_TERMINATES_WITH_PARENT = Boolean.parseBoolean(System.getProperty("com.zaxxer.nuprocess.enableShutdownHook", "true"));
    }
 
    WindowsProcess(NuProcessHandler processListener)
@@ -197,6 +188,11 @@ public final class WindowsProcess implements NuProcess
    public void destroy(boolean force)
    {
       NuKernel32.TerminateProcess(processInfo.hProcess, Integer.MAX_VALUE);
+
+      if (CHILD_TERMINATES_WITH_PARENT && hJob != null) {
+         NuKernel32.TerminateJobObject(hJob, 0);
+         NuKernel32.CloseHandle(hJob);
+      }
    }
 
    public int getPID(){
@@ -226,6 +222,8 @@ public final class WindowsProcess implements NuProcess
 
    NuProcess start(List<String> commands, String[] environment, Path cwd)
    {
+      createJob();
+
       callPreStart();
 
       try {
@@ -234,6 +232,8 @@ public final class WindowsProcess implements NuProcess
          registerProcess();
 
          callStart();
+
+         attachJob();
 
          NuKernel32.ResumeThread(processInfo.hThread);
       }
@@ -248,6 +248,53 @@ public final class WindowsProcess implements NuProcess
       }
 
       return this;
+   }
+
+   private void attachJob()
+   {
+      if (!CHILD_TERMINATES_WITH_PARENT) {
+         return;
+      }
+
+      if (!AssignProcessToJobObject(hJob, getPidHandle())) {
+         throw new RuntimeException("Failed to attach to job " + Native.getLastError());
+      }
+   }
+
+   private void createJob()
+   {
+      if (!CHILD_TERMINATES_WITH_PARENT) {
+         return;
+      }
+
+      hJob = NuKernel32.CreateJobObject(null, null);
+      if (hJob.getPointer() == null) {
+         throw new RuntimeException("Unable to create job object: " + Native.getLastError());
+      }
+
+      JOBJECT_EXTENDED_LIMIT_INFORMATION.ByReference jobExtendedLimitInfo = new JOBJECT_EXTENDED_LIMIT_INFORMATION.ByReference();
+      jobExtendedLimitInfo.clear();
+
+      JOBOBJECT_BASIC_UI_RESTRICTIONS.ByReference jobUiRestrictions = new JOBOBJECT_BASIC_UI_RESTRICTIONS.ByReference();
+      jobUiRestrictions.clear();
+
+      // http://forum.sysinternals.com/forum_posts.asp?TID=4094
+      jobExtendedLimitInfo.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_BREAKAWAY_OK | JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+
+      jobExtendedLimitInfo.write();
+
+      if (!SetInformationJobObject(hJob, JobObjectExtendedLimitInformation, jobExtendedLimitInfo.getPointer(), jobExtendedLimitInfo.size())) {
+         throw new RuntimeException("Unable to set extended limit information on the job object: " + Native.getLastError());
+      }
+
+      // crete job in sandbox with own global atom table
+      jobUiRestrictions.UIRestrictionsClass = JOB_OBJECT_UILIMIT_GLOBALATOMS;
+
+      jobUiRestrictions.write();
+
+      if (!SetInformationJobObject(hJob, JobObjectBasicUIRestrictions, jobUiRestrictions.getPointer(), jobUiRestrictions.size())) {
+         throw new RuntimeException("Unable to set ui limit information on the job object: " + Native.getLastError());
+      }
    }
 
    void run(List<String> commands, String[] environment, Path cwd)
@@ -297,7 +344,12 @@ public final class WindowsProcess implements NuProcess
 
       processInfo = new PROCESS_INFORMATION();
 
-      DWORD dwCreationFlags = new DWORD(NuWinNT.CREATE_NO_WINDOW | NuWinNT.CREATE_UNICODE_ENVIRONMENT | NuWinNT.CREATE_SUSPENDED);
+      int creationFlagValue = CREATE_NO_WINDOW | CREATE_UNICODE_ENVIRONMENT | CREATE_SUSPENDED;
+      if (CHILD_TERMINATES_WITH_PARENT) {
+         creationFlagValue |= CREATE_BREAKAWAY_FROM_JOB | CREATE_NEW_PROCESS_GROUP;
+      }
+      
+      DWORD dwCreationFlags = new DWORD(creationFlagValue);
       char[] cwdChars = (cwd != null) ? Native.toCharArray(cwd.toAbsolutePath().toString()) : null;
       if (!NuKernel32.CreateProcessW(null, getCommandLine(commands), null /*lpProcessAttributes*/, null /*lpThreadAttributes*/, true /*bInheritHandles*/,
               dwCreationFlags, env, cwdChars, startupInfo, processInfo)) {

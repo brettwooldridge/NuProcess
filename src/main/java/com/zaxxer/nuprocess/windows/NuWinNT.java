@@ -36,6 +36,7 @@ public interface NuWinNT
    int CREATE_SUSPENDED = 0x00000004;
    int CREATE_UNICODE_ENVIRONMENT = 0x00000400;
    int CREATE_NO_WINDOW = 0x08000000;
+   int CREATE_NEW_PROCESS_GROUP = 0x00000200;
 
    int ERROR_SUCCESS = 0;
    int ERROR_BROKEN_PIPE = 109;
@@ -57,6 +58,17 @@ public interface NuWinNT
    int STILL_ACTIVE = STATUS_PENDING;
 
    int STARTF_USESTDHANDLES = 0x100;
+
+   int JOB_OBJECT_LIMIT_BREAKAWAY_OK = 2048;
+   int JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 8192;
+   // see SetInformationJobObject at msdn
+   int JobObjectExtendedLimitInformation = 9;
+   // see SetInformationJobObject at msdn
+   int JobObjectBasicUIRestrictions = 4;
+   // 0x00000020
+   int JOB_OBJECT_UILIMIT_GLOBALATOMS = 0x00000020;
+   // 0x01000000
+   int CREATE_BREAKAWAY_FROM_JOB = 16777216;
 
    HANDLE INVALID_HANDLE_VALUE = new HANDLE(HANDLE.INVALID);
 
@@ -160,14 +172,58 @@ public interface NuWinNT
       }
    }
 
+   class ULONGLONG extends IntegerType implements Comparable<ULONGLONG>
+   {
+
+      /**
+       * The Constant SIZE.
+       */
+      public static final int SIZE = Native.LONG_SIZE * 2;
+
+      /**
+       * Instantiates a new ULONGLONG.
+       */
+      public ULONGLONG()
+      {
+         this(0);
+      }
+
+      /**
+       * Instantiates a new ULONGLONG.
+       *
+       * @param value the value
+       */
+      public ULONGLONG(long value)
+      {
+         super(SIZE, value, true);
+      }
+
+      @Override public int compareTo(ULONGLONG other)
+      {
+         return compare(this, other);
+      }
+   }
+
+   class SIZE_T extends ULONG_PTR
+   {
+      public SIZE_T()
+      {
+         this(0);
+      }
+
+      public SIZE_T(long value)
+      {
+         super(value);
+      }
+   }
+
    class SECURITY_ATTRIBUTES extends Structure
    {
       public DWORD dwLength;
       public Pointer lpSecurityDescriptor;
       public boolean bInheritHandle;
 
-      @Override
-      protected List<String> getFieldOrder()
+      @Override protected List<String> getFieldOrder()
       {
          return Arrays.asList("dwLength", "lpSecurityDescriptor", "bInheritHandle");
       }
@@ -215,10 +271,299 @@ public interface NuWinNT
       public DWORD dwProcessId;
       public DWORD dwThreadId;
 
-      @Override
-      protected List<String> getFieldOrder()
+      @Override protected List<String> getFieldOrder()
       {
          return Arrays.asList("hProcess", "hThread", "dwProcessId", "dwThreadId");
+      }
+   }
+
+   class LARGE_INTEGER extends Structure implements Comparable<LARGE_INTEGER>
+   {
+      public static class ByReference extends LARGE_INTEGER implements Structure.ByReference
+      {
+      }
+
+      public static class LowHigh extends Structure
+      {
+         public DWORD LowPart;
+         public DWORD HighPart;
+
+         public LowHigh()
+         {
+            super();
+         }
+
+         public LowHigh(long value)
+         {
+            this(new DWORD(value & 0xFFFFFFFFL), new DWORD((value >> 32) & 0xFFFFFFFFL));
+         }
+
+         public LowHigh(DWORD low, DWORD high)
+         {
+            LowPart = low;
+            HighPart = high;
+         }
+
+         public long longValue()
+         {
+            long loValue = LowPart.longValue();
+            long hiValue = HighPart.longValue();
+            return ((hiValue << 32) & 0xFFFFFFFF00000000L) | (loValue & 0xFFFFFFFFL);
+         }
+
+         @Override public String toString()
+         {
+            if ((LowPart == null) || (HighPart == null)) {
+               return "null";
+            }
+            else {
+               return Long.toString(longValue());
+            }
+         }
+
+         @Override protected List<String> getFieldOrder()
+         {
+            return Arrays.asList("LowPart", "HighPart");
+         }
+      }
+
+      public static class UNION extends Union
+      {
+         public LowHigh lh;
+         public long value;
+
+         public UNION()
+         {
+            super();
+         }
+
+         public UNION(long value)
+         {
+            this.value = value;
+            this.lh = new LowHigh(value);
+         }
+
+         public long longValue()
+         {
+            return value;
+         }
+
+         @Override public String toString()
+         {
+            return Long.toString(longValue());
+         }
+      }
+
+      public UNION u;
+
+      public LARGE_INTEGER()
+      {
+         super();
+      }
+
+      public LARGE_INTEGER(long value)
+      {
+         this.u = new UNION(value);
+      }
+
+      /**
+       * Low DWORD.
+       *
+       * @return Low DWORD value
+       */
+      public DWORD getLow()
+      {
+         return u.lh.LowPart;
+      }
+
+      /**
+       * High DWORD.
+       *
+       * @return High DWORD value
+       */
+      public DWORD getHigh()
+      {
+         return u.lh.HighPart;
+      }
+
+      /**
+       * 64-bit value.
+       *
+       * @return The 64-bit value.
+       */
+      public long getValue()
+      {
+         return u.value;
+      }
+
+      @Override public int compareTo(LARGE_INTEGER other)
+      {
+         return compare(this, other);
+      }
+
+      @Override public String toString()
+      {
+         return (u == null) ? "null" : Long.toString(getValue());
+      }
+
+      /**
+       * Compares 2 LARGE_INTEGER values -  - <B>Note:</B> a {@code null}
+       * value is considered <U>greater</U> than any non-{@code null} one
+       * (i.e., {@code null} values are &quot;pushed&quot; to the end
+       * of a sorted array / list of values)
+       *
+       * @param v1 The 1st value
+       * @param v2 The 2nd value
+       * @return 0 if values are equal (including if <U>both</U> are {@code null},
+       * negative if 1st value less than 2nd one, positive otherwise. <B>Note:</B>
+       * the comparison uses the {@link #getValue()}.
+       * @see IntegerType#compare(long, long)
+       */
+      public static int compare(LARGE_INTEGER v1, LARGE_INTEGER v2)
+      {
+         if (v1 == v2) {
+            return 0;
+         }
+         else if (v1 == null) {
+            return 1;   // v2 cannot be null or v1 == v2 would hold
+         }
+         else if (v2 == null) {
+            return (-1);
+         }
+         else {
+            return IntegerType.compare(v1.getValue(), v2.getValue());
+         }
+      }
+
+      /**
+       * Compares a LARGE_INTEGER value with a {@code long} one. <B>Note:</B> if
+       * the LARGE_INTEGER value is {@code null} then it is consider <U>greater</U>
+       * than any {@code long} value.
+       *
+       * @param v1 The {@link LARGE_INTEGER} value
+       * @param v2 The {@code long} value
+       * @return 0 if values are equal, negative if 1st value less than 2nd one,
+       * positive otherwise. <B>Note:</B> the comparison uses the {@link #getValue()}.
+       * @see IntegerType#compare(long, long)
+       */
+      public static int compare(LARGE_INTEGER v1, long v2)
+      {
+         if (v1 == null) {
+            return 1;
+         }
+         else {
+            return IntegerType.compare(v1.getValue(), v2);
+         }
+      }
+
+      @Override protected List<String> getFieldOrder()
+      {
+         return Arrays.asList("u");
+      }
+   }
+
+   class JOBJECT_BASIC_LIMIT_INFORMATION extends Structure
+   {
+      public LARGE_INTEGER PerProcessUserTimeLimit;
+      public LARGE_INTEGER PerJobUserTimeLimit;
+      public int LimitFlags;
+      public SIZE_T MinimumWorkingSetSize;
+      public SIZE_T MaximumWorkingSetSize;
+      public int ActiveProcessLimit;
+      public ULONG_PTR Affinity;
+      public int PriorityClass;
+      public int SchedulingClass;
+
+      @Override protected List<String> getFieldOrder()
+      {
+         return Arrays.asList("PerProcessUserTimeLimit", "PerJobUserTimeLimit", "LimitFlags", "MinimumWorkingSetSize", "MaximumWorkingSetSize",
+                              "ActiveProcessLimit", "Affinity", "PriorityClass", "SchedulingClass");
+      }
+   }
+
+   class IO_COUNTERS extends Structure
+   {
+
+      public ULONGLONG ReadOperationCount;
+      public ULONGLONG WriteOperationCount;
+      public ULONGLONG OtherOperationCount;
+      public ULONGLONG ReadTransferCount;
+      public ULONGLONG WriteTransferCount;
+      public ULONGLONG OtherTransferCount;
+
+      @Override protected List<String> getFieldOrder()
+      {
+         return Arrays.asList("ReadOperationCount", "WriteOperationCount", "OtherOperationCount", "ReadTransferCount", "WriteTransferCount",
+                              "OtherTransferCount");
+      }
+   }
+
+   class JOBJECT_EXTENDED_LIMIT_INFORMATION extends Structure
+   {
+
+      public JOBJECT_BASIC_LIMIT_INFORMATION BasicLimitInformation;
+      public IO_COUNTERS IoInfo;
+      public SIZE_T ProcessMemoryLimit;
+      public SIZE_T JobMemoryLimit;
+      public SIZE_T PeakProcessMemoryUsed;
+      public SIZE_T PeakJobMemoryUsed;
+
+      @Override protected List<String> getFieldOrder()
+      {
+         return Arrays.asList("BasicLimitInformation", "IoInfo", "ProcessMemoryLimit", "JobMemoryLimit", "PeakProcessMemoryUsed", "PeakJobMemoryUsed");
+      }
+
+      public JOBJECT_EXTENDED_LIMIT_INFORMATION()
+      {
+      }
+
+      public JOBJECT_EXTENDED_LIMIT_INFORMATION(Pointer memory)
+      {
+         super(memory);
+      }
+
+      public static class ByReference extends JOBJECT_EXTENDED_LIMIT_INFORMATION implements Structure.ByReference
+      {
+
+         public ByReference()
+         {
+         }
+
+         public ByReference(Pointer memory)
+         {
+            super(memory);
+         }
+      }
+   }
+
+   class JOBOBJECT_BASIC_UI_RESTRICTIONS extends Structure
+   {
+      public int UIRestrictionsClass;
+
+      public JOBOBJECT_BASIC_UI_RESTRICTIONS()
+      {
+      }
+
+      public JOBOBJECT_BASIC_UI_RESTRICTIONS(Pointer memory)
+      {
+         super(memory);
+      }
+
+      public static class ByReference extends JOBOBJECT_BASIC_UI_RESTRICTIONS implements Structure.ByReference
+      {
+         public ByReference()
+         {
+         }
+
+         public ByReference(Pointer memory)
+         {
+            super(memory);
+         }
+      }
+
+      @Override protected List<String> getFieldOrder()
+      {
+         return Arrays.asList("UIRestrictionsClass");
       }
    }
 }
