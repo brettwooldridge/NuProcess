@@ -95,6 +95,7 @@ public class LibC
 
    // from /usr/include/asm-generic/errno-base.h
    public static final int ESRCH = 3;   /* No such process */
+   public static final int EINTR = 4;   /* Interrupted system call */
    public static final int ECHILD = 10; /* No child processes */
 
    // from /usr/include/sys/wait.h
