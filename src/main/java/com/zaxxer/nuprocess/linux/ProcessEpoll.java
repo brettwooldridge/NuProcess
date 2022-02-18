@@ -218,7 +218,17 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
       try {
          int nev = LibEpoll.epoll_wait(epoll, triggeredEvent.getPointer(), 1, DEADPOOL_POLL_INTERVAL);
          if (nev == -1) {
-            throw new RuntimeException("Error waiting for epoll");
+            int errno = Native.getLastError();
+            if (errno == LibC.EINTR) {
+               // Signals received while in epoll_wait can interrupt the call and, per the documentation for
+               // SA_RESTART, it will not be restarted automatically. When that happens, we manually restart
+               // epoll_wait by returning true, which ensures BaseEventProcessor.run() calls process() again.
+               // This matches how the JVM internals handle EINTR during epoll_wait.
+               // See https://github.com/JetBrains/jdk8u_jdk/blob/94318f9185757cc33d2b8d527d36be26ac6b7582/src/solaris/native/sun/nio/ch/nio_util.h#L33-L37
+               return true;
+            }
+
+            throw new RuntimeException("Error waiting for epoll (" + errno + ")");
          }
 
          if (nev == 0) {
