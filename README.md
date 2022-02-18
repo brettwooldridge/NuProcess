@@ -170,6 +170,11 @@ This property controls how long the processing thread(s) remains after the last 
 order to avoid the overhead of starting up another processing thread, if processes are frequently run it may be desirable
 for the processing thread to remain (linger) for some amount of time (default 2500ms).
 
+##### ``com.zaxxer.nuprocess.enableShutdownHook``
+On Windows, this enables creating processes with job objects, which ensures they die when the parent process dies, in all
+circumstances. On Linux and macOS, this creates a Java shutdown hook that quits created, running processes. This has the
+same limitations as shutdown hooks, which may not run in certain circumstances like termination. The default value is "true".
+
 #### Related Projects
 Charles Duffy has developed a Clojure wrapper library [here](https://github.com/threatgrid/asynp).
 Julien Viet has developed a Vert.x 3 library [here](https://github.com/vietj/vertx-childprocess).

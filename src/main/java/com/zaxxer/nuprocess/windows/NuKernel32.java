@@ -85,6 +85,14 @@ public class NuKernel32
    public static native int WriteFile(HANDLE hFile, ByteBuffer lpBuffer, int nNumberOfBytesToWrite, IntByReference lpNumberOfBytesWritten,
                                       NuKernel32.OVERLAPPED lpOverlapped);
 
+	public static native HANDLE CreateJobObject(SECURITY_ATTRIBUTES attrs, String name);
+
+	public static native boolean SetInformationJobObject(HANDLE hJob, int JobObjectInfoClass, Pointer lpJobObjectInfo, int cbJobObjectInfoLength); // {return false;};
+
+	public static native boolean AssignProcessToJobObject(HANDLE hJob, HANDLE hProcess); // {return false;};
+
+	public static native boolean TerminateJobObject(HANDLE hJob, long uExitCode); // {return false;};
+
    /**
     * The OVERLAPPED structure contains information used in
     * asynchronous (or overlapped) input and output (I/O).
