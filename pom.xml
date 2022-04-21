@@ -121,6 +121,11 @@
                 </plugin>
                 <plugin>
                     <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-release-plugin</artifactId>
+                    <version>2.5.3</version>
+                </plugin>
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
                     <artifactId>maven-resources-plugin</artifactId>
                     <version>3.2.0</version>
                 </plugin>
@@ -192,13 +197,19 @@
         </plugins>
     </build>
 
-    <!-- For release: mvn release:perform -Darguments=-Dgpg.passphrase=PASSPHRASE
-         If using newer GPG, you don't need to pass the passphrase; the GPG agent will prompt for it. -->
     <profiles>
         <profile>
-            <id>release-profile</id>
+            <id>release</id>
+            <activation>
+                <property>
+                    <name>performRelease</name>
+                    <value>true</value>
+                </property>
+            </activation>
             <build>
                 <plugins>
+                    <!-- For release: mvn release:perform -Darguments=-Dgpg.passphrase=PASSPHRASE
+                         With gpg2 you don't need to pass the passphrase; the GPG agent will prompt for it. -->
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-gpg-plugin</artifactId>
@@ -238,8 +249,8 @@
                         <artifactId>nexus-staging-maven-plugin</artifactId>
                         <extensions>true</extensions>
                         <configuration>
-                            <serverId>ossrh</serverId>
                             <nexusUrl>https://oss.sonatype.org/</nexusUrl>
+                            <serverId>ossrh</serverId>
                         </configuration>
                     </plugin>
                 </plugins>
