@@ -353,8 +353,9 @@ public abstract class BasePosixProcess implements NuProcess
          int read = LibC.read(fd, outBuffer, Math.min(availability, outBuffer.remaining()));
          if (read == -1) {
             outClosed = true;
-            throw new RuntimeException("Unexpected eof");
-            // EOF?
+
+            int errno = Native.getLastError();
+            throw new RuntimeException("Unexpected EOF reading stdout, errno: " + errno);
          }
 
          outBuffer.limit(outBuffer.position() + read);
@@ -390,9 +391,10 @@ public abstract class BasePosixProcess implements NuProcess
 
          int read = LibC.read(fd, errBuffer, Math.min(availability, errBuffer.remaining()));
          if (read == -1) {
-            // EOF?
             errClosed = true;
-            throw new RuntimeException("Unexpected eof");
+
+            int errno = Native.getLastError();
+            throw new RuntimeException("Unexpected EOF reading stderr, errno: " + errno);
          }
 
          errBuffer.limit(errBuffer.position() + read);
