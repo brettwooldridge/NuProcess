@@ -56,6 +56,11 @@
 
     <properties>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+
+        <!-- When releasing a new version, this property controls whether the staged artifacts will be automatically
+             released in Nexus. If this is set to false (-DautoReleaseStagedArtifacts=false), artifacts will need to
+             be manually released via the Nexus UI at https://oss.sonatype.org -->
+        <autoReleaseStagedArtifacts>true</autoReleaseStagedArtifacts>
     </properties>
 
     <dependencies>
@@ -249,6 +254,7 @@
                         <artifactId>nexus-staging-maven-plugin</artifactId>
                         <extensions>true</extensions>
                         <configuration>
+                            <autoReleaseAfterClose>${autoReleaseStagedArtifacts}</autoReleaseAfterClose>
                             <nexusUrl>https://oss.sonatype.org/</nexusUrl>
                             <serverId>ossrh</serverId>
                         </configuration>
