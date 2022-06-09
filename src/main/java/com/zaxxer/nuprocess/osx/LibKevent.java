@@ -59,6 +59,7 @@ public class LibKevent
       public int fflags;
       public NativeLong data;
       public Pointer udata;
+      public long[] ext = new long[4];
 
       public Kevent() {
           super();
@@ -72,7 +73,12 @@ public class LibKevent
       @Override
       protected List getFieldOrder()
       {
-         return Arrays.asList("ident", "filter", "flags", "fflags", "data", "udata");
+         String osname = System.getProperty("os.name").toLowerCase();
+         if(osname.contains("freebsd")){
+            return Arrays.asList("ident", "filter", "flags", "fflags", "data", "udata", "ext");
+         } else {
+            return Arrays.asList("ident", "filter", "flags", "fflags", "data", "udata");
+         }
       }
 
       Kevent EV_SET(long ident, int filter, int flags, int fflags, long data, Pointer udata)
