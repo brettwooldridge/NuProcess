@@ -188,7 +188,6 @@
                     </archive>
                 </configuration>
             </plugin>
-            
             <!-- Note: we might need this for removing side-effect on InterruptTest -->
             <!--plugin>
                 <groupId>org.apache.maven.plugins</groupId>
