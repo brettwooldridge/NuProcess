@@ -316,6 +316,32 @@ public class RunTest
       System.err.println("Completed test softCloseStdinAfterWrite()");
    }
 
+   @Test(expected = IllegalArgumentException.class)
+   public void nullCommandViaCommandMutationWithRun() {
+      NuProcessBuilder pb = new NuProcessBuilder(new NullProcessHandler(), command);
+      pb.command().add("--foo\0--bar");
+      pb.run();
+   }
+
+   @Test(expected = IllegalArgumentException.class)
+   public void nullCommandViaCommandMutationWithStart() {
+      NuProcessBuilder pb = new NuProcessBuilder(new NullProcessHandler(), command);
+      pb.command().add("--foo\0--bar");
+      pb.start();
+   }
+
+   @Test(expected = IllegalArgumentException.class)
+   public void nullCommandViaConstructorWithRun() {
+      NuProcessBuilder pb = new NuProcessBuilder(new NullProcessHandler(), command, "--foo\0--bar");
+      pb.run();
+   }
+
+   @Test(expected = IllegalArgumentException.class)
+   public void nullCommandViaConstructorWithStart() {
+      NuProcessBuilder pb = new NuProcessBuilder(new NullProcessHandler(), command, "--foo\0--bar");
+      pb.start();
+   }
+
    private static byte[] getLotsOfBytes()
    {
       StringBuilder sb = new StringBuilder();
@@ -393,6 +419,9 @@ public class RunTest
       {
          return writes == WRITES && readAdler32.getValue() == writeAdler32.getValue();
       }
+   }
+
+   private static class NullProcessHandler extends NuAbstractProcessHandler {
    }
 
    private static class Utf8DecodingListener extends NuAbstractCharsetHandler
