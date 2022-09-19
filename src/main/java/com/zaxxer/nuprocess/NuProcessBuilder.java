@@ -107,7 +107,6 @@ public class NuProcessBuilder
       if (commands == null || commands.isEmpty()) {
          throw new IllegalArgumentException("List of commands may not be null or empty");
       }
-      ensureNoNullCharacters(commands);
 
       this.environment = new TreeMap<String, String>(environment);
       this.command = new ArrayList<String>(commands);
@@ -127,7 +126,6 @@ public class NuProcessBuilder
       if (commands == null || commands.isEmpty()) {
          throw new IllegalArgumentException("List of commands may not be null or empty");
       }
-      ensureNoNullCharacters(commands);
 
       this.environment = new TreeMap<String, String>(System.getenv());
       this.command = new ArrayList<String>(commands);
@@ -146,11 +144,9 @@ public class NuProcessBuilder
       if (commands == null || commands.length == 0) {
          throw new IllegalArgumentException("List of commands may not be null or empty");
       }
-      List<String> commandsList = Arrays.asList(commands);
-      ensureNoNullCharacters(commandsList);
 
       this.environment = new TreeMap<String, String>(System.getenv());
-      this.command = new ArrayList<String>(commandsList);
+      this.command = new ArrayList<String>(Arrays.asList(commands));
    }
 
    /**
@@ -257,6 +253,7 @@ public class NuProcessBuilder
     */
    public NuProcess start()
    {
+      ensureNoNullCharacters(command);
       ensureListener();
       String[] env = prepareEnvironment();
 
@@ -271,6 +268,7 @@ public class NuProcessBuilder
     */
    public void run()
    {
+      ensureNoNullCharacters(command);
       ensureListener();
       String[] env = prepareEnvironment();
 
