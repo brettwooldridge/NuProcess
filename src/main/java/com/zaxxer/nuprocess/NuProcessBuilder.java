@@ -107,6 +107,7 @@ public class NuProcessBuilder
       if (commands == null || commands.isEmpty()) {
          throw new IllegalArgumentException("List of commands may not be null or empty");
       }
+      ensureNoNullCharacters(commands);
 
       this.environment = new TreeMap<String, String>(environment);
       this.command = new ArrayList<String>(commands);
@@ -126,6 +127,7 @@ public class NuProcessBuilder
       if (commands == null || commands.isEmpty()) {
          throw new IllegalArgumentException("List of commands may not be null or empty");
       }
+      ensureNoNullCharacters(commands);
 
       this.environment = new TreeMap<String, String>(System.getenv());
       this.command = new ArrayList<String>(commands);
@@ -144,9 +146,11 @@ public class NuProcessBuilder
       if (commands == null || commands.length == 0) {
          throw new IllegalArgumentException("List of commands may not be null or empty");
       }
+      List<String> commandsList = Arrays.asList(commands);
+      ensureNoNullCharacters(commandsList);
 
       this.environment = new TreeMap<String, String>(System.getenv());
-      this.command = new ArrayList<String>(Arrays.asList(commands));
+      this.command = new ArrayList<String>(commandsList);
    }
 
    /**
@@ -277,6 +281,14 @@ public class NuProcessBuilder
    {
       if (processListener == null) {
          throw new IllegalArgumentException("NuProcessHandler not specified");
+      }
+   }
+
+   private void ensureNoNullCharacters(List<String> commands) {
+      for (String command : commands) {
+         if (command.indexOf('\u0000') >= 0) {
+            throw new IllegalArgumentException("Commands may not contain null characters");
+         }
       }
    }
 
