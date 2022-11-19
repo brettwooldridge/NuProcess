@@ -1,3 +1,8 @@
+Changes in 2.0.6
+
+ * Fix environment variable injection vulnerability. This is a follow-up from CVE-2022-39243 and does not
+   have its own CVE assigned
+
 Changes in 2.0.5
 
  * Fix command line injection vulnerability (CVE-2022-39243) (#143)
