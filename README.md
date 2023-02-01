@@ -182,7 +182,7 @@ The following limitations exist in NuProcess:
 
 [Build Status]:https://circleci.com/gh/brettwooldridge/NuProcess`
 [Build Status img]:https://circleci.com/gh/brettwooldridge/NuProcess.svg?style=shield
-`
+
 [Shippable Status]:https://app.shippable.com/github/brettwooldridge/NuProcess
 [Shippable Status img]:https://api.shippable.com/projects/5b4b6a3e6db3b807000a63d8/badge?branch=master
 
