@@ -180,9 +180,9 @@ The following limitations exist in NuProcess:
  * Java 7 and above
  * Linux support requires at least kernel version 2.6.17 or higher (kernels after June 2006)
 
-[Build Status]:https://travis-ci.org/brettwooldridge/NuProcess
-[Build Status img]:https://travis-ci.org/brettwooldridge/NuProcess.svg?branch=master
-
+[Build Status]:https://circleci.com/gh/brettwooldridge/NuProcess`
+[Build Status img]:https://circleci.com/gh/brettwooldridge/NuProcess.svg?style=shield
+`
 [Shippable Status]:https://app.shippable.com/github/brettwooldridge/NuProcess
 [Shippable Status img]:https://api.shippable.com/projects/5b4b6a3e6db3b807000a63d8/badge?branch=master
 
