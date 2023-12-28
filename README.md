@@ -16,7 +16,7 @@ Have you ever been annoyed by the fact that whenever you spawn a process in Java
 threads (for every process) to pull data out of the ``stdout`` and ``stderr`` pipes and pump data into ``stdin``?  If your
 code starts a lot of processes you can have dozens or hundreds of threads doing nothing but pumping data.
 
-NuProcess uses the JNA library to use platform-specific native APIs to achive non-blocking I/O on the pipes between your
+NuProcess uses the JNA library to use platform-specific native APIs to achieve non-blocking I/O on the pipes between your
 Java process and the spawned processes:
 
  * Linux: uses epoll
