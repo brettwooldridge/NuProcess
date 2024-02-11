@@ -20,6 +20,7 @@ import java.util.Arrays;
 import java.util.List;
 
 import com.sun.jna.*;
+import com.zaxxer.nuprocess.internal.Util;
 
 class EpollEvent
 {
@@ -62,6 +63,11 @@ class EpollEvent
 
    int size() {
       return size;
+   }
+
+   public void close()
+   {
+      Util.close(getPointer());
    }
 
    public static class EpollEventPrototype extends Structure

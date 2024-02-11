@@ -35,7 +35,6 @@ import static com.zaxxer.nuprocess.internal.Constants.JVM_MAJOR_VERSION;
  */
 public class LinuxProcess extends BasePosixProcess
 {
-   private final EpollEvent epollEvent;
 
    static {
       LibEpoll.sigignore(LibEpoll.SIGPIPE);
@@ -58,7 +57,6 @@ public class LinuxProcess extends BasePosixProcess
    LinuxProcess(NuProcessHandler processListener) {
       super(processListener);
 
-      epollEvent = new EpollEvent();
    }
 
    @Override
@@ -115,17 +113,6 @@ public class LinuxProcess extends BasePosixProcess
          LOGGER.log(Level.WARNING, "Failed to start process", e);
          onExit(Integer.MIN_VALUE);
       }
-   }
-
-   /**
-    * An {@link EpollEvent} struct, which may be used when registering for events for this process. Each process has
-    * its own struct to avoid concurrency issues in {@link ProcessEpoll#registerProcess} when multiple processes are
-    * registered at once (e.g. multiple threads are all starting new processes concurrently).
-    *
-    * @return this process's {@link EpollEvent} struct
-    */
-   EpollEvent getEpollEvent() {
-      return epollEvent;
    }
 
    private void prepareProcess(List<String> command, String[] environment, Path cwd) throws IOException
