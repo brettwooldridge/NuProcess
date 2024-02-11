@@ -40,6 +40,9 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
    private final EpollEvent triggeredEvent;
    private final List<LinuxProcess> deadPool;
 
+   // see comment in #cleanupProcess for explanation on dynamicDeadpoolPollInterval
+   private int dynamicDeadpoolPollInterval = DEADPOOL_POLL_INTERVAL;
+
    private LinuxProcess process;
 
    ProcessEpoll()
@@ -191,7 +194,9 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
       int stderrFd = Integer.MIN_VALUE;
       LinuxProcess linuxProcess = null;
       try {
-         int nev = LibEpoll.epoll_wait(epoll, triggeredEvent.getPointer(), 1, DEADPOOL_POLL_INTERVAL);
+         int nev = LibEpoll.epoll_wait(epoll, triggeredEvent.getPointer(), 1, dynamicDeadpoolPollInterval);
+         // see comment in #cleanupProcess for explanation on dynamicDeadpoolPollInterval
+         dynamicDeadpoolPollInterval = Math.min(DEADPOOL_POLL_INTERVAL, 2 * dynamicDeadpoolPollInterval);
          if (nev == -1) {
             int errno = Native.getLastError();
             if (errno == LibC.EINTR) {
@@ -292,19 +297,16 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
 
    private void cleanupProcess(LinuxProcess linuxProcess, int stdinFd, int stdoutFd, int stderrFd)
    {
+      // we detected a close of a stream, this means that the process is going to be closed soon or is already closed
+      // in the absence of other EPoll events this means that we might wait for the full DEADPOOL_POLL_INTERVAL
+      // before we do waitpid check again. With dynamic poll interval, we check again in the intervals of
+      // 1, 2, 4, 8, ... DEADPOOL_POLL_INTERVAL ms. This allows us to catch exit much sooner.
+      dynamicDeadpoolPollInterval = 1;
+
       pidToProcessMap.remove(linuxProcess.getPid());
       fildesToProcessMap.remove(stdinFd);
       fildesToProcessMap.remove(stdoutFd);
       fildesToProcessMap.remove(stderrFd);
-
-      //        linuxProcess.close(linuxProcess.getStdin());
-      //        linuxProcess.close(linuxProcess.getStdout());
-      //        linuxProcess.close(linuxProcess.getStderr());
-
-      if (linuxProcess.cleanlyExitedBeforeProcess.get()) {
-         linuxProcess.onExit(0);
-         return;
-      }
 
       IntByReference ret = new IntByReference();
       int rc = LibC.waitpid(linuxProcess.getPid(), ret, LibC.WNOHANG);
