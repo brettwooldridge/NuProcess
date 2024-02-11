@@ -30,7 +30,6 @@ import java.util.concurrent.TimeUnit;
 
 import com.sun.jna.Native;
 import com.sun.jna.Pointer;
-import com.sun.jna.ptr.IntByReference;
 import com.zaxxer.nuprocess.internal.BaseEventProcessor;
 import com.zaxxer.nuprocess.internal.LibC;
 import com.zaxxer.nuprocess.osx.LibKevent.Kevent;
@@ -47,12 +46,12 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
    private static final int NUM_KEVENTS = 64;
    private static final int JAVA_PID;
 
-   private volatile int kqueue;
+   private final int kqueue;
 
    // Re-used in process() to avoid repeatedly allocating and destroying array of events.
-   private Kevent[] processEvents;
-   private BlockingQueue<OsxProcess> closeQueue;
-   private BlockingQueue<OsxProcess> wantsWrite;
+   private final Kevent[] processEvents;
+   private final BlockingQueue<OsxProcess> closeQueue;
+   private final BlockingQueue<OsxProcess> wantsWrite;
 
    static {
       JAVA_PID = LibC.getpid();
@@ -277,9 +276,11 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
          try {
             int stdoutFd = osxProcess.getStdout().acquire();
             if (ident == stdoutFd) {
-               osxProcess.readStdout(available, stdoutFd);
+               tempBuffer.clear();
+               osxProcess.readStdout(available, stdoutFd, tempBuffer);
                if ((kevent.flags & Kevent.EV_EOF) != 0) {
-                  osxProcess.readStdout(-1, stdoutFd);
+                  tempBuffer.clear();
+                  osxProcess.readStdout(-1, stdoutFd, tempBuffer);
                }
                return;
             }
@@ -290,9 +291,11 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
          try {
             int stderrFd = osxProcess.getStderr().acquire();
             if (ident == stderrFd) {
-               osxProcess.readStderr(available, stderrFd);
+               tempBuffer.clear();
+               osxProcess.readStderr(available, stderrFd, tempBuffer);
                if ((kevent.flags & Kevent.EV_EOF) != 0) {
-                  osxProcess.readStderr(-1, stderrFd);
+                  tempBuffer.clear();
+                  osxProcess.readStderr(-1, stderrFd, tempBuffer);
                }
             }
          } finally {
@@ -393,7 +396,7 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
 
    private void cleanupProcess(OsxProcess osxProcess)
    {
-      LibC.waitpid(osxProcess.getPid(), new IntByReference(), LibC.WNOHANG);
+      LibC.waitpid(osxProcess.getPid(), tempPointer, LibC.WNOHANG);
 
       // If this is the last process in the map, this thread will cleanly shut down.
       pidToProcessMap.remove(osxProcess.getPid());

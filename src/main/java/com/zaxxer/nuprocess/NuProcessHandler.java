@@ -99,10 +99,10 @@ public interface NuProcessHandler
     * <p>
     * Upon returning from this method, if any bytes are left in the buffer
     * (i.e., {@code buffer.hasRemaining()} returns {@code true}), then the
-    * buffer will be {@link ByteBuffer#compact() compacted} after returning. Any
-    * unused data will be kept at the start of the buffer and passed back to you
+    * buffer will be {@link ByteBuffer#clear()}ed at some point. Any
+    * unused data will <b>NOT</b> be kept at the start of the buffer and passed back to you
     * as part of the next invocation of this method (which might be when EOF is
-    * reached and {@code closed} is {@code true}).
+    * reached and {@code closed} is {@code true}). <b>This is a breaking change from the previous versions. </b>
     * <p>
     * Exceptions thrown out from your method will be ignored, but your method
     * should handle all exceptions itself.
@@ -123,10 +123,10 @@ public interface NuProcessHandler
     * <p>
     * Upon returning from this method, if any bytes are left in the buffer
     * (i.e., {@code buffer.hasRemaining()} returns {@code true}), then the
-    * buffer will be {@link ByteBuffer#compact() compacted} after returning. Any
-    * unused data will be kept at the start of the buffer and passed back to you
+    * buffer will be {@link ByteBuffer#clear()}ed at some point. Any
+    * unused data will <b>NOT</b> be kept at the start of the buffer and passed back to you
     * as part of the next invocation of this method (which might be when EOF is
-    * reached and {@code closed} is {@code true}).
+    * reached and {@code closed} is {@code true}). <b>This is a breaking change from the previous versions. </b>
     * <p>
     * Users wishing to merge stderr into stdout should simply delegate this
     * callback to {@link #onStdout(ByteBuffer, boolean)} when invoked, like so:

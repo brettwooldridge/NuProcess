@@ -19,6 +19,8 @@ package com.zaxxer.nuprocess.linux;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 import com.sun.jna.Native;
 import com.sun.jna.ptr.IntByReference;
@@ -39,6 +41,12 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
    private final int epoll;
    private final EpollEvent triggeredEvent;
    private final List<LinuxProcess> deadPool;
+
+   // prefering (uncontended) locking over memory allocations
+   private final EpollEvent tempEventForRegistration = new EpollEvent();
+   private final EpollEvent tempEventForQueueWrite = new EpollEvent();
+   private final Lock tempEventForRegistrationLock = new ReentrantLock();
+   private final Lock tempEventForQueueWriteLock = new ReentrantLock();
 
    private LinuxProcess process;
 
@@ -79,6 +87,10 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
    @Override
    public void registerProcess(LinuxProcess process)
    {
+      // prefer locking over allocating 12-16B event object for each call to register
+      // expecting method call to be mostly uncontended anyway
+      tempEventForRegistrationLock.lock();
+
       if (shutdown) {
          return;
       }
@@ -96,7 +108,7 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
          fildesToProcessMap.put(stdoutFd, process);
          fildesToProcessMap.put(stderrFd, process);
 
-         EpollEvent event = process.getEpollEvent();
+         EpollEvent event = tempEventForRegistration;
          event.setEvents(LibEpoll.EPOLLIN);
          event.setFileDescriptor(stdoutFd);
          int rc = LibEpoll.epoll_ctl(epoll, LibEpoll.EPOLL_CTL_ADD, stdoutFd, event.getPointer());
@@ -114,6 +126,7 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
          }
       }
       finally {
+         tempEventForRegistrationLock.unlock();
          if (stdinFd != Integer.MIN_VALUE) {
             process.getStdin().release();
          }
@@ -133,13 +146,16 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
          return;
       }
 
+      // prefer locking over allocating 12-16B event object for each call to queueWrite
+      // expecting method call to be mostly uncontended anyway
+      tempEventForQueueWriteLock.lock();
       try {
          int stdin = process.getStdin().acquire();
          if (stdin == -1) {
            return;
          }
 
-         EpollEvent event = process.getEpollEvent();
+         EpollEvent event = tempEventForQueueWrite;
          event.setEvents(LibEpoll.EPOLLOUT | LibEpoll.EPOLLONESHOT | LibEpoll.EPOLLRDHUP | LibEpoll.EPOLLHUP);
          event.setFileDescriptor(stdin);
          int rc = LibEpoll.epoll_ctl(epoll, LibEpoll.EPOLL_CTL_MOD, stdin, event.getPointer());
@@ -153,6 +169,7 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
          }
       }
       finally {
+         tempEventForQueueWriteLock.unlock();
          process.getStdin().release();
       }
    }
@@ -167,6 +184,12 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
          // the handler's onExit is called before LinuxProcess.run returns.
          waitForDeadPool();
       }
+      // here we could explicity free tempEventForRegistration and tempEventForQueueWrite native memory
+      // But I'd prefer to err on the side of delayed freeing via GC RefQueue vs a SegFault.
+      // As at this point no new registrations or queueWrites make sense
+      // but technically the user can call wantWrite again on the process causing a possible segfault
+      // will just leave freeing of this two tempEvent objects to GC ReferenceQueue handler.
+      // todo: add explicit free and add guards to using tempEvent objects again
    }
 
    @Override
@@ -225,10 +248,12 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
 
          if ((events & LibEpoll.EPOLLIN) != 0) { // stdout/stderr data available to read
             if (ident == stdoutFd) {
-               linuxProcess.readStdout(NuProcess.BUFFER_CAPACITY, stdoutFd);
+               tempBuffer.clear();
+               linuxProcess.readStdout(NuProcess.BUFFER_CAPACITY, stdoutFd, tempBuffer);
             }
             else if (ident == stderrFd) {
-               linuxProcess.readStderr(NuProcess.BUFFER_CAPACITY, stderrFd);
+               tempBuffer.clear();
+               linuxProcess.readStderr(NuProcess.BUFFER_CAPACITY, stderrFd, tempBuffer);
             }
          }
          else if ((events & LibEpoll.EPOLLOUT) != 0) { // Room in stdin pipe available to write
@@ -243,10 +268,12 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
          if ((events & LibEpoll.EPOLLHUP) != 0 || (events & LibEpoll.EPOLLRDHUP) != 0 || (events & LibEpoll.EPOLLERR) != 0) {
             LibEpoll.epoll_ctl(epoll, LibEpoll.EPOLL_CTL_DEL, ident, null);
             if (ident == stdoutFd) {
-               linuxProcess.readStdout(-1, stdoutFd);
+               tempBuffer.clear();
+               linuxProcess.readStdout(-1, stdoutFd, tempBuffer);
             }
             else if (ident == stderrFd) {
-               linuxProcess.readStderr(-1, stderrFd);
+               tempBuffer.clear();
+               linuxProcess.readStderr(-1, stderrFd, tempBuffer);
             }
             else if (ident == stdinFd) {
                linuxProcess.closeStdin(true);
@@ -306,8 +333,7 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
          return;
       }
 
-      IntByReference ret = new IntByReference();
-      int rc = LibC.waitpid(linuxProcess.getPid(), ret, LibC.WNOHANG);
+      int rc = LibC.waitpid(linuxProcess.getPid(), tempPointer, LibC.WNOHANG);
 
       if (rc == 0) {
          deadPool.add(linuxProcess);
@@ -316,7 +342,7 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
          linuxProcess.onExit((Native.getLastError() == LibC.ECHILD) ? Integer.MAX_VALUE : Integer.MIN_VALUE);
       }
       else {
-         handleExit(linuxProcess, ret.getValue());
+         handleExit(linuxProcess, tempPointer.getValue());
       }
    }
 
@@ -326,7 +352,7 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
          return;
       }
 
-      IntByReference ret = new IntByReference();
+      IntByReference ret = tempPointer;
       Iterator<LinuxProcess> iterator = deadPool.iterator();
       while (iterator.hasNext()) {
          LinuxProcess process = iterator.next();

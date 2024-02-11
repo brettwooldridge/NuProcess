@@ -16,6 +16,8 @@
 
 package com.zaxxer.nuprocess.internal;
 
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.util.Collection;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -24,7 +26,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import com.sun.jna.Memory;
 import com.sun.jna.ptr.IntByReference;
+import com.zaxxer.nuprocess.NuProcess;
 
 /**
  * @author Brett Wooldridge
@@ -46,7 +50,15 @@ public abstract class BaseEventProcessor<T extends BasePosixProcess> implements 
    protected volatile boolean shutdown;
 
    private CyclicBarrier startBarrier;
-   private AtomicBoolean isRunning;
+   private final AtomicBoolean isRunning;
+
+   // avoid unnecessary malloc calls by reusing native pointer
+   // this field is thread safe as this is only used by EventProcess thread
+   protected final IntByReference tempPointer = new IntByReference();
+
+   // out/err buffers are per epoll processor for allocation free steady state
+   protected final Memory tempBufferMem = new Memory(NuProcess.BUFFER_CAPACITY);
+   protected final ByteBuffer tempBuffer = tempBufferMem.getByteBuffer(0, tempBufferMem.size()).order(ByteOrder.nativeOrder());
 
    static {
       LINGER_TIME_MS = Math.max(1000, Integer.getInteger("com.zaxxer.nuprocess.lingerTimeMs", 2500));
@@ -98,6 +110,9 @@ public abstract class BaseEventProcessor<T extends BasePosixProcess> implements 
             // an opportunity to close any descriptors it might have been using
             close();
          }
+
+         JnaHelper.free(tempPointer);
+         JnaHelper.free(tempBufferMem);
       }
    }
 
@@ -128,6 +143,7 @@ public abstract class BaseEventProcessor<T extends BasePosixProcess> implements 
          process.onExit(Integer.MAX_VALUE - 1);
          LibC.waitpid(process.getPid(), exitCode, LibC.WNOHANG);
       }
+      JnaHelper.free(exitCode);
    }
 
    /**

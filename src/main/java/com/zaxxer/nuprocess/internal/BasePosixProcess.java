@@ -64,14 +64,10 @@ public abstract class BasePosixProcess implements NuProcess
 
    protected AtomicBoolean userWantsWrite;
 
-   // ******* Input/Output Buffers
-   private Memory outBufferMemory;
-   private Memory errBufferMemory;
+   // ******* Except for input buffer, Buffers are managed by Event Poll thread
+   //         we use on demand per process input buffers
    private Memory inBufferMemory;
-
-   protected ByteBuffer outBuffer;
-   protected ByteBuffer errBuffer;
-   protected ByteBuffer inBuffer;
+   protected volatile ByteBuffer inBuffer;
 
    // ******* Stdin/Stdout/Stderr pipe handles
    protected ReferenceCountedFileDescriptor stdin;
@@ -86,7 +82,7 @@ public abstract class BasePosixProcess implements NuProcess
    protected boolean outClosed;
    protected boolean errClosed;
 
-   private ConcurrentLinkedQueue<ByteBuffer> pendingWrites;
+   private final ConcurrentLinkedQueue<ByteBuffer> pendingWrites = new ConcurrentLinkedQueue<>();
 
    static {
       IS_SOFTEXIT_DETECTION = Boolean.parseBoolean(System.getProperty("com.zaxxer.nuprocess.softExitDetection", "true"));
@@ -180,11 +176,20 @@ public abstract class BasePosixProcess implements NuProcess
 
    /** {@inheritDoc} */
    @Override
-   public void wantWrite()
+   public synchronized void wantWrite()
    {
       try {
         int fd = stdin.acquire();
         if (fd != -1) {
+           // on demand initialization of writing buffers, this is the reason why we made this method synchronized
+           if (inBuffer == null) {
+              inBufferMemory = new Memory(BUFFER_CAPACITY);
+              inBuffer = inBufferMemory.getByteBuffer(0, inBufferMemory.size()).order(ByteOrder.nativeOrder());
+
+              // Ensure stdin initially has 0 bytes pending write. We'll
+              // update this before invoking onStdinReady.
+              inBuffer.limit(0);
+           }
           userWantsWrite.set(true);
           myProcessor.queueWrite(this);
         }
@@ -290,6 +295,11 @@ public abstract class BasePosixProcess implements NuProcess
 
    public void onExit(int statusCode)
    {
+      onExit(statusCode, null, null);
+   }
+
+   public void onExit(int statusCode, ByteBuffer outBuffer, ByteBuffer errBuffer)
+   {
       if (exitPending.getCount() == 0) {
          // TODO: handle SIGCHLD
          return;
@@ -325,18 +335,16 @@ public abstract class BasePosixProcess implements NuProcess
          exitPending.countDown();
          // Once the last reference to the buffer is gone, Java will finalize the buffer
          // and release the native memory we allocated in initializeBuffers().
-         outBufferMemory = null;
-         errBufferMemory = null;
-         inBufferMemory = null;
-         outBuffer = null;
-         errBuffer = null;
-         inBuffer = null;
+         if(inBuffer != null){
+            JnaHelper.free(inBufferMemory);
+            inBufferMemory = null;
+            inBuffer = null;
+         }
          processHandler = null;
-         Memory.purge();
       }
    }
 
-   public void readStdout(int availability, int fd)
+   public void readStdout(int availability, int fd, ByteBuffer outBuffer)
    {
       if (outClosed || availability == 0) {
          return;
@@ -375,7 +383,7 @@ public abstract class BasePosixProcess implements NuProcess
       }
    }
 
-   public void readStderr(int availability, int fd)
+   public void readStderr(int availability, int fd, ByteBuffer errBuffer)
    {
       if (errClosed || availability == 0) {
          return;
@@ -525,21 +533,6 @@ public abstract class BasePosixProcess implements NuProcess
    {
       outClosed = false;
       errClosed = false;
-
-      pendingWrites = new ConcurrentLinkedQueue<>();
-
-      outBufferMemory = new Memory(BUFFER_CAPACITY);
-      outBuffer = outBufferMemory.getByteBuffer(0, outBufferMemory.size()).order(ByteOrder.nativeOrder());
-
-      errBufferMemory = new Memory(BUFFER_CAPACITY);
-      errBuffer = errBufferMemory.getByteBuffer(0, outBufferMemory.size()).order(ByteOrder.nativeOrder());
-
-      inBufferMemory = new Memory(BUFFER_CAPACITY);
-      inBuffer = inBufferMemory.getByteBuffer(0, outBufferMemory.size()).order(ByteOrder.nativeOrder());
-
-      // Ensure stdin initially has 0 bytes pending write. We'll
-      // update this before invoking onStdinReady.
-      inBuffer.limit(0);
    }
 
    @SuppressWarnings("unchecked")
