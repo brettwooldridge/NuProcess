@@ -75,9 +75,10 @@ public class LinuxProcess extends BasePosixProcess
 
          afterStart();
 
+         callStart();
+
          registerProcess();
 
-         callStart();
       }
       catch (Exception e) {
          // TODO remove from event processor pid map?
@@ -104,9 +105,9 @@ public class LinuxProcess extends BasePosixProcess
 
          afterStart();
 
-         myProcessor = (IEventProcessor) new ProcessEpoll(this);
-
          callStart();
+
+         myProcessor = (IEventProcessor) new ProcessEpoll(this);
 
          myProcessor.run();
       }
