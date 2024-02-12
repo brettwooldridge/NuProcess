@@ -43,10 +43,10 @@
     </developers>
 
     <scm>
-        <connection>scm:git:git@github.com:brettwooldridge/NuProcess.git</connection>
-        <developerConnection>scm:git:git@github.com:brettwooldridge/NuProcess.git</developerConnection>
-        <url>git@github.com:brettwooldridge/NuProcess.git</url>
-      <tag>HEAD</tag>
+        <connection>scm:git:https://github.com/brettwooldridge/NuProcess.git</connection>
+        <developerConnection>scm:git:https://github.com/brettwooldridge/NuProcess.git</developerConnection>
+        <url>https://github.com/brettwooldridge/NuProcess.git</url>
+      <tag>nuprocess-2.0.7</tag>
   </scm>
     <distributionManagement>
         <snapshotRepository>
