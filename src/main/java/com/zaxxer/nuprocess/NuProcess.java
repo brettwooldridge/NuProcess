@@ -16,6 +16,8 @@
 
 package com.zaxxer.nuprocess;
 
+import com.zaxxer.nuprocess.internal.Constants;
+
 import java.nio.ByteBuffer;
 import java.util.concurrent.TimeUnit;
 
@@ -40,7 +42,9 @@ import java.util.concurrent.TimeUnit;
  */
 public interface NuProcess
 {
-   int BUFFER_CAPACITY = 65536;
+   String BUFFER_CAPACITY_PROPERTY = "com.zaxxer.nuprocess.bufferCapacity";
+
+   int BUFFER_CAPACITY = Constants.getBufferCapacity();
 
    /**
     * Waits for the process to exit in a blocking fashion. See
