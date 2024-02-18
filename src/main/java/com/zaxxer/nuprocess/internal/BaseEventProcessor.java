@@ -48,6 +48,8 @@ public abstract class BaseEventProcessor<T extends BasePosixProcess> implements 
    private CyclicBarrier startBarrier;
    private AtomicBoolean isRunning;
 
+   protected final IntByReference exitCodePointer = new IntByReference();
+
    static {
       LINGER_TIME_MS = Math.max(1000, Integer.getInteger("com.zaxxer.nuprocess.lingerTimeMs", 2500));
 
@@ -128,6 +130,7 @@ public abstract class BaseEventProcessor<T extends BasePosixProcess> implements 
          process.onExit(Integer.MAX_VALUE - 1);
          LibC.waitpid(process.getPid(), exitCode, LibC.WNOHANG);
       }
+      Util.close(exitCode);
    }
 
    /**

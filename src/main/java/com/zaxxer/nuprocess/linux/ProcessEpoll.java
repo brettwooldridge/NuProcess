@@ -21,7 +21,6 @@ import java.util.LinkedList;
 import java.util.List;
 
 import com.sun.jna.Native;
-import com.sun.jna.ptr.IntByReference;
 import com.zaxxer.nuprocess.NuProcess;
 import com.zaxxer.nuprocess.internal.BaseEventProcessor;
 import com.zaxxer.nuprocess.internal.LibC;
@@ -86,6 +85,7 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
       int stdinFd = Integer.MIN_VALUE;
       int stdoutFd = Integer.MIN_VALUE;
       int stderrFd = Integer.MIN_VALUE;
+      EpollEvent event = new EpollEvent();
       try {
          stdinFd = process.getStdin().acquire();
          stdoutFd = process.getStdout().acquire();
@@ -96,7 +96,6 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
          fildesToProcessMap.put(stdoutFd, process);
          fildesToProcessMap.put(stderrFd, process);
 
-         EpollEvent event = process.getEpollEvent();
          event.setEvents(LibEpoll.EPOLLIN);
          event.setFileDescriptor(stdoutFd);
          int rc = LibEpoll.epoll_ctl(epoll, LibEpoll.EPOLL_CTL_ADD, stdoutFd, event.getPointer());
@@ -114,6 +113,7 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
          }
       }
       finally {
+         event.close();
          if (stdinFd != Integer.MIN_VALUE) {
             process.getStdin().release();
          }
@@ -133,13 +133,14 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
          return;
       }
 
+      EpollEvent event = null;
       try {
          int stdin = process.getStdin().acquire();
          if (stdin == -1) {
            return;
          }
 
-         EpollEvent event = process.getEpollEvent();
+         event = new EpollEvent();
          event.setEvents(LibEpoll.EPOLLOUT | LibEpoll.EPOLLONESHOT | LibEpoll.EPOLLRDHUP | LibEpoll.EPOLLHUP);
          event.setFileDescriptor(stdin);
          int rc = LibEpoll.epoll_ctl(epoll, LibEpoll.EPOLL_CTL_MOD, stdin, event.getPointer());
@@ -153,6 +154,9 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
          }
       }
       finally {
+         if (event != null) {
+            event.close();
+         }
          process.getStdin().release();
       }
    }
@@ -306,8 +310,7 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
          return;
       }
 
-      IntByReference ret = new IntByReference();
-      int rc = LibC.waitpid(linuxProcess.getPid(), ret, LibC.WNOHANG);
+      int rc = LibC.waitpid(linuxProcess.getPid(), exitCodePointer, LibC.WNOHANG);
 
       if (rc == 0) {
          deadPool.add(linuxProcess);
@@ -316,7 +319,7 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
          linuxProcess.onExit((Native.getLastError() == LibC.ECHILD) ? Integer.MAX_VALUE : Integer.MIN_VALUE);
       }
       else {
-         handleExit(linuxProcess, ret.getValue());
+         handleExit(linuxProcess, exitCodePointer.getValue());
       }
    }
 
@@ -326,11 +329,10 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
          return;
       }
 
-      IntByReference ret = new IntByReference();
       Iterator<LinuxProcess> iterator = deadPool.iterator();
       while (iterator.hasNext()) {
          LinuxProcess process = iterator.next();
-         int rc = LibC.waitpid(process.getPid(), ret, LibC.WNOHANG);
+         int rc = LibC.waitpid(process.getPid(), exitCodePointer, LibC.WNOHANG);
          if (rc == 0) {
             continue;
          }
@@ -341,7 +343,7 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
             continue;
          }
 
-         handleExit(process, ret.getValue());
+         handleExit(process, exitCodePointer.getValue());
       }
    }
 
