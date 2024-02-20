@@ -16,10 +16,13 @@
 
 package com.zaxxer.nuprocess.osx;
 
-import static com.zaxxer.nuprocess.internal.LibC.WEXITSTATUS;
-import static com.zaxxer.nuprocess.internal.LibC.WIFEXITED;
-import static com.zaxxer.nuprocess.internal.LibC.WIFSIGNALED;
-import static com.zaxxer.nuprocess.internal.LibC.WTERMSIG;
+import com.sun.jna.Native;
+import com.sun.jna.Pointer;
+import com.sun.jna.ptr.IntByReference;
+import com.zaxxer.nuprocess.internal.BaseEventProcessor;
+import com.zaxxer.nuprocess.internal.LibC;
+import com.zaxxer.nuprocess.osx.LibKevent.Kevent;
+import com.zaxxer.nuprocess.osx.LibKevent.TimeSpec;
 
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -28,13 +31,7 @@ import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.TimeUnit;
 
-import com.sun.jna.Native;
-import com.sun.jna.Pointer;
-import com.sun.jna.ptr.IntByReference;
-import com.zaxxer.nuprocess.internal.BaseEventProcessor;
-import com.zaxxer.nuprocess.internal.LibC;
-import com.zaxxer.nuprocess.osx.LibKevent.Kevent;
-import com.zaxxer.nuprocess.osx.LibKevent.TimeSpec;
+import static com.zaxxer.nuprocess.internal.LibC.*;
 
 /**
  * @author Brett Wooldridge
@@ -115,14 +112,14 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
          // We don't use the processEvents array here, since this method is not
          // called on the event processor thread.
          Kevent[] events = (Kevent[]) new Kevent().toArray(4);
-         // Listen for process exit (one-shot event)
-         events[0].EV_SET((long) pid, Kevent.EVFILT_PROC, Kevent.EV_ADD | Kevent.EV_RECEIPT | Kevent.EV_ONESHOT,
-                          Kevent.NOTE_EXIT | Kevent.NOTE_EXITSTATUS | Kevent.NOTE_REAP, 0L, pidPointer);
          // Listen for stdout and stderr data availability (events deleted automatically when file descriptors closed)
-         events[1].EV_SET(stdoutFd, Kevent.EVFILT_READ, Kevent.EV_ADD | Kevent.EV_RECEIPT, 0, 0L, pidPointer);
-         events[2].EV_SET(stderrFd, Kevent.EVFILT_READ, Kevent.EV_ADD | Kevent.EV_RECEIPT, 0, 0L, pidPointer);
+         events[0].EV_SET(stdoutFd, Kevent.EVFILT_READ, Kevent.EV_ADD | Kevent.EV_RECEIPT, 0, 0L, pidPointer);
+         events[1].EV_SET(stderrFd, Kevent.EVFILT_READ, Kevent.EV_ADD | Kevent.EV_RECEIPT, 0, 0L, pidPointer);
          // Listen for stdin data availability (initially disabled until user wants read, deleted automatically when file descriptor closed)
-         events[3].EV_SET(stdinFd, Kevent.EVFILT_WRITE, Kevent.EV_ADD | Kevent.EV_DISABLE | Kevent.EV_RECEIPT, 0, 0L, pidPointer);
+         events[2].EV_SET(stdinFd, Kevent.EVFILT_WRITE, Kevent.EV_ADD | Kevent.EV_DISABLE | Kevent.EV_RECEIPT, 0, 0L, pidPointer);
+         // Listen for process exit (one-shot event)
+         events[3].EV_SET((long) pid, Kevent.EVFILT_PROC, Kevent.EV_ADD | Kevent.EV_RECEIPT | Kevent.EV_ONESHOT,
+                          Kevent.NOTE_EXIT | Kevent.NOTE_EXITSTATUS | Kevent.NOTE_REAP, 0L, pidPointer);
 
          registerEvents(events, 4);
       } finally {
