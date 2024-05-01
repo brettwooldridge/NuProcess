@@ -371,6 +371,7 @@ public abstract class BasePosixProcess implements NuProcess
          // The caller's onStdout() callback must set the buffer's position
          // to indicate how many bytes were consumed, or else it will
          // eventually run out of capacity.
+         // TODO do we want to crash the entire event loop because of this?
          throw new RuntimeException("stdout buffer has no bytes remaining");
       }
    }
@@ -410,6 +411,7 @@ public abstract class BasePosixProcess implements NuProcess
          // The caller's onStderr() callback must set the buffer's position
          // to indicate how many bytes were consumed, or else it will
          // eventually run out of capacity.
+         // TODO do we want to crash the entire event loop because of this?
          throw new RuntimeException("stderr buffer has no bytes remaining");
       }
    }
