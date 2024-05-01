@@ -19,6 +19,8 @@ package com.zaxxer.nuprocess.linux;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.Queue;
 
 import com.sun.jna.Native;
 import com.sun.jna.ptr.IntByReference;
@@ -39,6 +41,7 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
    private final int epoll;
    private final EpollEvent triggeredEvent;
    private final List<LinuxProcess> deadPool;
+   private final Queue<LinuxProcess> callStartQueue = new ConcurrentLinkedQueue<>();
 
    private LinuxProcess process;
 
@@ -112,6 +115,8 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
             int errno = Native.getLastError();
             throw new RuntimeException("Unable to register new events to epoll, errno: " + errno);
          }
+         // TODO do we need to kill the process if we failed epoll registration?
+         callStartQueue.add(process);
       }
       finally {
          if (stdinFd != Integer.MIN_VALUE) {
@@ -186,6 +191,12 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
    @Override
    public boolean process()
    {
+      // handle case for processes that don't trigger epoll events
+      LinuxProcess p;
+      while ((p = callStartQueue.poll()) != null) {
+         p.ensureOnStartHandlerMethodCalled();
+      }
+
       int stdinFd = Integer.MIN_VALUE;
       int stdoutFd = Integer.MIN_VALUE;
       int stderrFd = Integer.MIN_VALUE;
@@ -218,6 +229,8 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
          if (linuxProcess == null) {
             return true;
          }
+
+         linuxProcess.ensureOnStartHandlerMethodCalled();
 
          stdinFd = linuxProcess.getStdin().acquire();
          stdoutFd = linuxProcess.getStdout().acquire();

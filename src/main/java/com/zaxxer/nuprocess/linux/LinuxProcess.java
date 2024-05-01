@@ -37,6 +37,8 @@ public class LinuxProcess extends BasePosixProcess
 {
    private final EpollEvent epollEvent;
 
+   private boolean startCalled;
+
    static {
       LibEpoll.sigignore(LibEpoll.SIGPIPE);
 
@@ -76,12 +78,11 @@ public class LinuxProcess extends BasePosixProcess
          afterStart();
 
          registerProcess();
-
-         callStart();
       }
       catch (Exception e) {
          // TODO remove from event processor pid map?
          LOGGER.log(Level.WARNING, "Failed to start process", e);
+         // TODO we might has successfully spawned but failed on epoll registration, do we call destroy?
          onExit(Integer.MIN_VALUE);
          return null;
       }
@@ -105,8 +106,6 @@ public class LinuxProcess extends BasePosixProcess
          afterStart();
 
          myProcessor = (IEventProcessor) new ProcessEpoll(this);
-
-         callStart();
 
          myProcessor.run();
       }
@@ -228,5 +227,13 @@ public class LinuxProcess extends BasePosixProcess
       }
 
       return block;
+   }
+
+   public void ensureOnStartHandlerMethodCalled() {
+      // only called via event processing thread
+      if (!startCalled) {
+         startCalled = true;
+         processHandler.onStart(this);
+      }
    }
 }
