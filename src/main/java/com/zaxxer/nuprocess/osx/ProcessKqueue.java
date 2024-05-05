@@ -68,6 +68,7 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
       this(-1);
 
       registerProcess(process);
+      queueRead(process);
       checkAndSetRunning();
    }
 
@@ -101,9 +102,18 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
       }
 
       int pid = process.getPid();
-      Pointer pidPointer = Pointer.createConstant(pid);
-
       pidToProcessMap.put(pid, process);
+   }
+
+   @Override
+   public void queueRead(OsxProcess process)
+   {
+      if (shutdown) {
+         return;
+      }
+
+      int pid = process.getPid();
+      Pointer pidPointer = Pointer.createConstant(pid);
 
       Integer stdinFd = null;
       Integer stdoutFd = null;
@@ -112,6 +122,7 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
          stdinFd = process.getStdin().acquire();
          stdoutFd = process.getStdout().acquire();
          stderrFd = process.getStderr().acquire();
+
          // We don't use the processEvents array here, since this method is not
          // called on the event processor thread.
          Kevent[] events = (Kevent[]) new Kevent().toArray(4);
@@ -125,7 +136,8 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
          events[3].EV_SET(stdinFd, Kevent.EVFILT_WRITE, Kevent.EV_ADD | Kevent.EV_DISABLE | Kevent.EV_RECEIPT, 0, 0L, pidPointer);
 
          registerEvents(events, 4);
-      } finally {
+      }
+      finally {
          if (stdinFd != null) {
             process.getStdin().release();
          }
