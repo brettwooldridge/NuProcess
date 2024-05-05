@@ -636,7 +636,7 @@ public final class WindowsProcess implements NuProcess
       if (myProcessor.checkAndSetRunning()) {
          CyclicBarrier spawnBarrier = myProcessor.getSpawnBarrier();
 
-         Thread t = new Thread(myProcessor, "ProcessIoCompletion" + mySlot);
+         Thread t = new Thread(myProcessor, "NuProcessIoCompletion-" + mySlot);
          t.setDaemon(true);
          t.start();
 

@@ -557,7 +557,7 @@ public abstract class BasePosixProcess implements NuProcess
       if (myProcessor.checkAndSetRunning()) {
          CyclicBarrier spawnBarrier = myProcessor.getSpawnBarrier();
 
-         Thread t = new Thread(myProcessor, "ProcessQueue" + mySlot);
+         Thread t = new Thread(myProcessor, "NuProcessQueue-" + mySlot);
          t.setDaemon(true);
          t.start();
 
