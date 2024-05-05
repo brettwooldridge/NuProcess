@@ -323,8 +323,9 @@ public abstract class BasePosixProcess implements NuProcess
       }
       finally {
          exitPending.countDown();
-         // Once the last reference to the buffer is gone, Java will finalize the buffer
-         // and release the native memory we allocated in initializeBuffers().
+         outBufferMemory.close();
+         errBufferMemory.close();
+         inBufferMemory.close();
          outBufferMemory = null;
          errBufferMemory = null;
          inBufferMemory = null;
@@ -332,7 +333,6 @@ public abstract class BasePosixProcess implements NuProcess
          errBuffer = null;
          inBuffer = null;
          processHandler = null;
-         Memory.purge();
       }
    }
 

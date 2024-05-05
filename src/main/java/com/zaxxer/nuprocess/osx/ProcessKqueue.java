@@ -30,7 +30,6 @@ import java.util.concurrent.TimeUnit;
 
 import com.sun.jna.Native;
 import com.sun.jna.Pointer;
-import com.sun.jna.ptr.IntByReference;
 import com.zaxxer.nuprocess.internal.BaseEventProcessor;
 import com.zaxxer.nuprocess.internal.LibC;
 import com.zaxxer.nuprocess.osx.LibKevent.Kevent;
@@ -393,7 +392,7 @@ final class ProcessKqueue extends BaseEventProcessor<OsxProcess>
 
    private void cleanupProcess(OsxProcess osxProcess)
    {
-      LibC.waitpid(osxProcess.getPid(), new IntByReference(), LibC.WNOHANG);
+      LibC.waitpid(osxProcess.getPid(), exitCodePointer, LibC.WNOHANG);
 
       // If this is the last process in the map, this thread will cleanly shut down.
       pidToProcessMap.remove(osxProcess.getPid());
