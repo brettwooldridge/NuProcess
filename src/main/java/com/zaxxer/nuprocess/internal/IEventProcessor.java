@@ -54,6 +54,18 @@ public interface IEventProcessor<T extends BasePosixProcess> extends Runnable
    void registerProcess(T process);
 
    /**
+    * Queues read handling for the process's STDOUT and STDERR streams.
+    * <p>
+    * Prior to 2.1, this was performed by {@link #registerProcess}, but it was moved to a separate method
+    * to help avoid a race condition when starting a new process where soft exit detection could result in
+    * a fast-running process exiting before start was called on its process handler.
+    *
+    * @param process the process from which STDOUT and STDERR should be read
+    * @since 2.1
+    */
+   void queueRead(T process);
+
+   /**
     * Express that the client desires to write data into the STDIN stream as
     * soon as possible.
     *

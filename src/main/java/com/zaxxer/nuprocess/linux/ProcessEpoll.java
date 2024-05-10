@@ -54,6 +54,7 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
       this.process = process;
 
       registerProcess(process);
+      queueRead(process);
       checkAndSetRunning();
    }
 
@@ -95,6 +96,32 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
          fildesToProcessMap.put(stdinFd, process);
          fildesToProcessMap.put(stdoutFd, process);
          fildesToProcessMap.put(stderrFd, process);
+      }
+      finally {
+         if (stdinFd != Integer.MIN_VALUE) {
+            process.getStdin().release();
+         }
+         if (stdoutFd != Integer.MIN_VALUE) {
+            process.getStdout().release();
+         }
+         if (stderrFd != Integer.MIN_VALUE) {
+            process.getStderr().release();
+         }
+      }
+   }
+
+   @Override
+   public void queueRead(LinuxProcess process)
+   {
+      if (shutdown) {
+         return;
+      }
+
+      int stdoutFd = Integer.MIN_VALUE;
+      int stderrFd = Integer.MIN_VALUE;
+      try {
+         stdoutFd = process.getStdout().acquire();
+         stderrFd = process.getStderr().acquire();
 
          EpollEvent event = process.getEpollEvent();
          event.setEvents(LibEpoll.EPOLLIN);
@@ -114,9 +141,6 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
          }
       }
       finally {
-         if (stdinFd != Integer.MIN_VALUE) {
-            process.getStdin().release();
-         }
          if (stdoutFd != Integer.MIN_VALUE) {
             process.getStdout().release();
          }

@@ -65,7 +65,11 @@ class OsxProcess extends BasePosixProcess
 
          afterStart();
 
+         // On macOS, registration can be immediately followed by queueing read handling for stdout
+         // and stderr without risking a racy exit because processes are launched suspended and are
+         // only resumed after NuProcessHandler.onStart is called
          registerProcess();
+         myProcessor.queueRead(this);
 
          callStart();
 

@@ -75,9 +75,15 @@ public class LinuxProcess extends BasePosixProcess
 
          afterStart();
 
+         // Registration must happen prior to calling NuProcessHandler.onStart to allow handlers
+         // to call wantWrite (which calls myProcessor.queueWrite)
          registerProcess();
 
          callStart();
+
+         // Queueing read handling for stdout and stderr happens after start has been called
+         // to ensure fast-exiting processes don't call NuProcessHandler.onExit before onStart
+         myProcessor.queueRead(this);
       }
       catch (Exception e) {
          // TODO remove from event processor pid map?
