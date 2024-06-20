@@ -81,7 +81,7 @@ public class LibC
    // We can't use JNA direct mapping for syscall(), since it takes varargs.
    public interface SyscallLibrary extends Library
    {
-      public static final int SYS___pthread_chdir = 348;
+      public static final int SYS___pthread_chdir = System.getProperty("os.name").toLowerCase().contains("freebsd") ? 12 : 348;
 
       int syscall(int syscall_number, Object... args);
    }
