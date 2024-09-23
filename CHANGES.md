@@ -1,3 +1,8 @@
+Changes in 3.0.0
+ * Drop support for Java 7. Artifact is now Java 8+ only.
+ * Fix race condition for fast exiting processes (#158).
+ * Alter thread name from "ProcessQueue" to "NuProcessQueue".
+
 Changes in 2.0.6
 
  * Fix environment variable injection vulnerability. This is a follow-up from CVE-2022-39243 and does not
