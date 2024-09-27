@@ -1,10 +1,21 @@
 package com.zaxxer.nuprocess.internal;
 
+import com.zaxxer.nuprocess.NuProcess;
+
+import java.util.logging.Level;
+import java.util.logging.Logger;
+
 public class Constants
 {
+   private static final Logger LOGGER = Logger.getLogger(Constants.class.getCanonicalName());
+
    public static final int NUMBER_OF_THREADS;
    public static final int JVM_MAJOR_VERSION;
    static final OperatingSystem OS;
+
+   static final int DEFAULT_BUFFER_CAPACITY = 64 * 1024;
+   static final int MIN_BUFFER_CAPACITY = 1024;
+   static final int MAX_BUFFER_CAPACITY = 1024 * 1024;
 
    enum OperatingSystem
    {
@@ -46,4 +57,29 @@ public class Constants
           NUMBER_OF_THREADS = Math.max(1, Integer.parseInt(threads));
       }
    }
+
+    public static int getBufferCapacity() {
+        final String bufferCapacityProperty = System.getProperty(NuProcess.BUFFER_CAPACITY_PROPERTY);
+        if (bufferCapacityProperty == null || bufferCapacityProperty.trim().isEmpty()) {
+            return DEFAULT_BUFFER_CAPACITY;
+        }
+        try {
+            final int value = Integer.parseInt(bufferCapacityProperty);
+            if (value < MIN_BUFFER_CAPACITY) {
+                LOGGER.log(Level.WARNING, "Requested bufferCapacity of " + value + " is less than min, defaulting to min value of " + MIN_BUFFER_CAPACITY);
+                return MIN_BUFFER_CAPACITY;
+            }
+            else if (value > MAX_BUFFER_CAPACITY) {
+                LOGGER.log(Level.WARNING, "Requested bufferCapacity of " + value + " is more than max, defaulting to max value of " + MAX_BUFFER_CAPACITY);
+                return MAX_BUFFER_CAPACITY;
+            }
+            else {
+                return value;
+            }
+        }
+        catch (NumberFormatException e) {
+            return DEFAULT_BUFFER_CAPACITY;
+        }
+    }
+
 }

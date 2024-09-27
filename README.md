@@ -168,6 +168,10 @@ This property controls how long the processing thread(s) remains after the last 
 order to avoid the overhead of starting up another processing thread, if processes are frequently run it may be desirable
 for the processing thread to remain (linger) for some amount of time (default 2500ms).
 
+##### ``com.zaxxer.nuprocess.bufferCapacity``
+Sets the size of native `ByteBuffer` used for `NuProcessHandler#onStdout`, `#onStderr` and `#onStdinReady` methods.
+The default value is 65536 Bytes (64 KiB). Minimum value is 1 KiB and maximum 1 MiB. 
+
 #### Related Projects
 Charles Duffy has developed a Clojure wrapper library [here](https://github.com/threatgrid/asynp).
 Julien Viet has developed a Vert.x 3 library [here](https://github.com/vietj/vertx-childprocess).
