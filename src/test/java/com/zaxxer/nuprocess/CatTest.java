@@ -24,6 +24,8 @@ import java.nio.charset.CoderResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
@@ -39,6 +41,7 @@ import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 
 import com.zaxxer.nuprocess.codec.NuAbstractCharsetHandler;
+import org.junit.runners.model.MultipleFailureException;
 
 /**
  * Performs <i>asynchronous</i> tests using {@link NuProcessBuilder#start}.
@@ -91,6 +94,68 @@ public class CatTest
       }
 
       System.err.println("Completed test lotOfProcesses()");
+   }
+
+   @Test
+   public void lotOfThreadedProcesses() throws Exception
+   {
+      final List<Throwable> failures = Collections.synchronizedList(new ArrayList<Throwable>());
+      Runnable r = new Runnable() {
+
+         @Override
+         public void run()
+         {
+            Semaphore[] semaphores = new Semaphore[25];
+            LottaProcessListener[] listeners = new LottaProcessListener[semaphores.length];
+
+            for (int i = 0; i < semaphores.length; i++) {
+               semaphores[i] = new Semaphore(0);
+               listeners[i] = new LottaProcessListener(semaphores[i]);
+
+               NuProcessBuilder pb = new NuProcessBuilder(listeners[i], command);
+               pb.start();
+            }
+
+            for (Semaphore semaphore : semaphores) {
+               semaphore.acquireUninterruptibly();
+            }
+
+            for (LottaProcessListener listener : listeners) {
+               try {
+                  Assert.assertTrue("Adler32 mismatch between written and read", listener.checkAdlers());
+                  Assert.assertEquals("Exit code mismatch", 0, listener.getExitCode());
+               }
+               catch (Throwable t) {
+                  failures.add(t);
+               }
+            }
+         }
+      };
+
+      // Each iteration starts 10 threads which each launch 25 processes and wait for them
+      // to complete, to verify concurrently starting processes works as expected
+      System.err.println("Starting test lotOfThreadedProcesses()");
+      for (int times = 0; times < 20; times++) {
+         System.err.printf(" Iteration %d\n", times + 1);
+
+         Thread[] threads = new Thread[10];
+         for (int i = 0; i < threads.length; ++i) {
+            threads[i] = new Thread(r, "lotOfThreadedProcesses-" + i);
+         }
+
+         for (Thread thread : threads) {
+            thread.start();
+         }
+
+         for (Thread thread : threads) {
+            thread.join();
+         }
+      }
+      System.err.println("Completed test lotOfThreadedProcesses()");
+
+      if (!failures.isEmpty()) {
+         throw new MultipleFailureException(failures);
+      }
    }
 
    @Test

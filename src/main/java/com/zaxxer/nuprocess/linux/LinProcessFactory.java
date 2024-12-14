@@ -36,9 +36,8 @@ public class LinProcessFactory implements NuProcessFactory
    public NuProcess createProcess(List<String> commands, String[] env, NuProcessHandler processListener, Path cwd)
    {
       LinuxProcess process = new LinuxProcess(processListener);
-      synchronized (LinProcessFactory.class) {
-         process.start(commands, env, cwd);
-      }
+      process.start(commands, env, cwd);
+
       return process;
    }
 
