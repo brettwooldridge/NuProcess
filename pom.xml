@@ -68,7 +68,7 @@
     <dependencies>
         <dependency>
             <groupId>net.java.dev.jna</groupId>
-            <artifactId>jna</artifactId>
+            <artifactId>jna-jpms</artifactId>
             <version>5.11.0</version>
         </dependency>
 
@@ -167,6 +167,11 @@
                     <artifactId>nexus-staging-maven-plugin</artifactId>
                     <version>1.6.12</version>
                 </plugin>
+                <plugin>
+                    <groupId>io.github.dmlloyd.module-info</groupId>
+                    <artifactId>module-info</artifactId>
+                    <version>2.0</version>
+                </plugin>
             </plugins>
         </pluginManagement>
         <plugins>
@@ -185,7 +190,7 @@
                 <configuration>
                     <archive>
                         <manifestEntries>
-                            <Automatic-Module-Name>com.zaxxer.nuprocess</Automatic-Module-Name>
+                            <Multi-Release>true</Multi-Release>
                         </manifestEntries>
                     </archive>
                 </configuration>
@@ -217,6 +222,22 @@
                         <_noee>true</_noee>
                     </instructions>
                 </configuration>
+            </plugin>
+            <plugin>
+                <groupId>io.github.dmlloyd.module-info</groupId>
+                <artifactId>module-info</artifactId>
+                <executions>
+                    <execution>
+                        <id>module-info</id>
+                        <phase>process-classes</phase>
+                        <configuration>
+                            <outputDirectory>${project.build.outputDirectory}/META-INF/9</outputDirectory>
+                        </configuration>
+                        <goals>
+                            <goal>generate</goal>
+                        </goals>
+                    </execution>
+                </executions>
             </plugin>
         </plugins>
     </build>

@@ -1,0 +1,10 @@
+name: com.zaxxer.nuprocess
+requires:
+  - module: com.sun.jna
+exports:
+  - package: com.zaxxer.nuprocess
+  - package: com.zaxxer.nuprocess.codec
+  - package: com.zaxxer.nuprocess.internal
+  - package: com.zaxxer.nuprocess.linux
+  - package: com.zaxxer.nuprocess.osx
+  - package: com.zaxxer.nuprocess.windows
