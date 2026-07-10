@@ -283,7 +283,7 @@
                         <extensions>true</extensions>
                         <configuration>
                             <autoReleaseAfterClose>${autoReleaseStagedArtifacts}</autoReleaseAfterClose>
-                            <nexusUrl>https://oss.sonatype.org/</nexusUrl>
+                            <nexusUrl>https://ossrh-staging-api.central.sonatype.com</nexusUrl>
                             <serverId>ossrh</serverId>
                         </configuration>
                     </plugin>
