@@ -16,34 +16,73 @@
 
 package com.zaxxer.nuprocess.linux;
 
-import com.sun.jna.Native;
-import com.sun.jna.Platform;
-import com.sun.jna.Pointer;
+import com.zaxxer.nuprocess.internal.FfmSupport;
+
+import java.lang.foreign.FunctionDescriptor;
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.SymbolLookup;
+import java.lang.invoke.MethodHandle;
+
+import static java.lang.foreign.ValueLayout.ADDRESS;
+import static java.lang.foreign.ValueLayout.JAVA_INT;
 
 /**
+ * FFM bindings for the Linux epoll facility.
+ *
  * @author Brett Wooldridge
  */
 public class LibEpoll
 {
-   static {
-      Native.register(Platform.C_LIBRARY_NAME);
+   private static final SymbolLookup LIBC = FfmSupport.LINKER.defaultLookup();
+
+   private static final MethodHandle EPOLL_CREATE =
+      FfmSupport.downcall(LIBC, "epoll_create", FunctionDescriptor.of(JAVA_INT, JAVA_INT));
+   private static final MethodHandle EPOLL_CTL =
+      FfmSupport.downcall(LIBC, "epoll_ctl", FunctionDescriptor.of(JAVA_INT, JAVA_INT, JAVA_INT, JAVA_INT, ADDRESS));
+   private static final MethodHandle EPOLL_WAIT =
+      FfmSupport.downcall(LIBC, "epoll_wait", FunctionDescriptor.of(JAVA_INT, JAVA_INT, ADDRESS, JAVA_INT, JAVA_INT));
+
+   public static int epoll_create(int size)
+   {
+      try {
+         return (int) EPOLL_CREATE.invokeExact(FfmSupport.captureState(), size);
+      }
+      catch (Throwable t) {
+         throw new RuntimeException(t);
+      }
    }
 
-   public static native int sigignore(int signal);
-
-   public static native int epoll_create(int size);
-
-   public static native int epoll_ctl(int epfd, int op, int fd, Pointer event);
+   /**
+    * @param event the address of an {@link EpollEvent}, or {@link MemorySegment#NULL}
+    */
+   public static int epoll_ctl(int epfd, int op, int fd, MemorySegment event)
+   {
+      try {
+         return (int) EPOLL_CTL.invokeExact(FfmSupport.captureState(), epfd, op, fd, event);
+      }
+      catch (Throwable t) {
+         throw new RuntimeException(t);
+      }
+   }
 
    // We only ever call this API with maxevents=1.  However, if calling with maxevents > 1,
-   // care must be taken to ensure that the "events" Pointer actually points to a
+   // care must be taken to ensure that the "events" segment actually points to a
    // contiguous block of memory large enough to handle maxevents number of EpollEvent
    // mappings.
-   //
-   // EpollEvent would likely need to be updated to add a convenience method that
-   // allocates a block of memory and returns an array of EpollEvents mapped into it.  The
-   // EpollEvent.getPointer() of the first array element could then be passed to this API.
-   public static native int epoll_wait(int epfd, Pointer events, int maxevents, int timeout);
+   public static int epoll_wait(int epfd, MemorySegment events, int maxevents, int timeout)
+   {
+      try {
+         return (int) EPOLL_WAIT.invokeExact(FfmSupport.captureState(), epfd, events, maxevents, timeout);
+      }
+      catch (Throwable t) {
+         throw new RuntimeException(t);
+      }
+   }
+
+   public static int getLastError()
+   {
+      return FfmSupport.getLastError();
+   }
 
    public static final int SIGPIPE = 13;
 

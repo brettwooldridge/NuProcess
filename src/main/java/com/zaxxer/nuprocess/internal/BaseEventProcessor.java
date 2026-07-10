@@ -24,8 +24,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import com.sun.jna.ptr.IntByReference;
-
 /**
  * @author Brett Wooldridge
  */
@@ -122,7 +120,7 @@ public abstract class BaseEventProcessor<T extends BasePosixProcess> implements 
    {
       shutdown = true;
       Collection<T> processes = pidToProcessMap.values();
-      IntByReference exitCode = new IntByReference();
+      int[] exitCode = new int[1];
       for (T process : processes) {
          LibC.kill(process.getPid(), LibC.SIGTERM);
          process.onExit(Integer.MAX_VALUE - 1);

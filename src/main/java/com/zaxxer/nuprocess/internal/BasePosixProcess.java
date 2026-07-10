@@ -16,8 +16,6 @@
 
 package com.zaxxer.nuprocess.internal;
 
-import com.sun.jna.Memory;
-import com.sun.jna.Native;
 import com.zaxxer.nuprocess.NuProcess;
 import com.zaxxer.nuprocess.NuProcessHandler;
 
@@ -50,9 +48,6 @@ public abstract class BasePosixProcess implements NuProcess
    protected static final IEventProcessor<? extends BasePosixProcess>[] processors;
    protected static int processorRoundRobin;
 
-   @SuppressWarnings("unused")
-   private int exitcode;  // set from native code in JDK 7
-
    protected IEventProcessor<? super BasePosixProcess> myProcessor;
    protected volatile NuProcessHandler processHandler;
 
@@ -65,10 +60,6 @@ public abstract class BasePosixProcess implements NuProcess
    protected AtomicBoolean userWantsWrite;
 
    // ******* Input/Output Buffers
-   private Memory outBufferMemory;
-   private Memory errBufferMemory;
-   private Memory inBufferMemory;
-
    protected ByteBuffer outBuffer;
    protected ByteBuffer errBuffer;
    protected ByteBuffer inBuffer;
@@ -166,7 +157,7 @@ public abstract class BasePosixProcess implements NuProcess
       if (isRunning) {
          int result = LibC.kill(pid, force ? LibC.SIGKILL : LibC.SIGTERM);
          if (result != 0) {
-            int errno = Native.getLastError();
+            int errno = LibC.getLastError();
             if (errno == LibC.ESRCH) {
                LOGGER.log(Level.FINE, "{0}: The process exited before it could be {1}",
                        new Object[]{pid, force ? "killed" : "terminated"});
@@ -325,14 +316,10 @@ public abstract class BasePosixProcess implements NuProcess
          exitPending.countDown();
          // Once the last reference to the buffer is gone, Java will finalize the buffer
          // and release the native memory we allocated in initializeBuffers().
-         outBufferMemory = null;
-         errBufferMemory = null;
-         inBufferMemory = null;
          outBuffer = null;
          errBuffer = null;
          inBuffer = null;
          processHandler = null;
-         Memory.purge();
       }
    }
 
@@ -354,7 +341,7 @@ public abstract class BasePosixProcess implements NuProcess
          if (read == -1) {
             outClosed = true;
 
-            int errno = Native.getLastError();
+            int errno = LibC.getLastError();
             throw new RuntimeException("Unexpected EOF reading stdout, errno: " + errno);
          }
 
@@ -393,7 +380,7 @@ public abstract class BasePosixProcess implements NuProcess
          if (read == -1) {
             errClosed = true;
 
-            int errno = Native.getLastError();
+            int errno = LibC.getLastError();
             throw new RuntimeException("Unexpected EOF reading stderr, errno: " + errno);
          }
 
@@ -425,7 +412,7 @@ public abstract class BasePosixProcess implements NuProcess
          do {
             wrote = LibC.write(fd, inBuffer, Math.min(availability, inBuffer.remaining()));
             if (wrote < 0) {
-               int errno = Native.getLastError();
+               int errno = LibC.getLastError();
                if (errno == 11 /*EAGAIN on MacOS*/ || errno == 35 /*EAGAIN on Linux*/) {
                   availability /= 4;
                   continue;
@@ -528,14 +515,9 @@ public abstract class BasePosixProcess implements NuProcess
 
       pendingWrites = new ConcurrentLinkedQueue<>();
 
-      outBufferMemory = new Memory(BUFFER_CAPACITY);
-      outBuffer = outBufferMemory.getByteBuffer(0, outBufferMemory.size()).order(ByteOrder.nativeOrder());
-
-      errBufferMemory = new Memory(BUFFER_CAPACITY);
-      errBuffer = errBufferMemory.getByteBuffer(0, outBufferMemory.size()).order(ByteOrder.nativeOrder());
-
-      inBufferMemory = new Memory(BUFFER_CAPACITY);
-      inBuffer = inBufferMemory.getByteBuffer(0, outBufferMemory.size()).order(ByteOrder.nativeOrder());
+      outBuffer = ByteBuffer.allocateDirect(BUFFER_CAPACITY).order(ByteOrder.nativeOrder());
+      errBuffer = ByteBuffer.allocateDirect(BUFFER_CAPACITY).order(ByteOrder.nativeOrder());
+      inBuffer = ByteBuffer.allocateDirect(BUFFER_CAPACITY).order(ByteOrder.nativeOrder());
 
       // Ensure stdin initially has 0 bytes pending write. We'll
       // update this before invoking onStdinReady.
@@ -648,7 +630,7 @@ public abstract class BasePosixProcess implements NuProcess
    protected static void checkReturnCode(int rc, String failureMessage)
    {
       if (rc != 0) {
-         throw new RuntimeException(failureMessage + ", return code: " + rc + ", last error: " + Native.getLastError());
+         throw new RuntimeException(failureMessage + ", return code: " + rc + ", last error: " + LibC.getLastError());
       }
    }
 

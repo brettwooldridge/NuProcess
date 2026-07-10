@@ -1,10 +1,22 @@
+version: 2.1
+
 jobs:
-  build: # name of your job
+  build:
     machine: true # executor type
     resource_class: brettwooldridge/ubuntu
+    environment:
+      JAVA_HOME: /usr/lib/jvm/java-25-openjdk-amd64
 
     steps:
       # Commands run in a Linux virtual machine environment
-      - checkout
-      - run: mvn clean package
+      - run:
+          name: Clone Repository via HTTPS Proxy
+          command: |
+            git clone https://${GITHUB_TOKEN}@github.com/brettwooldridge/NuProcess.git .
+            git checkout ${CIRCLE_SHA1}
+      - run:
+          name: Build and test with Maven
 
+          command: |
+            export PATH=$JAVA_HOME/bin:$PATH
+            mvn clean package

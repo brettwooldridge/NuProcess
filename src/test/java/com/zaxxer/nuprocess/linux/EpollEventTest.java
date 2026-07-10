@@ -1,6 +1,5 @@
 package com.zaxxer.nuprocess.linux;
 
-import com.sun.jna.Platform;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -13,9 +12,13 @@ public class EpollEventTest
    @Test
    public void testSize()
    {
+      String arch = System.getProperty("os.arch").toLowerCase();
+      boolean isIntel64 = "amd64".equals(arch) || "x86_64".equals(arch) || "x86-64".equals(arch);
+      boolean is64Bit = arch.contains("64") || "s390x".equals(arch);
+
       // 64-bit architectures use a 16 byte struct, except on AMD/Intel, where the struct is 12 bytes
       // on both 32- and 64-bit. The struct is 12 bytes on all 32-bit architectures
-      int expectedSize = (Platform.is64Bit() && !Platform.isIntel()) ? 16 : 12;
+      int expectedSize = (is64Bit && !isIntel64) ? 16 : 12;
 
       EpollEvent event = new EpollEvent();
       Assert.assertEquals(expectedSize, event.size());

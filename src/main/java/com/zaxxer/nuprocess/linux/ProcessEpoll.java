@@ -16,12 +16,11 @@
 
 package com.zaxxer.nuprocess.linux;
 
+import java.lang.foreign.MemorySegment;
 import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 
-import com.sun.jna.Native;
-import com.sun.jna.ptr.IntByReference;
 import com.zaxxer.nuprocess.NuProcess;
 import com.zaxxer.nuprocess.internal.BaseEventProcessor;
 import com.zaxxer.nuprocess.internal.LibC;
@@ -64,7 +63,7 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
 
       epoll = LibEpoll.epoll_create(1024);
       if (epoll < 0) {
-         int errno = Native.getLastError();
+         int errno = LibEpoll.getLastError();
          throw new RuntimeException("Unable to create kqueue, errno: " + errno);
       }
 
@@ -126,17 +125,17 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
          EpollEvent event = process.getEpollEvent();
          event.setEvents(LibEpoll.EPOLLIN);
          event.setFileDescriptor(stdoutFd);
-         int rc = LibEpoll.epoll_ctl(epoll, LibEpoll.EPOLL_CTL_ADD, stdoutFd, event.getPointer());
+         int rc = LibEpoll.epoll_ctl(epoll, LibEpoll.EPOLL_CTL_ADD, stdoutFd, event.getSegment());
          if (rc == -1) {
-            int errno = Native.getLastError();
+            int errno = LibEpoll.getLastError();
             throw new RuntimeException("Unable to register new events to epoll, errno: " + errno);
          }
 
          event.setEvents(LibEpoll.EPOLLIN);
          event.setFileDescriptor(stderrFd);
-         rc = LibEpoll.epoll_ctl(epoll, LibEpoll.EPOLL_CTL_ADD, stderrFd, event.getPointer());
+         rc = LibEpoll.epoll_ctl(epoll, LibEpoll.EPOLL_CTL_ADD, stderrFd, event.getSegment());
          if (rc == -1) {
-            int errno = Native.getLastError();
+            int errno = LibEpoll.getLastError();
             throw new RuntimeException("Unable to register new events to epoll, errno: " + errno);
          }
       }
@@ -166,12 +165,12 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
          EpollEvent event = process.getEpollEvent();
          event.setEvents(LibEpoll.EPOLLOUT | LibEpoll.EPOLLONESHOT | LibEpoll.EPOLLRDHUP | LibEpoll.EPOLLHUP);
          event.setFileDescriptor(stdin);
-         int rc = LibEpoll.epoll_ctl(epoll, LibEpoll.EPOLL_CTL_MOD, stdin, event.getPointer());
+         int rc = LibEpoll.epoll_ctl(epoll, LibEpoll.EPOLL_CTL_MOD, stdin, event.getSegment());
          if (rc == -1) {
-            LibEpoll.epoll_ctl(epoll, LibEpoll.EPOLL_CTL_DEL, stdin, event.getPointer());
-            rc = LibEpoll.epoll_ctl(epoll, LibEpoll.EPOLL_CTL_ADD, stdin, event.getPointer());
+            LibEpoll.epoll_ctl(epoll, LibEpoll.EPOLL_CTL_DEL, stdin, event.getSegment());
+            rc = LibEpoll.epoll_ctl(epoll, LibEpoll.EPOLL_CTL_ADD, stdin, event.getSegment());
             if (rc == -1) {
-               int errno = Native.getLastError();
+               int errno = LibEpoll.getLastError();
                throw new RuntimeException("Unable to register new event to epoll queue, errno: " + errno);
             }
          }
@@ -200,7 +199,7 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
          int stdin = process.getStdin().acquire();
          if (stdin != -1) {
             fildesToProcessMap.remove(stdin);
-            LibEpoll.epoll_ctl(epoll, LibEpoll.EPOLL_CTL_DEL, stdin, null);
+            LibEpoll.epoll_ctl(epoll, LibEpoll.EPOLL_CTL_DEL, stdin, MemorySegment.NULL);
          }
       } finally {
          process.getStdin().release();
@@ -215,9 +214,9 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
       int stderrFd = Integer.MIN_VALUE;
       LinuxProcess linuxProcess = null;
       try {
-         int nev = LibEpoll.epoll_wait(epoll, triggeredEvent.getPointer(), 1, DEADPOOL_POLL_INTERVAL);
+         int nev = LibEpoll.epoll_wait(epoll, triggeredEvent.getSegment(), 1, DEADPOOL_POLL_INTERVAL);
          if (nev == -1) {
-            int errno = Native.getLastError();
+            int errno = LibEpoll.getLastError();
             if (errno == LibC.EINTR) {
                // Signals received while in epoll_wait can interrupt the call and, per the documentation for
                // SA_RESTART, it will not be restarted automatically. When that happens, we manually restart
@@ -259,13 +258,13 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
             if (stdinFd != -1) {
                if (linuxProcess.writeStdin(NuProcess.BUFFER_CAPACITY, stdinFd)) {
                   epEvent.setEvents(LibEpoll.EPOLLOUT | LibEpoll.EPOLLONESHOT | LibEpoll.EPOLLRDHUP | LibEpoll.EPOLLHUP);
-                  LibEpoll.epoll_ctl(epoll, LibEpoll.EPOLL_CTL_MOD, ident, epEvent.getPointer());
+                  LibEpoll.epoll_ctl(epoll, LibEpoll.EPOLL_CTL_MOD, ident, epEvent.getSegment());
                }
             }
          }
 
          if ((events & LibEpoll.EPOLLHUP) != 0 || (events & LibEpoll.EPOLLRDHUP) != 0 || (events & LibEpoll.EPOLLERR) != 0) {
-            LibEpoll.epoll_ctl(epoll, LibEpoll.EPOLL_CTL_DEL, ident, null);
+            LibEpoll.epoll_ctl(epoll, LibEpoll.EPOLL_CTL_DEL, ident, MemorySegment.NULL);
             if (ident == stdoutFd) {
                linuxProcess.readStdout(-1, stdoutFd);
             }
@@ -330,17 +329,17 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
          return;
       }
 
-      IntByReference ret = new IntByReference();
+      int[] ret = new int[1];
       int rc = LibC.waitpid(linuxProcess.getPid(), ret, LibC.WNOHANG);
 
       if (rc == 0) {
          deadPool.add(linuxProcess);
       }
       else if (rc < 0) {
-         linuxProcess.onExit((Native.getLastError() == LibC.ECHILD) ? Integer.MAX_VALUE : Integer.MIN_VALUE);
+         linuxProcess.onExit((LibC.getLastError() == LibC.ECHILD) ? Integer.MAX_VALUE : Integer.MIN_VALUE);
       }
       else {
-         handleExit(linuxProcess, ret.getValue());
+         handleExit(linuxProcess, ret[0]);
       }
    }
 
@@ -350,7 +349,7 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
          return;
       }
 
-      IntByReference ret = new IntByReference();
+      int[] ret = new int[1];
       Iterator<LinuxProcess> iterator = deadPool.iterator();
       while (iterator.hasNext()) {
          LinuxProcess process = iterator.next();
@@ -361,11 +360,11 @@ class ProcessEpoll extends BaseEventProcessor<LinuxProcess>
 
          iterator.remove();
          if (rc < 0) {
-            process.onExit((Native.getLastError() == LibC.ECHILD) ? Integer.MAX_VALUE : Integer.MIN_VALUE);
+            process.onExit((LibC.getLastError() == LibC.ECHILD) ? Integer.MAX_VALUE : Integer.MIN_VALUE);
             continue;
          }
 
-         handleExit(process, ret.getValue());
+         handleExit(process, ret[0]);
       }
    }
 

@@ -16,15 +16,17 @@
 
 package com.zaxxer.nuprocess.windows;
 
-import com.sun.jna.Memory;
-import com.sun.jna.Native;
-import com.sun.jna.WString;
 import com.zaxxer.nuprocess.NuProcess;
 import com.zaxxer.nuprocess.NuProcessHandler;
-import com.zaxxer.nuprocess.windows.NuKernel32.OVERLAPPED;
-import com.zaxxer.nuprocess.windows.NuWinNT.*;
+import com.zaxxer.nuprocess.windows.NuWinNT.OVERLAPPED;
+import com.zaxxer.nuprocess.windows.NuWinNT.PROCESS_INFORMATION;
+import com.zaxxer.nuprocess.windows.NuWinNT.SECURITY_ATTRIBUTES;
+import com.zaxxer.nuprocess.windows.NuWinNT.STARTUPINFO;
 
+import java.lang.foreign.Arena;
+import java.lang.foreign.MemorySegment;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -37,6 +39,7 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import static com.zaxxer.nuprocess.internal.Constants.NUMBER_OF_THREADS;
+import static java.lang.foreign.ValueLayout.JAVA_CHAR;
 
 /**
  * @author Brett Wooldridge
@@ -71,9 +74,9 @@ public final class WindowsProcess implements NuProcess
    private volatile PipeBundle stdoutPipe;
    private volatile PipeBundle stderrPipe;
 
-   private HANDLE hStdinWidow;
-   private HANDLE hStdoutWidow;
-   private HANDLE hStderrWidow;
+   private MemorySegment hStdinWidow;
+   private MemorySegment hStdoutWidow;
+   private MemorySegment hStderrWidow;
 
    private ConcurrentLinkedQueue<ByteBuffer> pendingWrites;
    private final ByteBuffer pendingWriteStdinClosedTombstone;
@@ -82,7 +85,10 @@ public final class WindowsProcess implements NuProcess
    private volatile boolean outClosed;
    private volatile boolean errClosed;
 
-   private PROCESS_INFORMATION processInfo;
+   // Arena for native structs that must live as long as this process object
+   // (PROCESS_INFORMATION and the pipes' OVERLAPPED structs)
+   private final Arena processArena = Arena.ofAuto();
+   private MemorySegment processInfo;
 
    static {
       namedPipePathPrefix = "\\\\.\\pipe\\NuProcess-" + UUID.randomUUID().toString() + "-";
@@ -146,7 +152,7 @@ public final class WindowsProcess implements NuProcess
    @Override
    public void wantWrite()
    {
-      if (hStdinWidow != null && !NuWinNT.INVALID_HANDLE_VALUE.getPointer().equals(hStdinWidow.getPointer())) {
+      if (!NuWinNT.isInvalidHandle(hStdinWidow)) {
          userWantsWrite.set(true);
          myProcessor.wantWrite(this);
       }
@@ -156,7 +162,7 @@ public final class WindowsProcess implements NuProcess
    @Override
    public synchronized void writeStdin(ByteBuffer buffer)
    {
-      if (hStdinWidow != null && !NuWinNT.INVALID_HANDLE_VALUE.getPointer().equals(hStdinWidow.getPointer())) {
+      if (!NuWinNT.isInvalidHandle(hStdinWidow)) {
          pendingWrites.add(buffer);
          if (!writePending) {
             myProcessor.wantWrite(this);
@@ -196,14 +202,12 @@ public final class WindowsProcess implements NuProcess
    @Override
    public void destroy(boolean force)
    {
-      NuKernel32.TerminateProcess(processInfo.hProcess, Integer.MAX_VALUE);
+      NuKernel32.TerminateProcess(getPidHandle(), Integer.MAX_VALUE);
    }
 
-   public int getPID(){
-   	   //PointerByReference pointer = new PointerByReference();
-	   //return NuKernel32.User32DLL.GetWindowThreadProcessId(null, null);
-
-       return NuKernel32.GetProcessId(this.getPidHandle());
+   public int getPID()
+   {
+      return NuKernel32.GetProcessId(this.getPidHandle());
    }
 
    /** {@inheritDoc} */
@@ -235,7 +239,7 @@ public final class WindowsProcess implements NuProcess
 
          callStart();
 
-         NuKernel32.ResumeThread(processInfo.hThread);
+         NuKernel32.ResumeThread(PROCESS_INFORMATION.getThread(processInfo));
       }
       catch (Throwable e) {
          LOGGER.log(Level.WARNING, "Failed to start process", e);
@@ -261,7 +265,7 @@ public final class WindowsProcess implements NuProcess
 
          callStart();
 
-         NuKernel32.ResumeThread(processInfo.hThread);
+         NuKernel32.ResumeThread(PROCESS_INFORMATION.getThread(processInfo));
       }
       catch (Throwable e) {
          LOGGER.log(Level.WARNING, "Failed to start process", e);
@@ -283,34 +287,34 @@ public final class WindowsProcess implements NuProcess
    {
       createPipes();
 
-      char[] block = getEnvironment(environment);
-      Memory env = new Memory(block.length * 3);
-      env.write(0, block, 0, block.length);
+      try (Arena arena = Arena.ofConfined()) {
+         char[] block = getEnvironment(environment);
+         MemorySegment env = arena.allocate(2L * block.length, 2);
+         MemorySegment.copy(block, 0, env, JAVA_CHAR, 0, block.length);
 
-      STARTUPINFO startupInfo = new STARTUPINFO();
-      startupInfo.clear();
-      startupInfo.cb = new DWORD(startupInfo.size());
-      startupInfo.hStdInput = hStdinWidow;
-      startupInfo.hStdError = hStderrWidow;
-      startupInfo.hStdOutput = hStdoutWidow;
-      startupInfo.dwFlags = NuWinNT.STARTF_USESTDHANDLES;
+         MemorySegment startupInfo = STARTUPINFO.allocate(arena);
+         STARTUPINFO.setStdHandles(startupInfo, hStdinWidow, hStdoutWidow, hStderrWidow);
+         STARTUPINFO.setFlags(startupInfo, NuWinNT.STARTF_USESTDHANDLES);
 
-      processInfo = new PROCESS_INFORMATION();
+         processInfo = PROCESS_INFORMATION.allocate(processArena);
 
-      DWORD dwCreationFlags = new DWORD(NuWinNT.CREATE_NO_WINDOW | NuWinNT.CREATE_UNICODE_ENVIRONMENT | NuWinNT.CREATE_SUSPENDED);
-      char[] cwdChars = (cwd != null) ? Native.toCharArray(cwd.toAbsolutePath().toString()) : null;
-      if (!NuKernel32.CreateProcessW(null, getCommandLine(commands), null /*lpProcessAttributes*/, null /*lpThreadAttributes*/, true /*bInheritHandles*/,
-              dwCreationFlags, env, cwdChars, startupInfo, processInfo)) {
-         int lastError = Native.getLastError();
-         throw new RuntimeException("CreateProcessW() failed, error: " + lastError);
+         int dwCreationFlags = NuWinNT.CREATE_NO_WINDOW | NuWinNT.CREATE_UNICODE_ENVIRONMENT | NuWinNT.CREATE_SUSPENDED;
+         MemorySegment cwdSegment = (cwd != null) ? arena.allocateFrom(cwd.toAbsolutePath().toString(), StandardCharsets.UTF_16LE) : MemorySegment.NULL;
+         MemorySegment commandLine = arena.allocateFrom(getCommandLine(commands), StandardCharsets.UTF_16LE);
+         if (!NuKernel32.CreateProcessW(MemorySegment.NULL, commandLine, MemorySegment.NULL /*lpProcessAttributes*/,
+                 MemorySegment.NULL /*lpThreadAttributes*/, true /*bInheritHandles*/,
+                 dwCreationFlags, env, cwdSegment, startupInfo, processInfo)) {
+            int lastError = NuKernel32.getLastError();
+            throw new RuntimeException("CreateProcessW() failed, error: " + lastError);
+         }
       }
 
       afterStart();
    }
 
-   HANDLE getPidHandle()
+   MemorySegment getPidHandle()
    {
-      return processInfo.hProcess;
+      return PROCESS_INFORMATION.getProcess(processInfo);
    }
 
    PipeBundle getStdinPipe()
@@ -497,7 +501,7 @@ public final class WindowsProcess implements NuProcess
                NuKernel32.CloseHandle(stdinPipe.pipeHandle);
             }
             // Once the last reference to the buffer is gone, Java will finalize the buffer
-            // and release the native memory we allocated in initializeBuffers().
+            // and release the native memory we allocated in afterStart().
             stdinPipe.buffer = null;
          }
 
@@ -511,8 +515,8 @@ public final class WindowsProcess implements NuProcess
          }
 
          if (processInfo != null) {
-            NuKernel32.CloseHandle(processInfo.hThread);
-            NuKernel32.CloseHandle(processInfo.hProcess);
+            NuKernel32.CloseHandle(PROCESS_INFORMATION.getThread(processInfo));
+            NuKernel32.CloseHandle(PROCESS_INFORMATION.getProcess(processInfo));
          }
 
          stderrPipe = null;
@@ -559,49 +563,51 @@ public final class WindowsProcess implements NuProcess
 
    private void createPipes()
    {
-      SECURITY_ATTRIBUTES sattr = new SECURITY_ATTRIBUTES();
-      sattr.dwLength = new DWORD(sattr.size());
-      sattr.bInheritHandle = true;
-      sattr.lpSecurityDescriptor = null;
+      try (Arena arena = Arena.ofConfined()) {
+         MemorySegment sattr = SECURITY_ATTRIBUTES.allocate(arena, true);
 
-      // ################ STDOUT PIPE ################
-      long ioCompletionKey = namedPipeCounter.getAndIncrement();
-      WString pipeName = new WString(namedPipePathPrefix + ioCompletionKey);
-      hStdoutWidow = NuKernel32.CreateNamedPipeW(pipeName, NuKernel32.PIPE_ACCESS_INBOUND, 0 /*dwPipeMode*/, 1 /*nMaxInstances*/, BUFFER_SIZE, BUFFER_SIZE,
-                                                 0 /*nDefaultTimeOut*/, sattr);
-      checkHandleValidity(hStdoutWidow);
+         // ################ STDOUT PIPE ################
+         long ioCompletionKey = namedPipeCounter.getAndIncrement();
+         MemorySegment pipeName = arena.allocateFrom(namedPipePathPrefix + ioCompletionKey, StandardCharsets.UTF_16LE);
+         hStdoutWidow = NuKernel32.CreateNamedPipeW(pipeName, NuKernel32.PIPE_ACCESS_INBOUND, 0 /*dwPipeMode*/, 1 /*nMaxInstances*/, BUFFER_SIZE,
+                                                    BUFFER_SIZE, 0 /*nDefaultTimeOut*/, sattr);
+         checkHandleValidity(hStdoutWidow);
 
-      HANDLE stdoutHandle = NuKernel32.CreateFile(pipeName, NuWinNT.GENERIC_READ, NuWinNT.FILE_SHARE_READ, null, NuWinNT.OPEN_EXISTING,
-                                                  NuWinNT.FILE_ATTRIBUTE_NORMAL | NuWinNT.FILE_FLAG_OVERLAPPED, null /*hTemplateFile*/);
-      checkHandleValidity(stdoutHandle);
-      stdoutPipe = new PipeBundle(stdoutHandle, ioCompletionKey);
-      checkPipeConnected(NuKernel32.ConnectNamedPipe(hStdoutWidow, null));
+         MemorySegment stdoutHandle = NuKernel32.CreateFile(pipeName, NuWinNT.GENERIC_READ, NuWinNT.FILE_SHARE_READ, MemorySegment.NULL,
+                                                            NuWinNT.OPEN_EXISTING, NuWinNT.FILE_ATTRIBUTE_NORMAL | NuWinNT.FILE_FLAG_OVERLAPPED,
+                                                            MemorySegment.NULL /*hTemplateFile*/);
+         checkHandleValidity(stdoutHandle);
+         stdoutPipe = new PipeBundle(processArena, stdoutHandle, ioCompletionKey);
+         checkPipeConnected(NuKernel32.ConnectNamedPipe(hStdoutWidow, null));
 
-      // ################ STDERR PIPE ################
-      ioCompletionKey = namedPipeCounter.getAndIncrement();
-      pipeName = new WString(namedPipePathPrefix + ioCompletionKey);
-      hStderrWidow = NuKernel32.CreateNamedPipeW(pipeName, NuKernel32.PIPE_ACCESS_INBOUND, 0 /*dwPipeMode*/, 1 /*nMaxInstances*/, BUFFER_SIZE, BUFFER_SIZE,
-                                                 0 /*nDefaultTimeOut*/, sattr);
-      checkHandleValidity(hStderrWidow);
+         // ################ STDERR PIPE ################
+         ioCompletionKey = namedPipeCounter.getAndIncrement();
+         pipeName = arena.allocateFrom(namedPipePathPrefix + ioCompletionKey, StandardCharsets.UTF_16LE);
+         hStderrWidow = NuKernel32.CreateNamedPipeW(pipeName, NuKernel32.PIPE_ACCESS_INBOUND, 0 /*dwPipeMode*/, 1 /*nMaxInstances*/, BUFFER_SIZE,
+                                                    BUFFER_SIZE, 0 /*nDefaultTimeOut*/, sattr);
+         checkHandleValidity(hStderrWidow);
 
-      HANDLE stderrHandle = NuKernel32.CreateFile(pipeName, NuWinNT.GENERIC_READ, NuWinNT.FILE_SHARE_READ, null, NuWinNT.OPEN_EXISTING,
-                                                  NuWinNT.FILE_ATTRIBUTE_NORMAL | NuWinNT.FILE_FLAG_OVERLAPPED, null /*hTemplateFile*/);
-      checkHandleValidity(stderrHandle);
-      stderrPipe = new PipeBundle(stderrHandle, ioCompletionKey);
-      checkPipeConnected(NuKernel32.ConnectNamedPipe(hStderrWidow, null));
+         MemorySegment stderrHandle = NuKernel32.CreateFile(pipeName, NuWinNT.GENERIC_READ, NuWinNT.FILE_SHARE_READ, MemorySegment.NULL,
+                                                            NuWinNT.OPEN_EXISTING, NuWinNT.FILE_ATTRIBUTE_NORMAL | NuWinNT.FILE_FLAG_OVERLAPPED,
+                                                            MemorySegment.NULL /*hTemplateFile*/);
+         checkHandleValidity(stderrHandle);
+         stderrPipe = new PipeBundle(processArena, stderrHandle, ioCompletionKey);
+         checkPipeConnected(NuKernel32.ConnectNamedPipe(hStderrWidow, null));
 
-      // ################ STDIN PIPE ################
-      ioCompletionKey = namedPipeCounter.getAndIncrement();
-      pipeName = new WString(namedPipePathPrefix + ioCompletionKey);
-      hStdinWidow = NuKernel32.CreateNamedPipeW(pipeName, NuKernel32.PIPE_ACCESS_OUTBOUND, 0 /*dwPipeMode*/, 1 /*nMaxInstances*/, BUFFER_SIZE, BUFFER_SIZE,
-                                                0 /*nDefaultTimeOut*/, sattr);
-      checkHandleValidity(hStdinWidow);
+         // ################ STDIN PIPE ################
+         ioCompletionKey = namedPipeCounter.getAndIncrement();
+         pipeName = arena.allocateFrom(namedPipePathPrefix + ioCompletionKey, StandardCharsets.UTF_16LE);
+         hStdinWidow = NuKernel32.CreateNamedPipeW(pipeName, NuKernel32.PIPE_ACCESS_OUTBOUND, 0 /*dwPipeMode*/, 1 /*nMaxInstances*/, BUFFER_SIZE,
+                                                   BUFFER_SIZE, 0 /*nDefaultTimeOut*/, sattr);
+         checkHandleValidity(hStdinWidow);
 
-      HANDLE stdinHandle = NuKernel32.CreateFile(pipeName, NuWinNT.GENERIC_WRITE, NuWinNT.FILE_SHARE_WRITE, null, NuWinNT.OPEN_EXISTING,
-                                                 NuWinNT.FILE_ATTRIBUTE_NORMAL | NuWinNT.FILE_FLAG_OVERLAPPED, null /*hTemplateFile*/);
-      checkHandleValidity(stdinHandle);
-      stdinPipe = new PipeBundle(stdinHandle, ioCompletionKey);
-      checkPipeConnected(NuKernel32.ConnectNamedPipe(hStdinWidow, null));
+         MemorySegment stdinHandle = NuKernel32.CreateFile(pipeName, NuWinNT.GENERIC_WRITE, NuWinNT.FILE_SHARE_WRITE, MemorySegment.NULL,
+                                                           NuWinNT.OPEN_EXISTING, NuWinNT.FILE_ATTRIBUTE_NORMAL | NuWinNT.FILE_FLAG_OVERLAPPED,
+                                                           MemorySegment.NULL /*hTemplateFile*/);
+         checkHandleValidity(stdinHandle);
+         stdinPipe = new PipeBundle(processArena, stdinHandle, ioCompletionKey);
+         checkPipeConnected(NuKernel32.ConnectNamedPipe(hStdinWidow, null));
+      }
    }
 
    private void afterStart()
@@ -649,7 +655,7 @@ public final class WindowsProcess implements NuProcess
       }
    }
 
-   private char[] getCommandLine(List<String> commands)
+   private String getCommandLine(List<String> commands)
    {
       StringBuilder sb = new StringBuilder();
       boolean isFirstCommand = true;
@@ -666,7 +672,7 @@ public final class WindowsProcess implements NuProcess
          // or simply add double-quotes around the path.
          WindowsCreateProcessEscape.quote(sb, command);
       }
-      return Native.toCharArray(sb.toString());
+      return sb.toString();
    }
 
    private char[] getEnvironment(String[] environment)
@@ -719,17 +725,17 @@ public final class WindowsProcess implements NuProcess
       return sb.toString();
    }
 
-   private void checkHandleValidity(HANDLE handle)
+   private void checkHandleValidity(MemorySegment handle)
    {
-      if (NuWinNT.INVALID_HANDLE_VALUE.getPointer().equals(handle.getPointer())) {
-         throw new RuntimeException("Unable to create pipe, error " + Native.getLastError());
+      if (NuWinNT.isInvalidHandle(handle)) {
+         throw new RuntimeException("Unable to create pipe, error " + NuKernel32.getLastError());
       }
    }
 
    private void checkPipeConnected(int status)
    {
       int lastError;
-      if (status == 0 && ((lastError = Native.getLastError()) != NuWinNT.ERROR_PIPE_CONNECTED)) {
+      if (status == 0 && ((lastError = NuKernel32.getLastError()) != NuWinNT.ERROR_PIPE_CONNECTED)) {
          throw new RuntimeException("Unable to connect pipe, error: " + lastError);
       }
    }
@@ -770,22 +776,21 @@ public final class WindowsProcess implements NuProcess
 
    static final class PipeBundle
    {
-      final OVERLAPPED overlapped;
+      final MemorySegment overlapped;
       final long ioCompletionKey;
-      final HANDLE pipeHandle;
+      final MemorySegment pipeHandle;
       ByteBuffer buffer;
       boolean registered;
 
-      PipeBundle(HANDLE pipeHandle, long ioCompletionKey)
+      PipeBundle(Arena arena, MemorySegment pipeHandle, long ioCompletionKey)
       {
          this.pipeHandle = pipeHandle;
          this.ioCompletionKey = ioCompletionKey;
 
-         // The OVERLAPPED structure is required to make non-blocking ReadFile and WriteFile calls,
-         // but its state is never read from nor written to in Java, so we disable auto-sync so JNA
-         // doesn't waste time marshaling contents to/from native memory
-         overlapped = new OVERLAPPED();
-         overlapped.setAutoSynch(false);
+         // The OVERLAPPED structure is required to make non-blocking ReadFile and WriteFile
+         // calls, but its state is never read from nor written to in Java; it just needs to
+         // stay allocated (zeroed) for as long as the pipe is in use
+         overlapped = OVERLAPPED.allocate(arena);
       }
    }
 }

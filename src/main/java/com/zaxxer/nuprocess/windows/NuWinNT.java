@@ -1,9 +1,6 @@
 /*
  * Copyright (C) 2015 Ben Hamilton
  *
- * Originally from JNA com.sun.jna.platform.win32 package (Apache
- * License, Version 2.0)
- *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -19,206 +16,165 @@
 
 package com.zaxxer.nuprocess.windows;
 
-import java.util.Arrays;
-import java.util.List;
+import java.lang.foreign.Arena;
+import java.lang.foreign.MemorySegment;
 
-import com.sun.jna.*;
-import com.sun.jna.ptr.ByReference;
-import com.sun.jna.ptr.ByteByReference;
+import static java.lang.foreign.ValueLayout.ADDRESS;
+import static java.lang.foreign.ValueLayout.JAVA_INT;
 
 /**
- * Constants and structures for Windows APIs, borrowed from com.sun.jna.platform.win32
- * to avoid pulling in a dependency on that package.
+ * Constants and struct accessors for the Windows APIs used by NuProcess.
+ * All structs use the 64-bit (x64 / ARM64) layouts; FFM is not available
+ * on 32-bit Windows JVMs.
  */
-@SuppressWarnings("serial")
-public interface NuWinNT
+public final class NuWinNT
 {
-   int CREATE_SUSPENDED = 0x00000004;
-   int CREATE_UNICODE_ENVIRONMENT = 0x00000400;
-   int CREATE_NO_WINDOW = 0x08000000;
+   public static final int CREATE_SUSPENDED = 0x00000004;
+   public static final int CREATE_UNICODE_ENVIRONMENT = 0x00000400;
+   public static final int CREATE_NO_WINDOW = 0x08000000;
 
-   int ERROR_SUCCESS = 0;
-   int ERROR_BROKEN_PIPE = 109;
-   int ERROR_PIPE_NOT_CONNECTED = 233;
-   int ERROR_PIPE_CONNECTED = 535;
-   int ERROR_IO_PENDING = 997;
+   public static final int ERROR_SUCCESS = 0;
+   public static final int ERROR_BROKEN_PIPE = 109;
+   public static final int ERROR_PIPE_NOT_CONNECTED = 233;
+   public static final int ERROR_PIPE_CONNECTED = 535;
+   public static final int ERROR_IO_PENDING = 997;
 
-   int FILE_ATTRIBUTE_NORMAL = 0x00000080;
-   int FILE_FLAG_OVERLAPPED = 0x40000000;
-   int FILE_SHARE_READ = 0x00000001;
-   int FILE_SHARE_WRITE = 0x00000002;
+   public static final int FILE_ATTRIBUTE_NORMAL = 0x00000080;
+   public static final int FILE_FLAG_OVERLAPPED = 0x40000000;
+   public static final int FILE_SHARE_READ = 0x00000001;
+   public static final int FILE_SHARE_WRITE = 0x00000002;
 
-   int GENERIC_READ = 0x80000000;
-   int GENERIC_WRITE = 0x40000000;
+   public static final int GENERIC_READ = 0x80000000;
+   public static final int GENERIC_WRITE = 0x40000000;
 
-   int OPEN_EXISTING = 3;
+   public static final int OPEN_EXISTING = 3;
 
-   int STATUS_PENDING = 0x00000103;
-   int STILL_ACTIVE = STATUS_PENDING;
+   public static final int STATUS_PENDING = 0x00000103;
+   public static final int STILL_ACTIVE = STATUS_PENDING;
 
-   int STARTF_USESTDHANDLES = 0x100;
+   public static final int STARTF_USESTDHANDLES = 0x100;
 
-   HANDLE INVALID_HANDLE_VALUE = new HANDLE(HANDLE.INVALID);
+   /** A {@code HANDLE} is simply a native address; this is {@code (HANDLE) -1}. */
+   public static final MemorySegment INVALID_HANDLE_VALUE = MemorySegment.ofAddress(-1L);
 
-   class HANDLE extends PointerType
+   private NuWinNT() {
+   }
+
+   public static boolean isInvalidHandle(MemorySegment handle)
    {
-      static final Pointer INVALID = Pointer.createConstant(Native.POINTER_SIZE == 8 ? -1 : 0xFFFFFFFFL);
+      return handle == null || handle.address() == INVALID_HANDLE_VALUE.address();
+   }
 
-      public HANDLE()
-      {
+   public static boolean isNullHandle(MemorySegment handle)
+   {
+      return handle == null || handle.address() == 0L;
+   }
+
+   /**
+    * Accessors for a {@code SECURITY_ATTRIBUTES} struct laid out in native memory.
+    */
+   public static final class SECURITY_ATTRIBUTES
+   {
+      public static final long SIZE = 24;
+      private static final long NLENGTH_OFFSET = 0;
+      @SuppressWarnings("unused")
+      private static final long LP_SECURITY_DESCRIPTOR_OFFSET = 8;
+      private static final long BINHERIT_HANDLE_OFFSET = 16;
+
+      private SECURITY_ATTRIBUTES() {
       }
 
-      public HANDLE(Pointer p)
+      public static MemorySegment allocate(Arena arena, boolean inheritHandle)
       {
-         setPointer(p);
-      }
-
-      @Override
-      public Object fromNative(Object nativeValue, FromNativeContext context)
-      {
-         if (nativeValue == null) {
-            return null;
-         }
-
-         Pointer ptr = (Pointer) nativeValue;
-         if (INVALID.equals(ptr)) {
-            return INVALID_HANDLE_VALUE;
-         }
-         return new HANDLE(ptr);
+         MemorySegment segment = arena.allocate(SIZE, 8);
+         segment.set(JAVA_INT, NLENGTH_OFFSET, (int) SIZE);
+         segment.set(JAVA_INT, BINHERIT_HANDLE_OFFSET, inheritHandle ? 1 : 0);
+         return segment;
       }
    }
 
-   class WORD extends IntegerType
+   /**
+    * Accessors for a {@code STARTUPINFOW} struct laid out in native memory.
+    */
+   public static final class STARTUPINFO
    {
-      public static final int SIZE = 2;
+      public static final long SIZE = 104;
+      private static final long CB_OFFSET = 0;
+      private static final long DWFLAGS_OFFSET = 60;
+      private static final long HSTDINPUT_OFFSET = 80;
+      private static final long HSTDOUTPUT_OFFSET = 88;
+      private static final long HSTDERROR_OFFSET = 96;
 
-      public WORD()
-      {
-         this(0);
+      private STARTUPINFO() {
       }
 
-      public WORD(long value)
+      public static MemorySegment allocate(Arena arena)
       {
-         super(SIZE, value, true);
+         MemorySegment segment = arena.allocate(SIZE, 8);
+         segment.set(JAVA_INT, CB_OFFSET, (int) SIZE);
+         return segment;
+      }
+
+      public static void setFlags(MemorySegment startupInfo, int flags)
+      {
+         startupInfo.set(JAVA_INT, DWFLAGS_OFFSET, flags);
+      }
+
+      public static void setStdHandles(MemorySegment startupInfo, MemorySegment hStdInput, MemorySegment hStdOutput, MemorySegment hStdError)
+      {
+         startupInfo.set(ADDRESS, HSTDINPUT_OFFSET, hStdInput);
+         startupInfo.set(ADDRESS, HSTDOUTPUT_OFFSET, hStdOutput);
+         startupInfo.set(ADDRESS, HSTDERROR_OFFSET, hStdError);
       }
    }
 
-   class DWORD extends IntegerType
+   /**
+    * Accessors for a {@code PROCESS_INFORMATION} struct laid out in native memory.
+    */
+   public static final class PROCESS_INFORMATION
    {
-      public static final int SIZE = 4;
+      public static final long SIZE = 24;
+      private static final long HPROCESS_OFFSET = 0;
+      private static final long HTHREAD_OFFSET = 8;
+      @SuppressWarnings("unused")
+      private static final long DWPROCESS_ID_OFFSET = 16;
+      @SuppressWarnings("unused")
+      private static final long DWTHREAD_ID_OFFSET = 20;
 
-      public DWORD()
-      {
-         this(0);
+      private PROCESS_INFORMATION() {
       }
 
-      public DWORD(long value)
+      public static MemorySegment allocate(Arena arena)
       {
-         super(SIZE, value, true);
+         return arena.allocate(SIZE, 8);
+      }
+
+      public static MemorySegment getProcess(MemorySegment processInformation)
+      {
+         return processInformation.get(ADDRESS, HPROCESS_OFFSET);
+      }
+
+      public static MemorySegment getThread(MemorySegment processInformation)
+      {
+         return processInformation.get(ADDRESS, HTHREAD_OFFSET);
       }
    }
 
-   class ULONG_PTR extends IntegerType
+   /**
+    * Accessors for an {@code OVERLAPPED} struct laid out in native memory. NuProcess only
+    * ever passes zeroed OVERLAPPED structs and never examines their contents in Java, so
+    * only allocation is supported.
+    */
+   public static final class OVERLAPPED
    {
-      public ULONG_PTR()
-      {
-         this(0);
+      public static final long SIZE = 32;
+
+      private OVERLAPPED() {
       }
 
-      public ULONG_PTR(long value)
+      public static MemorySegment allocate(Arena arena)
       {
-         super(Native.POINTER_SIZE, value, true);
-      }
-   }
-
-   class ULONG_PTRByReference extends ByReference
-   {
-      public ULONG_PTRByReference()
-      {
-         this(new ULONG_PTR(0));
-      }
-
-      public ULONG_PTRByReference(ULONG_PTR value)
-      {
-         super(Native.POINTER_SIZE);
-         setValue(value);
-      }
-
-      public void setValue(ULONG_PTR value)
-      {
-         if (Native.POINTER_SIZE == 4) {
-            getPointer().setInt(0, value.intValue());
-         }
-         else {
-            getPointer().setLong(0, value.longValue());
-         }
-      }
-
-      public ULONG_PTR getValue()
-      {
-         return new ULONG_PTR(Native.POINTER_SIZE == 4 ? getPointer().getInt(0) : getPointer().getLong(0));
-      }
-   }
-
-   class SECURITY_ATTRIBUTES extends Structure
-   {
-      public DWORD dwLength;
-      public Pointer lpSecurityDescriptor;
-      public boolean bInheritHandle;
-
-      @Override
-      protected List<String> getFieldOrder()
-      {
-         return Arrays.asList("dwLength", "lpSecurityDescriptor", "bInheritHandle");
-      }
-   }
-
-   class STARTUPINFO extends Structure
-   {
-      public DWORD cb;
-      public String lpReserved;
-      public String lpDesktop;
-      public String lpTitle;
-      public DWORD dwX;
-      public DWORD dwY;
-      public DWORD dwXSize;
-      public DWORD dwYSize;
-      public DWORD dwXCountChars;
-      public DWORD dwYCountChars;
-      public DWORD dwFillAttribute;
-      public int dwFlags;
-      public WORD wShowWindow;
-      public WORD cbReserved2;
-      public ByteByReference lpReserved2;
-      public HANDLE hStdInput;
-      public HANDLE hStdOutput;
-      public HANDLE hStdError;
-
-      public STARTUPINFO()
-      {
-         cb = new DWORD(size());
-      }
-
-      @Override
-      protected List<String> getFieldOrder()
-      {
-         return Arrays.asList("cb", "lpReserved", "lpDesktop", "lpTitle", "dwX", "dwY", "dwXSize", "dwYSize",
-               "dwXCountChars", "dwYCountChars", "dwFillAttribute", "dwFlags", "wShowWindow", "cbReserved2",
-               "lpReserved2", "hStdInput", "hStdOutput", "hStdError");
-      }
-   }
-
-   class PROCESS_INFORMATION extends Structure
-   {
-      public HANDLE hProcess;
-      public HANDLE hThread;
-      public DWORD dwProcessId;
-      public DWORD dwThreadId;
-
-      @Override
-      protected List<String> getFieldOrder()
-      {
-         return Arrays.asList("hProcess", "hThread", "dwProcessId", "dwThreadId");
+         return arena.allocate(SIZE, 8);
       }
    }
 }

@@ -16,74 +16,161 @@
 
 package com.zaxxer.nuprocess.osx;
 
-import java.util.Arrays;
-import java.util.List;
+import com.zaxxer.nuprocess.internal.FfmSupport;
 
-import com.sun.jna.Native;
-import com.sun.jna.NativeLibrary;
-import com.sun.jna.NativeLong;
-import com.sun.jna.Pointer;
-import com.sun.jna.Structure;
+import java.lang.foreign.Arena;
+import java.lang.foreign.FunctionDescriptor;
+import java.lang.foreign.MemorySegment;
+import java.lang.foreign.SymbolLookup;
+import java.lang.invoke.MethodHandle;
+
+import static java.lang.foreign.ValueLayout.ADDRESS;
+import static java.lang.foreign.ValueLayout.JAVA_INT;
+import static java.lang.foreign.ValueLayout.JAVA_LONG;
+import static java.lang.foreign.ValueLayout.JAVA_SHORT;
 
 /**
+ * FFM bindings for kqueue/kevent on macOS (and FreeBSD).
+ *
  * @author Brett Wooldridge
  */
 public class LibKevent
 {
-   static {
-      Native.register(NativeLibrary.getProcess());
-   }
+   private static final SymbolLookup LIBC = FfmSupport.LINKER.defaultLookup();
 
-   public static native int kqueue();
+   private static final MethodHandle KQUEUE =
+      FfmSupport.downcall(LIBC, "kqueue", FunctionDescriptor.of(JAVA_INT));
+   private static final MethodHandle KEVENT =
+      FfmSupport.downcall(LIBC, "kevent", FunctionDescriptor.of(JAVA_INT, JAVA_INT, ADDRESS, JAVA_INT, ADDRESS, JAVA_INT, ADDRESS));
 
-   public static native int kevent(int kq, Pointer changeList, int nchanges, Pointer eventList, int nevents, TimeSpec timespec);
-
-   public static class TimeSpec extends Structure
+   public static int kqueue()
    {
-      public long tv_sec;
-      public long tv_nsec;
-
-      @SuppressWarnings("rawtypes")
-      @Override
-      protected List getFieldOrder()
-      {
-         return Arrays.asList("tv_sec", "tv_nsec");
+      try {
+         return (int) KQUEUE.invokeExact(FfmSupport.captureState());
+      }
+      catch (Throwable t) {
+         throw new RuntimeException(t);
       }
    }
 
-   public static class Kevent extends Structure
+   /**
+    * @param changeList the address of an array of {@link Kevent} structs, or {@link MemorySegment#NULL}
+    * @param eventList the address of an array of {@link Kevent} structs, or {@link MemorySegment#NULL}
+    * @param timespec a {@link TimeSpec} struct, or {@link MemorySegment#NULL} to block indefinitely
+    */
+   public static int kevent(int kq, MemorySegment changeList, int nchanges, MemorySegment eventList, int nevents, MemorySegment timespec)
    {
-      public NativeLong ident;
-      public short filter;
-      public short flags;
-      public int fflags;
-      public NativeLong data;
-      public Pointer udata;
+      try {
+         return (int) KEVENT.invokeExact(FfmSupport.captureState(), kq, changeList, nchanges, eventList, nevents, timespec);
+      }
+      catch (Throwable t) {
+         throw new RuntimeException(t);
+      }
+   }
 
-      public Kevent() {
-          super();
+   public static int getLastError()
+   {
+      return FfmSupport.getLastError();
+   }
+
+   /**
+    * Accessors for a {@code struct timespec} laid out in native memory.
+    */
+   public static final class TimeSpec
+   {
+      public static final long SIZE = 16;
+
+      private TimeSpec() {
       }
 
-      public Kevent(Pointer p) {
-          super(p);
-      }
-
-      @SuppressWarnings("rawtypes")
-      @Override
-      protected List getFieldOrder()
+      public static MemorySegment allocate(Arena arena)
       {
-         return Arrays.asList("ident", "filter", "flags", "fflags", "data", "udata");
+         return arena.allocate(SIZE, 8);
       }
 
-      Kevent EV_SET(long ident, int filter, int flags, int fflags, long data, Pointer udata)
+      public static void set(MemorySegment timespec, long tvSec, long tvNsec)
       {
-         this.ident.setValue(ident);
-         this.filter = (short) filter;
-         this.flags = (short) flags;
-         this.fflags = fflags;
-         this.data.setValue(data);
-         this.udata = udata;
-         return this;
+         timespec.set(JAVA_LONG, 0, tvSec);
+         timespec.set(JAVA_LONG, 8, tvNsec);
+      }
+   }
+
+   /**
+    * Accessors for a 64-bit {@code struct kevent} laid out in native memory:
+    * <pre>
+    * struct kevent {
+    *     uintptr_t ident;  // offset  0
+    *     int16_t   filter; // offset  8
+    *     uint16_t  flags;  // offset 10
+    *     uint32_t  fflags; // offset 12
+    *     intptr_t  data;   // offset 16
+    *     void      *udata; // offset 24
+    * };                    // size   32
+    * </pre>
+    */
+   public static final class Kevent
+   {
+      public static final long SIZE = 32;
+
+      private static final long IDENT_OFFSET = 0;
+      private static final long FILTER_OFFSET = 8;
+      private static final long FLAGS_OFFSET = 10;
+      private static final long FFLAGS_OFFSET = 12;
+      private static final long DATA_OFFSET = 16;
+      private static final long UDATA_OFFSET = 24;
+
+      private Kevent() {
+      }
+
+      public static MemorySegment allocateArray(Arena arena, int count)
+      {
+         return arena.allocate(SIZE * count, 8);
+      }
+
+      /** Returns a view of the {@code index}-th struct in an array of kevents. */
+      public static MemorySegment at(MemorySegment keventArray, int index)
+      {
+         return keventArray.asSlice(SIZE * index, SIZE);
+      }
+
+      public static void EV_SET(MemorySegment kevent, long ident, int filter, int flags, int fflags, long data, long udata)
+      {
+         kevent.set(JAVA_LONG, IDENT_OFFSET, ident);
+         kevent.set(JAVA_SHORT, FILTER_OFFSET, (short) filter);
+         kevent.set(JAVA_SHORT, FLAGS_OFFSET, (short) flags);
+         kevent.set(JAVA_INT, FFLAGS_OFFSET, fflags);
+         kevent.set(JAVA_LONG, DATA_OFFSET, data);
+         kevent.set(JAVA_LONG, UDATA_OFFSET, udata);
+      }
+
+      public static long getIdent(MemorySegment kevent)
+      {
+         return kevent.get(JAVA_LONG, IDENT_OFFSET);
+      }
+
+      public static int getFilter(MemorySegment kevent)
+      {
+         return kevent.get(JAVA_SHORT, FILTER_OFFSET);
+      }
+
+      public static int getFlags(MemorySegment kevent)
+      {
+         return kevent.get(JAVA_SHORT, FLAGS_OFFSET) & 0xffff;
+      }
+
+      public static int getFFlags(MemorySegment kevent)
+      {
+         return kevent.get(JAVA_INT, FFLAGS_OFFSET);
+      }
+
+      public static long getData(MemorySegment kevent)
+      {
+         return kevent.get(JAVA_LONG, DATA_OFFSET);
+      }
+
+      public static long getUdata(MemorySegment kevent)
+      {
+         return kevent.get(JAVA_LONG, UDATA_OFFSET);
       }
 
       /* actions */
@@ -124,6 +211,5 @@ public class LibKevent
       public static final int NOTE_EXIT = 0x80000000; /* process exited */
       public static final int NOTE_REAP = 0x10000000; /* process exited */
       public static final int NOTE_EXITSTATUS = 0x04000000; /* exit status to be returned, valid for child process only */
-
    }
 }

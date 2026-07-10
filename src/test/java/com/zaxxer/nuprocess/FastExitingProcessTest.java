@@ -29,8 +29,6 @@ import java.util.concurrent.TimeUnit;
 
 import org.junit.Test;
 
-import com.sun.jna.Platform;
-
 public class FastExitingProcessTest
 {
    private static class Handler extends NuAbstractProcessHandler
@@ -66,7 +64,7 @@ public class FastExitingProcessTest
          for (int i = 0; i < 250; i++) {
             Handler handler = new Handler();
             NuProcess process;
-            if (Platform.isWindows()) {
+            if (System.getProperty("os.name").toLowerCase().contains("win")) {
                // We can't use an argument with a space here because the following command:
                //   cmd /c echo "Hello world!"
                // literally echoes the quotes around "Hello world!" to stdout.

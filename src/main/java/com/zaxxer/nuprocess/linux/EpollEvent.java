@@ -16,123 +16,73 @@
 
 package com.zaxxer.nuprocess.linux;
 
-import java.util.Arrays;
-import java.util.List;
+import java.lang.foreign.Arena;
+import java.lang.foreign.MemorySegment;
 
-import com.sun.jna.*;
+import static java.lang.foreign.ValueLayout.JAVA_INT;
 
+/**
+ * A {@code struct epoll_event} laid out in native memory:
+ * <pre>
+ * struct epoll_event
+ * {
+ *   uint32_t events;   // Epoll events
+ *   epoll_data_t data; // User data variable (union; only the 'fd' member is used here)
+ * } __EPOLL_PACKED;
+ * </pre>
+ * On x86-64 the struct is declared with {@code __attribute__((packed))}, making it
+ * 12 bytes with the data union at offset 4. On all other 64-bit architectures it has
+ * natural alignment: 16 bytes with the data union at offset 8. On 32-bit architectures
+ * it is 12 bytes with the data union at offset 4.
+ */
 class EpollEvent
 {
-   private static final int eventsOffset;
-   private static final int fdOffset;
-   private static final int size;
+   private static final int EVENTS_OFFSET = 0;
+   private static final int DATA_OFFSET;
+   private static final int SIZE;
 
    static {
-      EpollEventPrototype event = new EpollEventPrototype();
-      eventsOffset = event.getFieldOffset("events");
-      fdOffset = event.getFieldOffset("data");
-      size = event.size();
+      String arch = System.getProperty("os.arch").toLowerCase();
+      boolean isIntel64 = "amd64".equals(arch) || "x86_64".equals(arch) || "x86-64".equals(arch);
+      boolean is64Bit = arch.contains("64") || "s390x".equals(arch);
+
+      if (is64Bit && !isIntel64) {
+         DATA_OFFSET = 8;
+         SIZE = 16;
+      }
+      else {
+         DATA_OFFSET = 4;
+         SIZE = 12;
+      }
    }
 
-   private final Pointer pointer;
+   private final MemorySegment segment;
 
    EpollEvent() {
-      pointer = new Memory(size);
+      segment = Arena.ofAuto().allocate(SIZE, 8);
    }
 
    int getEvents() {
-      return pointer.getInt(eventsOffset);
+      return segment.get(JAVA_INT, EVENTS_OFFSET);
    }
 
    void setEvents(final int mask) {
-      pointer.setInt(eventsOffset, mask);
+      segment.set(JAVA_INT, EVENTS_OFFSET, mask);
    }
 
    void setFileDescriptor(final int fd) {
-      pointer.setInt(fdOffset, fd);
+      segment.set(JAVA_INT, DATA_OFFSET, fd);
    }
 
    int getFileDescriptor() {
-      return pointer.getInt(fdOffset);
+      return segment.get(JAVA_INT, DATA_OFFSET);
    }
 
-   Pointer getPointer() {
-      return pointer;
+   MemorySegment getSegment() {
+      return segment;
    }
 
    int size() {
-      return size;
-   }
-
-   public static class EpollEventPrototype extends Structure
-   {
-      /*
-          struct epoll_event
-          {
-            uint32_t events;   // Epoll events
-            epoll_data_t data; // User data variable
-          } __EPOLL_PACKED;
-
-          sizeof(struct epoll_event) is 12 on x86 and x86_64, but is 16 on other 64-bit platforms
-      */
-
-      public int events;
-      public EpollData data;
-
-      EpollEventPrototype() {
-         super(detectAlignment());
-
-         data = new EpollData();
-         data.setType("fd");
-      }
-
-      int getFieldOffset(String field)
-      {
-         return fieldOffset(field);
-      }
-
-      @SuppressWarnings("rawtypes")
-      @Override
-      protected List<String> getFieldOrder() {
-         return Arrays.asList("events", "data");
-      }
-
-      /**
-       * Uses the OS architecture to reproduce the following logic from the epoll header:
-       * <code><pre>
-       * #ifdef __x86_64__
-       * #define EPOLL_PACKED __attribute__((packed))
-       * #else
-       * #define EPOLL_PACKED
-       * #endif
-       * </pre></code>
-       *
-       * On x86-64 (amd64) platforms, {@code ALIGN_NONE} is used (to emulate {@code __attribute__((packed))}),
-       * and on all other platforms {@code ALIGN_GNUC} is used.
-       */
-      private static int detectAlignment() {
-         return Platform.isIntel() && Platform.is64Bit() ? ALIGN_NONE : ALIGN_GNUC;
-      }
-
-      /*
-          typedef union epoll_data
-          {
-            void *ptr;
-            int fd;
-            uint32_t u32;
-            uint64_t u64;
-          } epoll_data_t;
-      */
-
-      @SuppressWarnings("unused") // unused fields are part of the union's C definition
-      public static class EpollData extends Union {
-         // technically this union should have a "Pointer ptr" field, but, for how EpollData is actually
-         // used, only referencing the "fd" field, it's nothing but overhead. JNA will end up constructing
-         // them as part of ProcessEpoll's execution, but they never get used
-         //public Pointer ptr;
-         public int fd;
-         public int u32;
-         public long u64; // must be included to make this union's size 8 bytes
-      }
+      return SIZE;
    }
 }

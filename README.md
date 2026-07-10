@@ -14,18 +14,29 @@ Have you ever been annoyed by the fact that whenever you spawn a process in Java
 threads (for every process) to pull data out of the ``stdout`` and ``stderr`` pipes and pump data into ``stdin``?  If your
 code starts a lot of processes you can have dozens or hundreds of threads doing nothing but pumping data.
 
-NuProcess uses the JNA library to use platform-specific native APIs to achieve non-blocking I/O on the pipes between your
-Java process and the spawned processes:
+NuProcess uses the Java Foreign Function & Memory (FFM) API to invoke platform-specific native APIs to achieve
+non-blocking I/O on the pipes between your Java process and the spawned processes:
 
  * Linux: uses epoll
  * MacOS X: uses kqueue/kevent
  * Windows: uses IO Completion Ports
 
+NuProcess 4.x requires Java 25 or newer. Versions 3.x and earlier are based on JNA and support Java 1.7 and above.
+
 #### Maven
     <dependency>
         <groupId>com.zaxxer</groupId>
         <artifactId>nuprocess</artifactId>
-        <version>2.0.6</version>
+        <version>4.0.0</version>
+        <scope>compile</scope>
+    </dependency>
+
+For Java versions prior to 25, use the JNA-based 3.x release:
+
+    <dependency>
+        <groupId>com.zaxxer</groupId>
+        <artifactId>nuprocess</artifactId>
+        <version>3.0.0</version>
         <scope>compile</scope>
     </dependency>
 
@@ -168,6 +179,14 @@ This property controls how long the processing thread(s) remains after the last 
 order to avoid the overhead of starting up another processing thread, if processes are frequently run it may be desirable
 for the processing thread to remain (linger) for some amount of time (default 2500ms).
 
+#### Testing
+``mvn test`` runs the test suite on the host platform. Additionally, when Docker is available, the suite is
+executed a second time inside a Linux container (JDK 25) via Testcontainers, exercising the Linux
+``epoll``/``posix_spawn`` code paths even when building on macOS or Windows. The container image can be
+overridden with ``-Dnuprocess.test.linuxImage=<image>`` (default ``eclipse-temurin:25-jdk``). If your Docker
+daemon is older than Docker Engine 25.0, pass ``-Dapi.version=<version>`` to select a Docker API version it
+supports.
+
 #### Related Projects
 Charles Duffy has developed a Clojure wrapper library [here](https://github.com/threatgrid/asynp).
 Julien Viet has developed a Vert.x 3 library [here](https://github.com/vietj/vertx-childprocess).
@@ -175,8 +194,10 @@ Julien Viet has developed a Vert.x 3 library [here](https://github.com/vietj/ver
 #### Limitations
 The following limitations exist in NuProcess:
  * Currently only supports Linux, Windows, and MacOS X.
- * Java 7 and above
- * Linux support requires at least kernel version 2.6.17 or higher (kernels after June 2006)
+ * Java 25 and above (versions 3.x and earlier are based on JNA and support Java 1.7 and above)
+ * Linux support requires glibc 2.29+ or musl 1.1.24+ (for ``posix_spawn`` with the ``addchdir`` file action)
+ * Because NuProcess calls native code, run with ``--enable-native-access=ALL-UNNAMED`` (or grant native access to
+   the ``com.zaxxer.nuprocess`` module) to avoid JVM warnings, which will become errors in future JDK releases
 
 [Build Status]:https://circleci.com/gh/brettwooldridge/NuProcess`
 [Build Status img]:https://circleci.com/gh/brettwooldridge/NuProcess.svg?style=shield

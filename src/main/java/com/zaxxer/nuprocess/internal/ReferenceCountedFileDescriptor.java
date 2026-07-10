@@ -16,8 +16,6 @@
 
 package com.zaxxer.nuprocess.internal;
 
-import com.sun.jna.LastErrorException;
-
 /**
  * Encapsulates a file descriptor plus a reference count to ensure close requests
  * only close the file descriptor once the last reference to the file descriptor
@@ -67,11 +65,7 @@ public class ReferenceCountedFileDescriptor {
    }
 
    private void doClose() {
-      try {
-         LibC.close(fd);
-         fd = -1;
-      } catch (LastErrorException e) {
-         throw new RuntimeException(e);
-      }
+      LibC.close(fd);
+      fd = -1;
    }
 }

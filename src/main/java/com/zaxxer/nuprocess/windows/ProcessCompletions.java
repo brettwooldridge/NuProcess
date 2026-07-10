@@ -16,6 +16,8 @@
 
 package com.zaxxer.nuprocess.windows;
 
+import java.lang.foreign.Arena;
+import java.lang.foreign.MemorySegment;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -30,14 +32,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import com.sun.jna.Native;
-import com.sun.jna.ptr.IntByReference;
-import com.sun.jna.ptr.PointerByReference;
 import com.zaxxer.nuprocess.internal.Constants;
-import com.zaxxer.nuprocess.windows.NuWinNT.HANDLE;
-import com.zaxxer.nuprocess.windows.NuWinNT.ULONG_PTR;
-import com.zaxxer.nuprocess.windows.NuWinNT.ULONG_PTRByReference;
 import com.zaxxer.nuprocess.windows.WindowsProcess.PipeBundle;
+
+import static java.lang.foreign.ValueLayout.ADDRESS;
+import static java.lang.foreign.ValueLayout.JAVA_INT;
+import static java.lang.foreign.ValueLayout.JAVA_LONG;
 
 public final class ProcessCompletions implements Runnable
 {
@@ -49,7 +49,7 @@ public final class ProcessCompletions implements Runnable
 
    private final int lingerIterations;
 
-   private HANDLE ioCompletionPort;
+   private MemorySegment ioCompletionPort;
 
    private List<WindowsProcess> deadPool;
    private BlockingQueue<WindowsProcess> pendingPool;
@@ -60,9 +60,13 @@ public final class ProcessCompletions implements Runnable
    private volatile CyclicBarrier startBarrier;
    private volatile boolean shutdown;
    private AtomicBoolean isRunning;
-   private IntByReference numberOfBytes;
-   private ULONG_PTRByReference completionKey;
-   private PointerByReference lpOverlapped;
+
+   // Native out-parameters for GetQueuedCompletionStatus; allocated once and reused
+   // for the life of this processor (only ever used on the processor's thread)
+   private final Arena arena;
+   private final MemorySegment numberOfBytes;
+   private final MemorySegment completionKey;
+   private final MemorySegment lpOverlapped;
 
    static {
       int lingerTimeMs = Math.max(1000, Integer.getInteger("com.zaxxer.nuprocess.lingerTimeMs", 2500));
@@ -99,15 +103,16 @@ public final class ProcessCompletions implements Runnable
       deadPool = new LinkedList<>();
       isRunning = new AtomicBoolean();
 
-      numberOfBytes = new IntByReference();
-      completionKey = new ULONG_PTRByReference();
-      lpOverlapped = new PointerByReference();
+      arena = Arena.ofAuto();
+      numberOfBytes = arena.allocate(JAVA_INT);
+      completionKey = arena.allocate(JAVA_LONG);
+      lpOverlapped = arena.allocate(ADDRESS);
 
       initCompletionPort();
    }
 
    /**
-    * The primary run loop of the kqueue event processor.
+    * The primary run loop of the I/O completion port processor.
     */
    @Override
    public void run()
@@ -142,14 +147,14 @@ public final class ProcessCompletions implements Runnable
    {
       try {
          int status = NuKernel32.GetQueuedCompletionStatus(ioCompletionPort, numberOfBytes, completionKey, lpOverlapped, DEADPOOL_POLL_INTERVAL);
-         if (status == 0 && lpOverlapped.getValue() == null) // timeout
+         if (status == 0 && lpOverlapped.get(ADDRESS, 0).address() == 0L) // timeout
          {
             checkWaitWrites();
             checkPendingPool();
             return false;
          }
 
-         final long key = completionKey.getValue().longValue();
+         final long key = completionKey.get(JAVA_LONG, 0);
          // explicit wake up by us to process pending want writes and registrations
          if (key == 0) {
             checkWaitWrites();
@@ -162,7 +167,7 @@ public final class ProcessCompletions implements Runnable
             return true;
          }
 
-         int transferred = numberOfBytes.getValue();
+         int transferred = numberOfBytes.get(JAVA_INT, 0);
          if (process.getStdoutPipe() != null && process.getStdoutPipe().ioCompletionKey == key) {
             if (transferred > 0) {
                process.readStdout(transferred);
@@ -223,7 +228,7 @@ public final class ProcessCompletions implements Runnable
    {
       try {
          wantsWrite.put(process);
-         NuKernel32.PostQueuedCompletionStatus(ioCompletionPort, 0, new ULONG_PTR(0), null);
+         NuKernel32.PostQueuedCompletionStatus(ioCompletionPort, 0, 0L, MemorySegment.NULL);
       }
       catch (InterruptedException e) {
          // ignore
@@ -238,7 +243,7 @@ public final class ProcessCompletions implements Runnable
 
       try {
          pendingPool.put(process);
-         NuKernel32.PostQueuedCompletionStatus(ioCompletionPort, 0, new ULONG_PTR(0), null);
+         NuKernel32.PostQueuedCompletionStatus(ioCompletionPort, 0, 0L, MemorySegment.NULL);
       }
       catch (InterruptedException e) {
          // ignore
@@ -254,12 +259,12 @@ public final class ProcessCompletions implements Runnable
       final PipeBundle stdinPipe = process.getStdinPipe();
 
       if (!stdinPipe.registered) {
-         HANDLE completionPort = NuKernel32.CreateIoCompletionPort(
+         MemorySegment completionPort = NuKernel32.CreateIoCompletionPort(
                  stdinPipe.pipeHandle, ioCompletionPort,
-                 new ULONG_PTR(stdinPipe.ioCompletionKey),
+                 stdinPipe.ioCompletionKey,
                  Constants.NUMBER_OF_THREADS);
-         if (!ioCompletionPort.equals(completionPort)) {
-            throw new RuntimeException("CreateIoCompletionPort() failed, error code: " + Native.getLastError());
+         if (ioCompletionPort.address() != completionPort.address()) {
+            throw new RuntimeException("CreateIoCompletionPort() failed, error code: " + NuKernel32.getLastError());
          }
 
          completionKeyToProcessMap.put(stdinPipe.ioCompletionKey, process);
@@ -267,7 +272,7 @@ public final class ProcessCompletions implements Runnable
       }
 
       if (NuKernel32.WriteFile(stdinPipe.pipeHandle, stdinPipe.buffer, 0, null, stdinPipe.overlapped) == 0
-            && Native.getLastError() != NuWinNT.ERROR_IO_PENDING) {
+            && NuKernel32.getLastError() != NuWinNT.ERROR_IO_PENDING) {
          process.stdinClose();
       }
    }
@@ -280,7 +285,7 @@ public final class ProcessCompletions implements Runnable
          throw new RuntimeException("stdout / stderr buffer has no bytes remaining");
       }
       if (NuKernel32.ReadFile(pipe.pipeHandle, pipe.buffer, pipe.buffer.remaining(), null, pipe.overlapped) == 0) {
-         int lastError = Native.getLastError();
+         int lastError = NuKernel32.getLastError();
          switch (lastError) {
          case NuWinNT.ERROR_SUCCESS:
          case NuWinNT.ERROR_IO_PENDING:
@@ -305,20 +310,20 @@ public final class ProcessCompletions implements Runnable
    {
       WindowsProcess process;
       while ((process = pendingPool.poll()) != null) {
-         HANDLE completionPort1 = NuKernel32.CreateIoCompletionPort(
+         MemorySegment completionPort1 = NuKernel32.CreateIoCompletionPort(
                  process.getStdoutPipe().pipeHandle, ioCompletionPort,
-                 new ULONG_PTR(process.getStdoutPipe().ioCompletionKey),
+                 process.getStdoutPipe().ioCompletionKey,
                  Constants.NUMBER_OF_THREADS);
-         if (!ioCompletionPort.equals(completionPort1)) {
-            throw new RuntimeException("CreateIoCompletionPort() failed, error code: " + Native.getLastError());
+         if (ioCompletionPort.address() != completionPort1.address()) {
+            throw new RuntimeException("CreateIoCompletionPort() failed, error code: " + NuKernel32.getLastError());
          }
 
-         HANDLE completionPort2 = NuKernel32.CreateIoCompletionPort(
+         MemorySegment completionPort2 = NuKernel32.CreateIoCompletionPort(
                  process.getStderrPipe().pipeHandle, ioCompletionPort,
-                 new ULONG_PTR(process.getStderrPipe().ioCompletionKey),
+                 process.getStderrPipe().ioCompletionKey,
                  Constants.NUMBER_OF_THREADS);
-         if (!ioCompletionPort.equals(completionPort2)) {
-            throw new RuntimeException("CreateIoCompletionPort() failed, error code: " + Native.getLastError());
+         if (ioCompletionPort.address() != completionPort2.address()) {
+            throw new RuntimeException("CreateIoCompletionPort() failed, error code: " + NuKernel32.getLastError());
          }
 
          completionKeyToProcessMap.put(process.getStdoutPipe().ioCompletionKey, process);
@@ -343,13 +348,13 @@ public final class ProcessCompletions implements Runnable
          return;
       }
 
-      IntByReference exitCode = new IntByReference();
+      int[] exitCode = new int[1];
       Iterator<WindowsProcess> iterator = deadPool.iterator();
       while (iterator.hasNext()) {
          WindowsProcess process = iterator.next();
-         if (NuKernel32.GetExitCodeProcess(process.getPidHandle(), exitCode) && exitCode.getValue() != NuWinNT.STILL_ACTIVE) {
+         if (NuKernel32.GetExitCodeProcess(process.getPidHandle(), exitCode) && exitCode[0] != NuWinNT.STILL_ACTIVE) {
             iterator.remove();
-            process.onExit(exitCode.getValue());
+            process.onExit(exitCode[0]);
          }
       }
    }
@@ -360,9 +365,9 @@ public final class ProcessCompletions implements Runnable
       completionKeyToProcessMap.remove(process.getStdoutPipe().ioCompletionKey);
       completionKeyToProcessMap.remove(process.getStderrPipe().ioCompletionKey);
 
-      IntByReference exitCode = new IntByReference();
-      if (NuKernel32.GetExitCodeProcess(process.getPidHandle(), exitCode) && exitCode.getValue() != NuWinNT.STILL_ACTIVE) {
-         process.onExit(exitCode.getValue());
+      int[] exitCode = new int[1];
+      if (NuKernel32.GetExitCodeProcess(process.getPidHandle(), exitCode) && exitCode[0] != NuWinNT.STILL_ACTIVE) {
+         process.onExit(exitCode[0]);
       }
       else {
          deadPool.add(process);
@@ -372,9 +377,9 @@ public final class ProcessCompletions implements Runnable
    private void initCompletionPort()
    {
       ioCompletionPort = NuKernel32.CreateIoCompletionPort(
-              NuWinNT.INVALID_HANDLE_VALUE, null, new ULONG_PTR(0), Constants.NUMBER_OF_THREADS);
-      if (ioCompletionPort == null) {
-         throw new RuntimeException("CreateIoCompletionPort() failed, error code: " + Native.getLastError());
+              NuWinNT.INVALID_HANDLE_VALUE, MemorySegment.NULL, 0L, Constants.NUMBER_OF_THREADS);
+      if (NuWinNT.isNullHandle(ioCompletionPort)) {
+         throw new RuntimeException("CreateIoCompletionPort() failed, error code: " + NuKernel32.getLastError());
       }
    }
 }
