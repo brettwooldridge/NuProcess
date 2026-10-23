@@ -96,10 +96,10 @@ public class NuKernel32
 
    public static MemorySegment CreateIoCompletionPort(MemorySegment fileHandle, MemorySegment existingCompletionPort, long completionKey, int numberOfThreads)
    {
+      MemorySegment completionPort = existingCompletionPort == null ? MemorySegment.NULL : existingCompletionPort;
       try {
          return (MemorySegment) CREATE_IO_COMPLETION_PORT.invokeExact(FfmSupport.captureState(), fileHandle,
-                                                                      existingCompletionPort == null ? MemorySegment.NULL : existingCompletionPort,
-                                                                      completionKey, numberOfThreads);
+                                                                      completionPort, completionKey, numberOfThreads);
       }
       catch (Throwable t) {
          throw new RuntimeException(t);
@@ -180,8 +180,9 @@ public class NuKernel32
 
    public static int ConnectNamedPipe(MemorySegment hNamedPipe, MemorySegment lpo)
    {
+      MemorySegment overlapped = lpo == null ? MemorySegment.NULL : lpo;
       try {
-         return (int) CONNECT_NAMED_PIPE.invokeExact(FfmSupport.captureState(), hNamedPipe, lpo == null ? MemorySegment.NULL : lpo);
+         return (int) CONNECT_NAMED_PIPE.invokeExact(FfmSupport.captureState(), hNamedPipe, overlapped);
       }
       catch (Throwable t) {
          throw new RuntimeException(t);
@@ -223,8 +224,9 @@ public class NuKernel32
    {
       try {
          MemorySegment buffer = MemorySegment.ofBuffer(lpBuffer);
+         MemorySegment bytesRead = lpNumberOfBytesRead == null ? MemorySegment.NULL : lpNumberOfBytesRead;
          return (int) READ_FILE.invokeExact(FfmSupport.captureState(), hFile, buffer, nNumberOfBytesToRead,
-                                            lpNumberOfBytesRead == null ? MemorySegment.NULL : lpNumberOfBytesRead, lpOverlapped);
+                                            bytesRead, lpOverlapped);
       }
       catch (Throwable t) {
          throw new RuntimeException(t);
@@ -240,8 +242,9 @@ public class NuKernel32
    {
       try {
          MemorySegment buffer = MemorySegment.ofBuffer(lpBuffer);
+         MemorySegment bytesWritten = lpNumberOfBytesWritten == null ? MemorySegment.NULL : lpNumberOfBytesWritten;
          return (int) WRITE_FILE.invokeExact(FfmSupport.captureState(), hFile, buffer, nNumberOfBytesToWrite,
-                                             lpNumberOfBytesWritten == null ? MemorySegment.NULL : lpNumberOfBytesWritten, lpOverlapped);
+                                             bytesWritten, lpOverlapped);
       }
       catch (Throwable t) {
          throw new RuntimeException(t);
